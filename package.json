@@ -1,0 +1,13 @@
+{
+  "name": "agent-logs-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web viewer for OpenClaw agent session logs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
