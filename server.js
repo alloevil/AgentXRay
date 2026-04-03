@@ -89,13 +89,15 @@ async function parseSessionMetadata(filePath, fileName) {
         messageCount += 1;
         const msg = record.message || {};
         const role = msg.role;
+        const content = Array.isArray(msg.content) ? msg.content : [];
 
         if (role === 'user') {
           userCount++;
           if (!firstUserMessage) {
             let texts = content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim();
             // Strip OpenClaw system envelope prefix to get actual user content
-            texts = texts.replace(/^System:.*?\n(?:Conversation info[\s\S]*?```\n)?(?:Sender[\s\S]*?```\n)?(?:Replied message[\s\S]*?```\n)?/m, '').trim();
+            texts = texts.replace(/^System:.*?\n/m, '').trim();
+            texts = texts.replace(/^(?:Conversation info|Sender|Replied message)[\s\S]*?```\n/gm, '').trim();
             if (texts) firstUserMessage = texts.slice(0, 120);
           }
         }
@@ -103,7 +105,6 @@ async function parseSessionMetadata(filePath, fileName) {
         if (role === 'toolResult') toolResultCount++;
 
         // Count tool calls and spawn calls within assistant messages
-        const content = Array.isArray(msg.content) ? msg.content : [];
         for (const c of content) {
           if (c.type === 'toolCall') {
             toolCallCount++;
