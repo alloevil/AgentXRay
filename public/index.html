@@ -661,6 +661,20 @@
       color: var(--muted);
     }
 
+    .message-head-main,
+    .message-head-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .message-head-meta {
+      justify-content: flex-end;
+      text-align: right;
+    }
+
     .message-role {
       font-weight: 700;
       text-transform: uppercase;
@@ -681,6 +695,29 @@
 
     .toolResult.error .message-role {
       color: #ff7b72;
+    }
+
+    .delta-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 1px 7px;
+      font-size: 10px;
+      line-height: 1.5;
+      border: 1px solid currentColor;
+      background: rgba(255, 255, 255, 0.04);
+      white-space: nowrap;
+    }
+
+    .delta-badge.warn {
+      color: #d29922;
+      background: rgba(210, 153, 34, 0.12);
+    }
+
+    .delta-badge.danger {
+      color: #ff7b72;
+      background: rgba(248, 81, 73, 0.14);
+      font-weight: 700;
     }
 
     .markdown p {
@@ -1214,6 +1251,109 @@
       return typeof value === 'number' ? value.toLocaleString() : '0';
     }
 
+    function parseTimestampMs(value) {
+      if (!value) return null;
+      const ms = new Date(value).getTime();
+      return Number.isNaN(ms) ? null : ms;
+    }
+
+    function formatDurationCompact(durationMs) {
+      if (!Number.isFinite(durationMs) || durationMs <= 0) return '0s';
+      const totalSeconds = durationMs / 1000;
+      if (totalSeconds < 10) {
+        return `${Math.round(totalSeconds * 10) / 10}s`;
+      }
+      const roundedSeconds = Math.round(totalSeconds);
+      const hours = Math.floor(roundedSeconds / 3600);
+      const minutes = Math.floor((roundedSeconds % 3600) / 60);
+      const seconds = roundedSeconds % 60;
+      if (hours > 0) {
+        return `${hours}h${minutes ? `${minutes}m` : ''}${!minutes && seconds ? `${seconds}s` : ''}`;
+      }
+      if (minutes > 0) {
+        return `${minutes}m${seconds ? `${seconds}s` : ''}`;
+      }
+      return `${seconds}s`;
+    }
+
+    function isDisplayableMessage(msg) {
+      if (!msg || msg.role === 'developer') return false;
+      if (msg.role === 'assistant') {
+        const hasText = (msg.content || []).some((c) => c.type === 'text' && (c.text || '').trim());
+        const hasTools = (msg.content || []).some((c) => c.type === 'toolCall');
+        return hasText || hasTools;
+      }
+      if (msg.role === 'reasoning') {
+        return (msg.content || []).some((c) => c.type === 'text' && (c.text || '').trim());
+      }
+      return true;
+    }
+
+    function getMessageTypeLabel(message) {
+      if (message.role === 'assistant') return 'assistant response';
+      if (message.role === 'user') return 'user message';
+      if (message.role === 'reasoning') return 'reasoning';
+      if (message.role === 'toolCall') return `tool: ${message.toolName || 'unknown'}`;
+      if (message.role === 'toolResult') return `tool result: ${message.toolName || 'unknown'}`;
+      return message.role || 'message';
+    }
+
+    function buildTimingAnalysis(messagesData) {
+      const visibleMessages = (messagesData || []).filter(isDisplayableMessage);
+      const timingByMessage = new Map();
+      let previousTimed = null;
+      let firstTimestamp = null;
+      let lastTimestamp = null;
+      let slowestStep = null;
+
+      visibleMessages.forEach((message) => {
+        const timestampMs = parseTimestampMs(message.timestamp);
+        const meta = { timestampMs, deltaMs: null };
+        if (timestampMs !== null) {
+          if (firstTimestamp === null) firstTimestamp = timestampMs;
+          lastTimestamp = timestampMs;
+          if (previousTimed !== null) {
+            meta.deltaMs = Math.max(0, timestampMs - previousTimed.timestampMs);
+            if (!slowestStep || meta.deltaMs > slowestStep.deltaMs) {
+              slowestStep = {
+                deltaMs: meta.deltaMs,
+                label: getMessageTypeLabel(message)
+              };
+            }
+          }
+          previousTimed = { timestampMs };
+        }
+        timingByMessage.set(message, meta);
+      });
+
+      return {
+        visibleMessages,
+        timingByMessage,
+        totalDurationMs: firstTimestamp !== null && lastTimestamp !== null ? Math.max(0, lastTimestamp - firstTimestamp) : null,
+        slowestStep
+      };
+    }
+
+    function getDeltaBadge(deltaMs) {
+      if (!Number.isFinite(deltaMs) || deltaMs < 5000) return '';
+      let cls = '';
+      if (deltaMs >= 120000) cls = ' danger';
+      else if (deltaMs >= 30000) cls = ' warn';
+      return `<span class="delta-badge${cls}">+${escapeHtml(formatDurationCompact(deltaMs))}</span>`;
+    }
+
+    function renderMessageHead(roleHtml, metaHtml, timestamp, deltaMs) {
+      const deltaBadge = getDeltaBadge(deltaMs);
+      const timestampHtml = timestamp ? `<span>${escapeHtml(formatDate(timestamp))}</span>` : '';
+      const rightSide = [timestampHtml, deltaBadge].filter(Boolean).join('');
+      return `
+        <div class="message-head">
+          <div class="message-head-main">${roleHtml}${metaHtml || ''}</div>
+          <div class="message-head-meta">${rightSide}</div>
+        </div>
+      `;
+    }
+
     function truncateId(value) {
       if (!value) return 'unknown';
       return value.length > 14 ? value.slice(0, 14) + '…' : value;
@@ -1490,7 +1630,8 @@
       `;
     }
 
-    function renderMessage(message) {
+    function renderMessage(message, timingMeta) {
+      const deltaMs = timingMeta?.deltaMs ?? null;
       const text = getTextContent(message.content);
       if (message.role === 'user') {
         const longText = text.length > 1400;
@@ -1498,10 +1639,7 @@
         return `
           <article class="message user session-anchor" id="message-${escapeHtml(message.id)}">
             <div class="bubble">
-              <div class="message-head">
-                <span class="message-role">User</span>
-                <span>${escapeHtml(formatDate(message.timestamp))}</span>
-              </div>
+              ${renderMessageHead('<span class="message-role">User</span>', '', message.timestamp, deltaMs)}
               ${renderMarkdown(preview)}
             </div>
           </article>
@@ -1513,10 +1651,7 @@
         return `
           <article class="message assistant session-anchor" id="message-${escapeHtml(message.id || '')}">
             <div class="card" style="border-color: rgba(139,148,158,0.2); opacity:0.75">
-              <div class="message-head">
-                <span class="message-role" style="color:var(--muted)">Reasoning</span>
-                <span>${escapeHtml(formatDate(message.timestamp))}</span>
-              </div>
+              ${renderMessageHead('<span class="message-role" style="color:var(--muted)">Reasoning</span>', '', message.timestamp, deltaMs)}
               ${renderMarkdown(text)}
             </div>
           </article>
@@ -1527,7 +1662,14 @@
         const args = message.details || {};
         const body = `<pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre>`;
         const header = `<span>🔧 ${escapeHtml(message.toolName || 'tool')}</span><span class="tool-meta">${escapeHtml(truncateId(message.toolCallId || ''))}</span>`;
-        return createCollapse(message.toolCallId, header, body, '');
+        return `
+          <article class="message toolResult ok session-anchor" id="message-${escapeHtml(message.id || message.toolCallId || '')}">
+            <div class="card">
+              ${renderMessageHead('<span class="message-role">Tool Call</span>', `<span class="tool-meta">${escapeHtml(message.toolName || 'tool')}</span>`, message.timestamp, deltaMs)}
+              ${createCollapse(message.toolCallId, header, body, '')}
+            </div>
+          </article>
+        `;
       }
 
       if (message.role === 'assistant') {
@@ -1536,13 +1678,11 @@
           .map(renderToolCall)
           .join('');
         const tokenBadge = message.usage?.totalTokens ? `<span class="badge">${escapeHtml(formatNumber(message.usage.totalTokens))} tokens</span>` : '';
+        const modelBadge = `<span class="tool-meta">${escapeHtml(message.model || 'unknown model')}</span>`;
         return `
           <article class="message assistant session-anchor" id="message-${escapeHtml(message.id)}">
             <div class="card">
-              <div class="message-head">
-                <span class="message-role">Assistant</span>
-                <span>${escapeHtml(message.model || 'unknown model')} ${tokenBadge}</span>
-              </div>
+              ${renderMessageHead('<span class="message-role">Assistant</span>', `${modelBadge}${tokenBadge}`, message.timestamp, deltaMs)}
               ${text ? renderMarkdown(text) : ''}
               ${toolCalls}
             </div>
@@ -1554,10 +1694,7 @@
       return `
         <article class="message toolResult ${resultClass} session-anchor" id="tool-result-${escapeHtml(message.toolCallId || message.id)}">
           <div class="card">
-            <div class="message-head">
-              <span class="message-role">${message.isError ? 'Tool Error' : 'Tool Result'}</span>
-              <span>${escapeHtml(formatDate(message.timestamp))}</span>
-            </div>
+            ${renderMessageHead(`<span class="message-role">${message.isError ? 'Tool Error' : 'Tool Result'}</span>`, `<span class="tool-meta">${escapeHtml(message.toolName || 'tool result')}</span>`, message.timestamp, deltaMs)}
             ${renderToolResult(message)}
           </div>
         </article>
@@ -1578,6 +1715,7 @@
       }
 
       const msgs = state.sessionData.messages;
+      const timing = buildTimingAnalysis(msgs);
       const tokenSummary = summarizeTokens(msgs);
 
       // Compute stats from loaded messages
@@ -1629,6 +1767,8 @@
             <div class="summary-meta">
               <span>${escapeHtml(formatDate(state.sessionData.session?.timestamp))}</span>
               <span>${escapeHtml(state.sessionData.session?.cwd || 'Unknown cwd')}</span>
+              ${timing.totalDurationMs !== null ? `<span>⏱ Total duration: ${escapeHtml(formatDurationCompact(timing.totalDurationMs))}</span>` : ''}
+              ${timing.slowestStep ? `<span>🐌 Slowest step: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
             </div>
           </div>
         </div>
@@ -1678,20 +1818,9 @@
         return;
       }
       const isCodex = state.platform === 'codex';
-      const isClaudeCode = state.platform === 'claude-code';
-      const filtered = state.sessionData.messages
+      const timing = buildTimingAnalysis(state.sessionData.messages);
+      const filtered = timing.visibleMessages
         .filter((msg) => {
-          // Skip developer messages (system instructions, not useful for display)
-          if (msg.role === 'developer') return false;
-          if (msg.role === 'assistant') {
-            const hasText = (msg.content || []).some((c) => c.type === 'text' && (c.text || '').trim());
-            const hasTools = (msg.content || []).some((c) => c.type === 'toolCall');
-            if (!hasText && !hasTools) return false;
-          }
-          if (msg.role === 'reasoning') {
-            const hasText = (msg.content || []).some((c) => c.type === 'text' && (c.text || '').trim());
-            if (!hasText) return false;
-          }
           // Apply stat filter
           const f = state.msgFilter;
           if (f === 'user') return msg.role === 'user';
@@ -1835,7 +1964,7 @@
           html += `
             <div class="msg-row" id="row-${escapeHtml(unit.msg.id || '')}">
               ${renderGraphLane(unit.msg)}
-              <div class="msg-content">${renderMessage(unit.msg)}</div>
+              <div class="msg-content">${renderMessage(unit.msg, timing.timingByMessage.get(unit.msg))}</div>
             </div>`;
         } else {
           // Turn group
@@ -1865,7 +1994,7 @@
 
           // Render the assistant text (if any) outside the fold
           const assistantText = getTextContent(unit.assistant.content);
-          const assistantTextHtml = assistantText ? renderMessage(unit.assistant) : '';
+          const assistantTextHtml = assistantText ? renderMessage(unit.assistant, timing.timingByMessage.get(unit.assistant)) : '';
 
           // The graph node for the assistant
           const assistantRow = `
@@ -1891,7 +2020,7 @@
             html += `
                     <div class="msg-row" id="row-${escapeHtml(step.id || '')}">
                       ${renderGraphLane(step)}
-                      <div class="msg-content">${renderMessage(step)}</div>
+                      <div class="msg-content">${renderMessage(step, timing.timingByMessage.get(step))}</div>
                     </div>`;
           }
 
