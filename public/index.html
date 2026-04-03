@@ -1324,8 +1324,8 @@
       let previousTimed = null;
       let firstTimestamp = null;
       let lastTimestamp = null;
-      let slowestStep = null;
 
+      // Per-message delta (for badges)
       visibleMessages.forEach((message) => {
         const timestampMs = parseTimestampMs(message.timestamp);
         const meta = { timestampMs, deltaMs: null };
@@ -1334,25 +1334,78 @@
           lastTimestamp = timestampMs;
           if (previousTimed !== null) {
             meta.deltaMs = Math.max(0, timestampMs - previousTimed.timestampMs);
-            // Slowest step: skip user messages (that's human think time, not agent work)
-            if (message.role !== 'user' && (!slowestStep || meta.deltaMs > slowestStep.deltaMs)) {
-              slowestStep = {
-                deltaMs: meta.deltaMs,
-                label: getMessageTypeLabel(message),
-                messageId: message.id || message.toolCallId || null
-              };
-            }
           }
           previousTimed = { timestampMs };
         }
         timingByMessage.set(message, meta);
       });
 
+      // Slowest turn: from user message to end of agent work (next user or end)
+      let slowestTurn = null;
+      let turnStart = null;
+      let turnFirstAgentId = null;
+      let turnToolCount = 0;
+
+      for (let i = 0; i < visibleMessages.length; i++) {
+        const msg = visibleMessages[i];
+        const ts = parseTimestampMs(msg.timestamp);
+        if (msg.role === 'user' && ts !== null) {
+          // Close previous turn if exists
+          if (turnStart !== null) {
+            finalizeTurn(i - 1);
+          }
+          turnStart = ts;
+          turnFirstAgentId = null;
+          turnToolCount = 0;
+        } else if (turnStart !== null && ts !== null) {
+          if (!turnFirstAgentId) turnFirstAgentId = msg.id || msg.toolCallId || null;
+          if (msg.role === 'toolCall' || msg.role === 'toolResult') turnToolCount++;
+        }
+      }
+      // Close last turn
+      if (turnStart !== null) {
+        finalizeTurn(visibleMessages.length - 1);
+      }
+
+      function finalizeTurn(endIdx) {
+        const endMsg = visibleMessages[endIdx];
+        const endTs = parseTimestampMs(endMsg?.timestamp);
+        if (endTs === null || endMsg.role === 'user') {
+          // Look backwards for last non-user message
+          for (let j = endIdx; j >= 0; j--) {
+            const m = visibleMessages[j];
+            if (m.role !== 'user') {
+              const t = parseTimestampMs(m.timestamp);
+              if (t !== null) {
+                checkTurn(t, m);
+                return;
+              }
+            }
+          }
+          return;
+        }
+        checkTurn(endTs, endMsg);
+      }
+
+      function checkTurn(endTs, lastAgentMsg) {
+        const duration = Math.max(0, endTs - turnStart);
+        if (duration > 0 && (!slowestTurn || duration > slowestTurn.deltaMs)) {
+          const parts = [];
+          parts.push('assistant');
+          if (turnToolCount > 0) parts.push(`${turnToolCount} tool calls`);
+          slowestTurn = {
+            deltaMs: duration,
+            label: parts.join(' + '),
+            messageId: turnFirstAgentId || lastAgentMsg.id || lastAgentMsg.toolCallId || null
+          };
+        }
+      }
+
       return {
         visibleMessages,
         timingByMessage,
         totalDurationMs: firstTimestamp !== null && lastTimestamp !== null ? Math.max(0, lastTimestamp - firstTimestamp) : null,
-        slowestStep
+        slowestStep: slowestTurn
       };
     }
 
@@ -1797,7 +1850,7 @@
               <span>${escapeHtml(formatDate(state.sessionData.session?.timestamp))}</span>
               <span>${escapeHtml(state.sessionData.session?.cwd || 'Unknown cwd')}</span>
               ${timing.totalDurationMs !== null ? `<span title="Wall-clock time from first to last message (includes user idle time)">⏱ Total duration: ${escapeHtml(formatDurationCompact(timing.totalDurationMs))}</span>` : ''}
-              ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump to this message" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest step: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
+              ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump — total agent work time for this turn (user msg → last agent response)" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest turn: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
             </div>
           </div>
         </div>
