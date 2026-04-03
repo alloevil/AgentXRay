@@ -1,13 +1,26 @@
 {
   "name": "agent-logs-viewer",
   "version": "1.0.0",
-  "private": true,
-  "description": "Web viewer for OpenClaw agent session logs",
+  "description": "Web dashboard for viewing AI agent session logs — supports OpenClaw, Codex, and Claude Code",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
+  "keywords": [
+    "agent",
+    "logs",
+    "viewer",
+    "claude-code",
+    "codex",
+    "openclaw",
+    "jsonl",
+    "dashboard"
+  ],
+  "license": "MIT",
   "dependencies": {
     "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

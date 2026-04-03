@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- v2.4.0 - 2026-04-02 - multi-platform + settings panel -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -40,9 +41,19 @@
     }
 
     .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-body {
       display: grid;
       grid-template-columns: 280px minmax(0, 1fr);
-      height: 100vh;
+      grid-template-rows: 1fr;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .sidebar {
@@ -52,12 +63,132 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      overflow: hidden;
     }
 
     .sidebar h1 {
       margin: 0;
       font-size: 18px;
       letter-spacing: 0.04em;
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .settings-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .settings-btn:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .settings-overlay[hidden] {
+      display: none;
+    }
+
+    .settings-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      width: min(480px, 90vw);
+      box-shadow: var(--shadow);
+    }
+
+    .settings-panel h2 {
+      margin: 0 0 18px;
+      font-size: 18px;
+    }
+
+    .settings-field {
+      margin-bottom: 14px;
+    }
+
+    .settings-field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .settings-field input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+
+    .settings-field input:focus {
+      outline: none;
+      border-color: var(--user);
+    }
+
+    .settings-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      justify-content: flex-end;
+    }
+
+    .settings-actions button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn-save {
+      background: var(--user);
+      border-color: var(--user);
+      color: #fff;
+    }
+
+    .btn-save:hover {
+      background: #1a7aef;
+    }
+
+    .btn-reset {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .btn-reset:hover {
+      color: var(--text);
+      border-color: var(--muted);
     }
 
     .sidebar .subtle {
@@ -157,6 +288,7 @@
       flex-direction: column;
       min-width: 0;
       min-height: 0;
+      overflow: hidden;
     }
 
     .summary {
@@ -195,12 +327,238 @@
     }
 
     .messages {
+      flex: 1;
       overflow: auto;
-      padding: 22px;
+      padding: 22px 22px 22px 0;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 0;
       scroll-behavior: smooth;
+      min-height: 0;
+    }
+
+    .msg-row {
+      display: flex;
+      align-items: stretch;
+      min-height: 40px;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+    }
+
+    .msg-row:last-child {
+      border-bottom: none;
+    }
+
+    /* Turn group: a round of assistant work (tool calls + results) */
+    .turn-group {
+      border-left: 2px solid transparent;
+      margin-left: 0;
+    }
+
+    .turn-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px 6px 0;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .turn-group-header:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .turn-group-header .turn-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .turn-group-header .turn-chevron {
+      transition: transform 0.2s;
+      color: var(--muted);
+      font-size: 14px;
+      width: 18px;
+      text-align: center;
+    }
+
+    .turn-group-header .turn-chevron.open {
+      transform: rotate(90deg);
+    }
+
+    .turn-group-body {
+      display: none;
+    }
+
+    .turn-group-body.open {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Nested msg-rows inside turn-group-body: no graph-lane, just content */
+    .turn-group-body .msg-row {
+      display: block;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+    }
+
+    .turn-group-body .msg-row:last-child {
+      border-bottom: none;
+    }
+
+    .turn-group-body .graph-lane {
+      display: none;
+    }
+
+    .turn-group-body .msg-content {
+      padding: 4px 0;
+      min-width: 0;
+    }
+
+    .turn-group-body .message {
+      max-width: 100%;
+    }
+
+    .turn-group-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .turn-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .turn-chip.ok { border-color: rgba(35, 134, 54, 0.3); color: #7ee787; }
+    .turn-chip.err { border-color: rgba(248, 81, 73, 0.3); color: #ff7b72; }
+    .turn-chip.spawn { border-color: rgba(240, 136, 62, 0.3); color: #f0883e; }
+
+    .graph-lane {
+      width: 52px;
+      min-width: 52px;
+      flex-shrink: 0;
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 16px;
+    }
+
+    .graph-lane .trunk {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    /* First and last top-level rows: trim the trunk */
+    .messages > .msg-row:first-child > .graph-lane .trunk {
+      top: 16px;
+    }
+
+    /* Nested graph lanes inside turn-group-body use a lighter trunk */
+    .turn-group-body .graph-lane .trunk {
+      background: rgba(48, 54, 61, 0.5);
+    }
+
+    .graph-lane .node {
+      position: relative;
+      z-index: 1;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      flex-shrink: 0;
+    }
+
+    .graph-lane .node:hover {
+      transform: scale(1.4);
+    }
+
+    .graph-lane .node.user {
+      background: #58a6ff;
+      box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+    }
+
+    .graph-lane .node.assistant {
+      background: #7ee787;
+      box-shadow: 0 0 8px rgba(126, 231, 135, 0.4);
+    }
+
+    .graph-lane .node.assistant.has-tools {
+      background: #7ee787;
+      border: 2px solid #d29922;
+      width: 14px;
+      height: 14px;
+      box-shadow: 0 0 8px rgba(210, 153, 34, 0.4);
+    }
+
+    .graph-lane .node.tool-result {
+      background: #d29922;
+      width: 8px;
+      height: 8px;
+    }
+
+    .graph-lane .node.tool-result.error {
+      background: var(--danger);
+    }
+
+    .graph-lane .node.spawn {
+      background: #f0883e;
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      transform: rotate(45deg);
+    }
+
+    .graph-lane .node.spawn:hover {
+      transform: rotate(45deg) scale(1.4);
+    }
+
+    /* Hide branch dots — replaced by turn-group chips */
+    .graph-lane .branch-line,
+    .graph-lane .tool-dots {
+      display: none;
+    }
+
+    .msg-content {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      padding: 4px 22px 4px 0;
+    }
+
+    .messages > .msg-row:first-child > .graph-lane .trunk {
+      top: 16px;
+    }
+
+    .graph-tooltip {
+      position: fixed;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--text);
+      pointer-events: none;
+      z-index: 100;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      display: none;
     }
 
     .empty {
@@ -208,6 +566,7 @@
       color: var(--muted);
       text-align: center;
       max-width: 420px;
+      padding-left: 64px;
     }
 
     .message {
@@ -386,7 +745,7 @@
     }
 
     .collapsible.open {
-      max-height: 1200px;
+      max-height: none;
     }
 
     .tool-content {
@@ -518,15 +877,87 @@
       }
     }
 
+    .platform-bar {
+      display: flex;
+      align-items: stretch;
+      background: rgba(17, 22, 29, 0.96);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
+    }
+
+    .platform-bar::-webkit-scrollbar {
+      height: 0;
+    }
+
+    .platform-tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px 20px;
+      cursor: pointer;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    .platform-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .platform-tab.active {
+      color: #58a6ff;
+      border-bottom-color: #58a6ff;
+    }
+
+    .agent-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .agent-tab {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    .agent-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .agent-tab.active {
+      color: #58a6ff;
+      border-color: rgba(31, 111, 235, 0.5);
+      background: rgba(31, 111, 235, 0.1);
+    }
+
     @media (max-width: 900px) {
       body {
         overflow: auto;
       }
 
       .app {
-        grid-template-columns: 1fr;
         height: auto;
         min-height: 100vh;
+      }
+
+      .app-body {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 70vh;
       }
 
       .sidebar {
@@ -537,46 +968,80 @@
       .main {
         min-height: 70vh;
       }
+
+      .graph-lane {
+        width: 36px;
+        min-width: 36px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
-      <div>
-        <h1>Agent Logs Viewer</h1>
-        <div class="subtle">OpenClaw session explorer</div>
-      </div>
-      <select id="agentSelect" class="control" aria-label="Agent selector"></select>
-      <input id="sessionSearch" class="control" type="search" placeholder="Filter sessions">
-      <div class="toggle-row">
-        <label class="toggle"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
-        <label class="toggle"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
-        <label class="toggle"><span>Auto-scroll</span><input id="autoScroll" type="checkbox"></label>
-      </div>
-      <div id="sessionList" class="session-list"></div>
-    </aside>
-    <main class="main">
-      <div id="breadcrumb" class="breadcrumb" hidden></div>
-      <section id="summary" class="summary">
-        <div class="summary-top">
+    <div class="platform-bar" id="platformBar"></div>
+    <div class="app-body">
+      <aside class="sidebar">
+        <div class="sidebar-header">
           <div>
-            <h2>No session selected</h2>
-            <div class="summary-meta">
-              <span>Select an agent and session from the left.</span>
+            <h1>Agent Logs Viewer</h1>
+            <div class="subtle" id="sidebarSubtitle"></div>
+          </div>
+          <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
+        </div>
+        <div id="agentNav" class="agent-nav" hidden></div>
+        <input id="sessionSearch" class="control" type="search" placeholder="Filter sessions">
+        <div class="toggle-row">
+          <label class="toggle" id="archivedToggle"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
+          <label class="toggle"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
+          <label class="toggle"><span>Auto-scroll</span><input id="autoScroll" type="checkbox"></label>
+        </div>
+        <div id="sessionList" class="session-list"></div>
+      </aside>
+      <main class="main">
+        <div id="breadcrumb" class="breadcrumb" hidden></div>
+        <section id="summary" class="summary">
+          <div class="summary-top">
+            <div>
+              <h2>No session selected</h2>
+              <div class="summary-meta">
+                <span>Select an agent and session from the left.</span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
-      <div id="errorBanner" class="error-banner" hidden></div>
-      <div id="loading" class="loading" hidden>Loading…</div>
-      <section id="messages" class="messages">
-        <div class="empty">Session messages will appear here.</div>
-      </section>
-    </main>
+        </section>
+        <div id="errorBanner" class="error-banner" hidden></div>
+        <div id="loading" class="loading" hidden>Loading…</div>
+        <section id="messages" class="messages">
+          <div class="empty">Session messages will appear here.</div>
+        </section>
+      </main>
+    </div>
   </div>
+  <div class="settings-overlay" id="settingsOverlay" hidden>
+    <div class="settings-panel">
+      <h2>Settings</h2>
+      <div class="settings-field">
+        <label>OpenClaw Directory</label>
+        <input id="settingOpenclaw" type="text" placeholder="~/.openclaw/agents">
+      </div>
+      <div class="settings-field">
+        <label>Codex Directory</label>
+        <input id="settingCodex" type="text" placeholder="~/.codex/sessions">
+      </div>
+      <div class="settings-field">
+        <label>Claude Code Directory</label>
+        <input id="settingClaudeCode" type="text" placeholder="~/.claude/projects">
+      </div>
+      <div class="settings-actions">
+        <button class="btn-reset" id="settingsReset">Reset to Defaults</button>
+        <button class="btn-save" id="settingsSave">Save</button>
+      </div>
+    </div>
+  </div>
+  <div id="graphTooltip" class="graph-tooltip"></div>
   <script>
     const state = {
+      platform: 'openclaw', // 'openclaw' | 'codex' | 'claude-code'
       agents: [],
       sessions: [],
       filteredSessions: [],
@@ -587,11 +1052,12 @@
       autoScroll: false,
       sessionData: null,
       refreshTimer: null,
-      spawnMap: [],        // spawn relationship links
-      navStack: []         // breadcrumb: [{agent, sessionId}]
+      spawnMap: [],
+      navStack: [],
+      settings: { openclawDir: '', codexDir: '', claudeCodeDir: '' }
     };
 
-    const agentSelect = document.getElementById('agentSelect');
+    const platformBar = document.getElementById('platformBar');
     const sessionSearch = document.getElementById('sessionSearch');
     const includeArchived = document.getElementById('includeArchived');
     const autoRefresh = document.getElementById('autoRefresh');
@@ -601,6 +1067,77 @@
     const messages = document.getElementById('messages');
     const loading = document.getElementById('loading');
     const errorBanner = document.getElementById('errorBanner');
+
+    // --- Settings ---
+    const SETTINGS_KEY = 'agent-logs-viewer-settings';
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const settingOpenclaw = document.getElementById('settingOpenclaw');
+    const settingCodex = document.getElementById('settingCodex');
+    const settingClaudeCode = document.getElementById('settingClaudeCode');
+    const settingsSave = document.getElementById('settingsSave');
+    const settingsReset = document.getElementById('settingsReset');
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state.settings.openclawDir = parsed.openclawDir || '';
+          state.settings.codexDir = parsed.codexDir || '';
+          state.settings.claudeCodeDir = parsed.claudeCodeDir || '';
+        }
+      } catch {}
+    }
+
+    function saveSettings() {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    }
+
+    function dirParam() {
+      let dir = '';
+      if (state.platform === 'openclaw') dir = state.settings.openclawDir;
+      else if (state.platform === 'codex') dir = state.settings.codexDir;
+      else if (state.platform === 'claude-code') dir = state.settings.claudeCodeDir;
+      return dir ? '?dir=' + encodeURIComponent(dir) : '';
+    }
+
+    function openSettings() {
+      settingOpenclaw.value = state.settings.openclawDir;
+      settingCodex.value = state.settings.codexDir;
+      settingClaudeCode.value = state.settings.claudeCodeDir;
+      settingsOverlay.hidden = false;
+    }
+
+    function closeSettings() {
+      settingsOverlay.hidden = true;
+    }
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsOverlay.addEventListener('click', (e) => {
+      if (e.target === settingsOverlay) closeSettings();
+    });
+
+    settingsSave.addEventListener('click', async () => {
+      state.settings.openclawDir = settingOpenclaw.value.trim();
+      state.settings.codexDir = settingCodex.value.trim();
+      state.settings.claudeCodeDir = settingClaudeCode.value.trim();
+      saveSettings();
+      closeSettings();
+      await refreshAll(false);
+    });
+
+    settingsReset.addEventListener('click', () => {
+      state.settings.openclawDir = '';
+      state.settings.codexDir = '';
+      state.settings.claudeCodeDir = '';
+      saveSettings();
+      settingOpenclaw.value = '';
+      settingCodex.value = '';
+      settingClaudeCode.value = '';
+    });
+
+    loadSettings();
 
     function escapeHtml(value) {
       return String(value)
@@ -645,11 +1182,69 @@
     }
 
     function renderAgents() {
-      agentSelect.innerHTML = state.agents
-        .map((agent) => `<option value="${escapeHtml(agent)}">${escapeHtml(agent)}</option>`)
+      // Update subtitle
+      const subtitle = document.getElementById('sidebarSubtitle');
+      const platformLabels = { openclaw: 'OpenClaw session explorer', codex: 'Codex session explorer', 'claude-code': 'Claude Code session explorer' };
+      subtitle.textContent = platformLabels[state.platform] || '';
+
+      // Platform tabs
+      const platforms = [
+        { id: 'openclaw', label: 'OpenClaw' },
+        { id: 'codex', label: 'Codex' },
+        { id: 'claude-code', label: 'Claude Code' }
+      ];
+      platformBar.innerHTML = platforms
+        .map((p) => {
+          const activeClass = p.id === state.platform ? 'active' : '';
+          return `<button class="platform-tab ${activeClass}" data-platform="${p.id}">${p.label}</button>`;
+        })
         .join('');
-      if (state.selectedAgent && state.agents.includes(state.selectedAgent)) {
-        agentSelect.value = state.selectedAgent;
+
+      platformBar.querySelectorAll('.platform-tab').forEach((tab) => {
+        tab.addEventListener('click', async () => {
+          const platform = tab.getAttribute('data-platform');
+          if (platform === state.platform) return;
+          state.platform = platform;
+          state.selectedAgent = '';
+          state.selectedSessionId = '';
+          state.sessions = [];
+          state.filteredSessions = [];
+          state.sessionData = null;
+          state.navStack = [];
+          renderBreadcrumb();
+          renderAgents();
+          await refreshAll(false);
+        });
+      });
+
+      // Agent sub-navigation in sidebar (OpenClaw only)
+      const agentNav = document.getElementById('agentNav');
+      const archivedToggle = document.getElementById('archivedToggle');
+      if (state.platform === 'openclaw') {
+        archivedToggle.hidden = false;
+        agentNav.hidden = false;
+        agentNav.innerHTML = state.agents
+          .map((agent) => {
+            const activeClass = agent === state.selectedAgent ? 'active' : '';
+            return `<button class="agent-tab ${activeClass}" data-agent="${escapeHtml(agent)}">${escapeHtml(agent)}</button>`;
+          })
+          .join('');
+        agentNav.querySelectorAll('.agent-tab').forEach((tab) => {
+          tab.addEventListener('click', async () => {
+            const agent = tab.getAttribute('data-agent');
+            if (agent === state.selectedAgent) return;
+            state.selectedAgent = agent;
+            state.selectedSessionId = '';
+            state.navStack = [];
+            renderBreadcrumb();
+            renderAgents();
+            await refreshAll(false);
+          });
+        });
+      } else {
+        archivedToggle.hidden = true;
+        agentNav.hidden = true;
+        agentNav.innerHTML = '';
       }
     }
 
@@ -798,6 +1393,51 @@
       );
     }
 
+    function getGraphNode(message) {
+      if (message.role === 'user') {
+        return { cls: 'user', tip: `User · ${formatDate(message.timestamp)}` };
+      }
+      if (message.role === 'reasoning') {
+        return { cls: 'assistant', tip: `Reasoning · ${formatDate(message.timestamp)}` };
+      }
+      if (message.role === 'toolCall') {
+        return { cls: 'assistant has-tools', tip: `🔧 ${message.toolName || 'tool'} · ${formatDate(message.timestamp)}` };
+      }
+      if (message.role === 'assistant') {
+        const tools = (message.content || []).filter(c => c.type === 'toolCall');
+        const hasSpawn = tools.some(c => {
+          if (c.name === 'sessions_spawn') return true;
+          if (c.name === 'exec' && typeof (c.arguments||{}).command === 'string') {
+            const cmd = c.arguments.command.toLowerCase();
+            return cmd.includes('codex ') || cmd.includes('claude ');
+          }
+          return false;
+        });
+        if (hasSpawn) {
+          return { cls: 'assistant has-tools', tip: `Assistant · ${tools.length} tools (spawn) · ${formatDate(message.timestamp)}`, tools, hasSpawn: true };
+        }
+        if (tools.length) {
+          return { cls: 'assistant has-tools', tip: `Assistant · ${tools.length} tools · ${formatDate(message.timestamp)}`, tools };
+        }
+        return { cls: 'assistant', tip: `Assistant · ${formatDate(message.timestamp)}` };
+      }
+      if (message.role === 'toolResult') {
+        const errCls = message.isError ? ' error' : '';
+        return { cls: `tool-result${errCls}`, tip: `${message.isError ? '❌' : '✅'} ${message.toolName || 'tool'} · ${formatDate(message.timestamp)}` };
+      }
+      return { cls: 'assistant', tip: formatDate(message.timestamp) };
+    }
+
+    function renderGraphLane(message) {
+      const gn = getGraphNode(message);
+      return `
+        <div class="graph-lane">
+          <div class="trunk"></div>
+          <div class="node ${gn.cls}" data-tip="${escapeHtml(gn.tip)}" data-msg-id="${escapeHtml(message.id || '')}"></div>
+        </div>
+      `;
+    }
+
     function renderMessage(message) {
       const text = getTextContent(message.content);
       if (message.role === 'user') {
@@ -814,6 +1454,28 @@
             </div>
           </article>
         `;
+      }
+
+      if (message.role === 'reasoning') {
+        if (!text.trim()) return '';
+        return `
+          <article class="message assistant session-anchor" id="message-${escapeHtml(message.id || '')}">
+            <div class="card" style="border-color: rgba(139,148,158,0.2); opacity:0.75">
+              <div class="message-head">
+                <span class="message-role" style="color:var(--muted)">Reasoning</span>
+                <span>${escapeHtml(formatDate(message.timestamp))}</span>
+              </div>
+              ${renderMarkdown(text)}
+            </div>
+          </article>
+        `;
+      }
+
+      if (message.role === 'toolCall') {
+        const args = message.details || {};
+        const body = `<pre>${escapeHtml(JSON.stringify(args, null, 2))}</pre>`;
+        const header = `<span>🔧 ${escapeHtml(message.toolName || 'tool')}</span><span class="tool-meta">${escapeHtml(truncateId(message.toolCallId || ''))}</span>`;
+        return createCollapse(message.toolCallId, header, body, '');
       }
 
       if (message.role === 'assistant') {
@@ -873,6 +1535,12 @@
         if (msg.role === 'user') userCount++;
         if (msg.role === 'assistant') assistantCount++;
         if (msg.role === 'toolResult') toolResultCount++;
+        // Codex-style: toolCall is a separate role
+        if (msg.role === 'toolCall') {
+          toolCallCount++;
+          const name = msg.toolName || 'unknown';
+          toolNames[name] = (toolNames[name] || 0) + 1;
+        }
         for (const c of (msg.content || [])) {
           if (c.type === 'toolCall') {
             toolCallCount++;
@@ -927,18 +1595,211 @@
         messages.innerHTML = '<div class="empty">Session messages will appear here.</div>';
         return;
       }
-      messages.innerHTML = state.sessionData.messages
+      const isCodex = state.platform === 'codex';
+      const isClaudeCode = state.platform === 'claude-code';
+      const filtered = state.sessionData.messages
         .filter((msg) => {
-          // Skip empty assistant messages (no text, no tool calls)
+          // Skip developer messages (system instructions, not useful for display)
+          if (msg.role === 'developer') return false;
           if (msg.role === 'assistant') {
             const hasText = (msg.content || []).some((c) => c.type === 'text' && (c.text || '').trim());
             const hasTools = (msg.content || []).some((c) => c.type === 'toolCall');
             if (!hasText && !hasTools) return false;
           }
+          if (msg.role === 'reasoning') {
+            const hasText = (msg.content || []).some((c) => c.type === 'text' && (c.text || '').trim());
+            if (!hasText) return false;
+          }
           return true;
-        })
-        .map(renderMessage)
-        .join('');
+        });
+
+      // Group messages into display units:
+      // - user messages: standalone
+      // - assistant with text only: standalone
+      // - assistant with tools + subsequent toolResults: collapsible group
+      // - For Codex: toolCall is a separate role, so assistant -> toolCall* -> toolResult*
+      const units = [];
+      let i = 0;
+      while (i < filtered.length) {
+        const msg = filtered[i];
+
+        if (msg.role === 'user') {
+          units.push({ type: 'single', msg });
+          i++;
+          continue;
+        }
+
+        if (msg.role === 'reasoning') {
+          units.push({ type: 'single', msg });
+          i++;
+          continue;
+        }
+
+        if (msg.role === 'assistant') {
+          // OpenClaw-style: toolCalls are inside assistant content
+          const tools = (msg.content || []).filter(c => c.type === 'toolCall');
+
+          if (tools.length === 0 && !isCodex) {
+            // Pure text assistant message (OpenClaw)
+            units.push({ type: 'single', msg });
+            i++;
+            continue;
+          }
+
+          // For Codex: assistant text message, then collect subsequent toolCall/toolResult roles
+          if (isCodex && tools.length === 0) {
+            // Collect trailing toolCall and toolResult records that follow this assistant
+            const codexTools = [];
+            const codexResults = [];
+            let peek = i + 1;
+            while (peek < filtered.length) {
+              const next = filtered[peek];
+              if (next.role === 'toolCall') {
+                codexTools.push(next);
+                codexResults.push(next); // include in steps
+                peek++;
+              } else if (next.role === 'toolResult') {
+                codexResults.push(next);
+                peek++;
+              } else if (next.role === 'reasoning') {
+                // reasoning between assistant and tools, skip
+                peek++;
+              } else {
+                break;
+              }
+            }
+
+            if (codexTools.length > 0) {
+              // Render assistant text above, tool calls grouped below
+              const group = { type: 'turn', assistant: msg, tools: codexTools, steps: codexResults };
+              i = peek;
+              units.push(group);
+              continue;
+            }
+
+            // Pure text assistant, no tools
+            units.push({ type: 'single', msg });
+            i++;
+            continue;
+          }
+
+          // OpenClaw-style: assistant with embedded toolCalls
+          if (tools.length === 0) {
+            units.push({ type: 'single', msg });
+            i++;
+            continue;
+          }
+
+          const group = { type: 'turn', assistant: msg, tools, steps: [] };
+          i++;
+
+          while (i < filtered.length) {
+            const next = filtered[i];
+            if (next.role === 'toolResult') {
+              group.steps.push(next);
+              i++;
+            } else if (next.role === 'assistant') {
+              const nextTools = (next.content || []).filter(c => c.type === 'toolCall');
+              const nextText = (next.content || []).filter(c => c.type === 'text' && (c.text || '').trim());
+              if (nextTools.length > 0) {
+                group.steps.push(next);
+                group.tools.push(...nextTools);
+                i++;
+              } else if (nextText.length === 0) {
+                i++;
+              } else {
+                break;
+              }
+            } else {
+              break;
+            }
+          }
+          units.push(group);
+          continue;
+        }
+
+        // Orphan toolResult / toolCall (no preceding assistant)
+        units.push({ type: 'single', msg });
+        i++;
+      }
+
+      // Render units
+      let html = '';
+      let turnIdx = 0;
+      for (const unit of units) {
+        if (unit.type === 'single') {
+          html += `
+            <div class="msg-row" id="row-${escapeHtml(unit.msg.id || '')}">
+              ${renderGraphLane(unit.msg)}
+              <div class="msg-content">${renderMessage(unit.msg)}</div>
+            </div>`;
+        } else {
+          // Turn group
+          const tid = 'turn-' + turnIdx++;
+          const toolCount = unit.tools.length;
+          const stepCount = unit.steps.length;
+          const errCount = unit.steps.filter(s => s.role === 'toolResult' && s.isError).length;
+          const spawnCount = unit.tools.filter(t => {
+            if (t.name === 'sessions_spawn') return true;
+            if (t.name === 'exec' && typeof (t.arguments||{}).command === 'string') {
+              const cmd = t.arguments.command.toLowerCase();
+              return cmd.includes('codex ') || cmd.includes('claude ');
+            }
+            return false;
+          }).length;
+
+          // Unique tool names for chips
+          const toolNameCounts = {};
+          unit.tools.forEach(t => { const n = t.name || '?'; toolNameCounts[n] = (toolNameCounts[n]||0)+1; });
+          const chips = Object.entries(toolNameCounts)
+            .sort((a,b) => b[1]-a[1])
+            .slice(0, 6)
+            .map(([name, count]) => `<span class="turn-chip">${escapeHtml(name)}${count > 1 ? ' ×' + count : ''}</span>`)
+            .join('');
+          const errChip = errCount ? `<span class="turn-chip err">❌ ${errCount} error${errCount>1?'s':''}</span>` : '';
+          const spawnChip = spawnCount ? `<span class="turn-chip spawn">🔗 ${spawnCount} spawn</span>` : '';
+
+          // Render the assistant text (if any) outside the fold
+          const assistantText = getTextContent(unit.assistant.content);
+          const assistantTextHtml = assistantText ? renderMessage(unit.assistant) : '';
+
+          // The graph node for the assistant
+          const assistantRow = `
+            <div class="msg-row" id="row-${escapeHtml(unit.assistant.id || '')}">
+              ${renderGraphLane(unit.assistant)}
+              <div class="msg-content">
+                ${assistantTextHtml}
+                <div class="turn-group">
+                  <div class="turn-group-header" data-turn="${tid}">
+                    <span class="turn-chevron" id="chevron-${tid}">▶</span>
+                    <div class="turn-summary">
+                      <strong>🔧 ${toolCount} tool call${toolCount>1?'s':''}</strong>
+                      <span>· ${stepCount} result${stepCount>1?'s':''}</span>
+                    </div>
+                    <div class="turn-group-chips">${chips}${errChip}${spawnChip}</div>
+                  </div>
+                  <div class="turn-group-body" id="body-${tid}">`;
+
+          html += assistantRow;
+
+          // Render each step inside the fold
+          for (const step of unit.steps) {
+            html += `
+                    <div class="msg-row" id="row-${escapeHtml(step.id || '')}">
+                      ${renderGraphLane(step)}
+                      <div class="msg-content">${renderMessage(step)}</div>
+                    </div>`;
+          }
+
+          html += `
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }
+      }
+
+      messages.innerHTML = html;
       bindMessageInteractions();
       if (state.autoScroll) {
         messages.scrollTop = messages.scrollHeight;
@@ -946,6 +1807,49 @@
     }
 
     function bindMessageInteractions() {
+      const tooltip = document.getElementById('graphTooltip');
+
+      // Graph node hover tooltips
+      messages.querySelectorAll('.graph-lane .node').forEach((node) => {
+        node.addEventListener('mouseenter', (e) => {
+          const tip = node.getAttribute('data-tip');
+          if (!tip) return;
+          tooltip.textContent = tip;
+          tooltip.style.display = 'block';
+          tooltip.style.left = (e.clientX + 12) + 'px';
+          tooltip.style.top = (e.clientY - 10) + 'px';
+        });
+        node.addEventListener('mousemove', (e) => {
+          tooltip.style.left = (e.clientX + 12) + 'px';
+          tooltip.style.top = (e.clientY - 10) + 'px';
+        });
+        node.addEventListener('mouseleave', () => {
+          tooltip.style.display = 'none';
+        });
+        // Click to scroll to the message
+        node.addEventListener('click', () => {
+          const msgId = node.getAttribute('data-msg-id');
+          if (!msgId) return;
+          const row = document.getElementById(`row-${CSS.escape(msgId)}`);
+          if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.style.outline = '2px solid #58a6ff';
+            setTimeout(() => { row.style.outline = ''; }, 1500);
+          }
+        });
+      });
+      // Turn group fold/unfold
+      messages.querySelectorAll('.turn-group-header').forEach((header) => {
+        header.addEventListener('click', () => {
+          const tid = header.getAttribute('data-turn');
+          const body = document.getElementById(`body-${tid}`);
+          const chevron = document.getElementById(`chevron-${tid}`);
+          if (!body) return;
+          body.classList.toggle('open');
+          if (chevron) chevron.classList.toggle('open');
+        });
+      });
+
       messages.querySelectorAll('[data-toggle]').forEach((button) => {
         button.addEventListener('click', () => {
           const id = button.getAttribute('data-toggle');
@@ -1021,7 +1925,7 @@
       }
 
       state.selectedAgent = childAgent;
-      agentSelect.value = childAgent;
+      renderAgents();
       state.selectedSessionId = '';
       await loadSessions(false);
       if (state.sessions.length > 0) {
@@ -1040,7 +1944,7 @@
       state.navStack = state.navStack.slice(0, index);
 
       state.selectedAgent = target.agent;
-      agentSelect.value = target.agent;
+      renderAgents();
       state.selectedSessionId = target.sessionId;
       await loadSessions(true);
       renderSessions();
@@ -1078,16 +1982,30 @@
     }
 
     async function loadAgents() {
-      state.agents = await fetchJson('/api/agents');
-      if (!state.selectedAgent && state.agents.length) {
-        state.selectedAgent = state.agents[0];
+      const dp = dirParam();
+      if (state.platform === 'openclaw') {
+        state.agents = await fetchJson('/api/agents' + dp);
+        if (!state.selectedAgent && state.agents.length) {
+          state.selectedAgent = state.agents[0];
+        }
+      } else {
+        state.agents = [];
+        state.selectedAgent = '';
       }
       renderAgents();
     }
 
     async function loadSessions(preserveSelection) {
-      if (!state.selectedAgent) return;
-      state.sessions = await fetchJson(`/api/agents/${encodeURIComponent(state.selectedAgent)}/sessions?include_archived=${state.includeArchived}`);
+      const dp = dirParam();
+      const dirAmp = dp ? (dp.replace('?', '&')) : '';
+      if (state.platform === 'openclaw') {
+        if (!state.selectedAgent) return;
+        state.sessions = await fetchJson(`/api/agents/${encodeURIComponent(state.selectedAgent)}/sessions?include_archived=${state.includeArchived}${dirAmp}`);
+      } else if (state.platform === 'codex') {
+        state.sessions = await fetchJson('/api/codex/sessions' + dp);
+      } else if (state.platform === 'claude-code') {
+        state.sessions = await fetchJson('/api/claude-code/sessions' + dp);
+      }
       if (!preserveSelection || !state.sessions.some((session) => session.id === state.selectedSessionId)) {
         state.selectedSessionId = state.sessions[0]?.id || '';
       }
@@ -1095,14 +2013,22 @@
     }
 
     async function loadSession() {
-      if (!state.selectedAgent || !state.selectedSessionId) {
+      if (!state.selectedSessionId) {
         state.sessionData = null;
         renderSummary();
         renderMessages();
         return;
       }
       loading.hidden = false;
-      const payload = await fetchJson(`/api/agents/${encodeURIComponent(state.selectedAgent)}/sessions/${encodeURIComponent(state.selectedSessionId)}`);
+      let payload;
+      const dp = dirParam();
+      if (state.platform === 'openclaw') {
+        payload = await fetchJson(`/api/agents/${encodeURIComponent(state.selectedAgent)}/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
+      } else if (state.platform === 'codex') {
+        payload = await fetchJson(`/api/codex/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
+      } else if (state.platform === 'claude-code') {
+        payload = await fetchJson(`/api/claude-code/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
+      }
       state.sessionData = payload;
       renderSummary();
       renderMessages();
@@ -1145,13 +2071,7 @@
       await refreshAll(true);
     });
 
-    agentSelect.addEventListener('change', async () => {
-      state.selectedAgent = agentSelect.value;
-      state.selectedSessionId = '';
-      state.navStack = [];  // Reset breadcrumb on manual switch
-      renderBreadcrumb();
-      await refreshAll(false);
-    });
+
 
     sessionSearch.addEventListener('input', () => {
       renderSessions();
