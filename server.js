@@ -65,6 +65,7 @@ async function parseSessionMetadata(filePath, fileName) {
   let toolResultCount = 0;
   let spawnCount = 0;
   let lastTimestamp = null;
+  let firstUserMessage = null;
   const toolNames = {};
 
   try {
@@ -89,7 +90,15 @@ async function parseSessionMetadata(filePath, fileName) {
         const msg = record.message || {};
         const role = msg.role;
 
-        if (role === 'user') userCount++;
+        if (role === 'user') {
+          userCount++;
+          if (!firstUserMessage) {
+            let texts = content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim();
+            // Strip OpenClaw system envelope prefix to get actual user content
+            texts = texts.replace(/^System:.*?\n(?:Conversation info[\s\S]*?```\n)?(?:Sender[\s\S]*?```\n)?(?:Replied message[\s\S]*?```\n)?/m, '').trim();
+            if (texts) firstUserMessage = texts.slice(0, 120);
+          }
+        }
         if (role === 'assistant') assistantCount++;
         if (role === 'toolResult') toolResultCount++;
 
@@ -138,6 +147,7 @@ async function parseSessionMetadata(filePath, fileName) {
     toolResultCount,
     spawnCount,
     topTools,
+    firstUserMessage: firstUserMessage || null,
     status: isArchivedFile(fileName) ? 'archived' : 'active',
     file: fileName
   };
@@ -448,6 +458,7 @@ async function parseCodexSessionMetadata(filePath, fileName) {
   let toolCallCount = 0;
   let toolResultCount = 0;
   let lastTimestamp = null;
+  let firstUserMessage = null;
   const toolNames = {};
 
   try {
@@ -471,7 +482,14 @@ async function parseCodexSessionMetadata(filePath, fileName) {
         const pt = payload.type;
         if (pt === 'message') {
           messageCount++;
-          if (payload.role === 'user') userCount++;
+          if (payload.role === 'user') {
+            userCount++;
+            if (!firstUserMessage) {
+              const content = Array.isArray(payload.content) ? payload.content : (typeof payload.content === 'string' ? [{ type: 'input_text', text: payload.content }] : []);
+              const texts = content.filter(c => c.type === 'input_text' || c.type === 'text').map(c => c.text || '').join(' ').trim();
+              if (texts) firstUserMessage = texts.slice(0, 120);
+            }
+          }
           if (payload.role === 'assistant') assistantCount++;
         } else if (pt === 'function_call' || pt === 'custom_tool_call') {
           toolCallCount++;
@@ -508,6 +526,7 @@ async function parseCodexSessionMetadata(filePath, fileName) {
     toolCallCount,
     toolResultCount,
     topTools,
+    firstUserMessage: firstUserMessage || null,
     cwd: sessionMeta?.cwd || null,
     file: fileName
   };
@@ -791,6 +810,7 @@ async function parseClaudeCodeSessionMetadata(filePath, fileName) {
   let toolCallCount = 0;
   let toolResultCount = 0;
   let lastTimestamp = null;
+  let firstUserMessage = null;
   const toolNames = {};
 
   try {
@@ -804,6 +824,16 @@ async function parseClaudeCodeSessionMetadata(filePath, fileName) {
       if (t === 'user') {
         messageCount++;
         userCount++;
+        // Extract first user message text
+        if (!firstUserMessage) {
+          const content = rec.message?.content;
+          if (typeof content === 'string' && content.trim()) {
+            firstUserMessage = content.trim().slice(0, 120);
+          } else if (Array.isArray(content)) {
+            const texts = content.filter(b => b.type === 'text').map(b => b.text || '').join(' ').trim();
+            if (texts) firstUserMessage = texts.slice(0, 120);
+          }
+        }
         // Check if this user message contains tool_result blocks
         const content = rec.message?.content;
         if (Array.isArray(content)) {
@@ -856,6 +886,7 @@ async function parseClaudeCodeSessionMetadata(filePath, fileName) {
     toolCallCount,
     toolResultCount,
     topTools,
+    firstUserMessage: firstUserMessage || null,
     cwd: sessionCwd,
     slug: sessionSlug,
     file: fileName

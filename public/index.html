@@ -262,6 +262,18 @@
       font-family: var(--mono);
     }
 
+    .session-preview {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.4;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      opacity: 0.75;
+    }
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -1545,7 +1557,7 @@
       const term = sessionSearch.value.trim().toLowerCase();
       state.filteredSessions = state.sessions.filter((session) => {
         if (!term) return true;
-        return session.id.toLowerCase().includes(term) || session.file.toLowerCase().includes(term);
+        return session.id.toLowerCase().includes(term) || session.file.toLowerCase().includes(term) || (session.firstUserMessage || '').toLowerCase().includes(term);
       });
     }
 
@@ -1577,6 +1589,7 @@
             </div>
             <div class="stats">${chips.join('')}</div>
             <div class="id">${escapeHtml(session.id)}</div>
+            ${session.firstUserMessage ? `<div class="session-preview">${escapeHtml(session.firstUserMessage.length > 80 ? session.firstUserMessage.slice(0, 80) + '…' : session.firstUserMessage)}</div>` : ''}
           </div>
         `;
       }).join('');
