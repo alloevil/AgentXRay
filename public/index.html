@@ -323,7 +323,28 @@
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      margin-top: 6px;
+    }
+
+    .summary-sections {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
       margin-top: 12px;
+    }
+
+    .summary-section {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .summary-section-title {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
     }
 
     .messages {
@@ -917,8 +938,25 @@
 
     .agent-nav {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 4px;
+    }
+
+    .agent-select {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .agent-select:focus {
+      outline: none;
+      border-color: var(--user);
     }
 
     .agent-tab {
@@ -1223,23 +1261,19 @@
       if (state.platform === 'openclaw') {
         archivedToggle.hidden = false;
         agentNav.hidden = false;
-        agentNav.innerHTML = state.agents
-          .map((agent) => {
-            const activeClass = agent === state.selectedAgent ? 'active' : '';
-            return `<button class="agent-tab ${activeClass}" data-agent="${escapeHtml(agent)}">${escapeHtml(agent)}</button>`;
-          })
-          .join('');
-        agentNav.querySelectorAll('.agent-tab').forEach((tab) => {
-          tab.addEventListener('click', async () => {
-            const agent = tab.getAttribute('data-agent');
-            if (agent === state.selectedAgent) return;
-            state.selectedAgent = agent;
-            state.selectedSessionId = '';
-            state.navStack = [];
-            renderBreadcrumb();
-            renderAgents();
-            await refreshAll(false);
-          });
+        agentNav.innerHTML = `<select class="agent-select" id="agentSelect">
+          ${state.agents.map((agent) =>
+            `<option value="${escapeHtml(agent)}"${agent === state.selectedAgent ? ' selected' : ''}>${escapeHtml(agent)}</option>`
+          ).join('')}
+        </select>`;
+        document.getElementById('agentSelect')?.addEventListener('change', async (e) => {
+          const agent = e.target.value;
+          if (agent === state.selectedAgent) return;
+          state.selectedAgent = agent;
+          state.selectedSessionId = '';
+          state.navStack = [];
+          renderBreadcrumb();
+          await refreshAll(false);
         });
       } else {
         archivedToggle.hidden = true;
@@ -1529,12 +1563,15 @@
       const tokenSummary = summarizeTokens(msgs);
 
       // Compute stats from loaded messages
-      let userCount = 0, assistantCount = 0, toolCallCount = 0, toolResultCount = 0, spawnCount = 0;
+      let userCount = 0, assistantCount = 0, toolCallCount = 0, toolResultCount = 0, errorCount = 0, spawnCount = 0;
       const toolNames = {};
       for (const msg of msgs) {
         if (msg.role === 'user') userCount++;
         if (msg.role === 'assistant') assistantCount++;
-        if (msg.role === 'toolResult') toolResultCount++;
+        if (msg.role === 'toolResult') {
+          toolResultCount++;
+          if (msg.isError) errorCount++;
+        }
         // Codex-style: toolCall is a separate role
         if (msg.role === 'toolCall') {
           toolCallCount++;
@@ -1577,16 +1614,33 @@
             </div>
           </div>
         </div>
-        <div class="token-grid" style="margin-bottom:6px">
-          <span class="badge">👤 User: ${userCount}</span>
-          <span class="badge">🤖 Assistant: ${assistantCount}</span>
-          <span class="badge">🔧 Tool Calls: ${toolCallCount}</span>
-          <span class="badge">📋 Tool Results: ${toolResultCount}</span>
-          ${spawnCount ? `<span class="badge" style="color:#f0883e">🔗 Spawns: ${spawnCount}</span>` : ''}
-          <span class="badge">💬 Total: ${msgs.length}</span>
+        <div class="summary-sections">
+          <div class="summary-section">
+            <div class="summary-section-title">Messages</div>
+            <div class="token-grid">
+              <span class="badge">👤 User: ${userCount}</span>
+              <span class="badge">🤖 Assistant: ${assistantCount}</span>
+              <span class="badge">💬 Total: ${msgs.length}</span>
+            </div>
+          </div>
+          <div class="summary-section">
+            <div class="summary-section-title">Tools</div>
+            <div class="token-grid">
+              <span class="badge">🔧 Tool Calls: ${toolCallCount}</span>
+              <span class="badge">📋 Tool Results: ${toolResultCount}</span>
+              ${errorCount ? `<span class="badge" style="color:#ff7b72">❌ Errors: ${errorCount}</span>` : ''}
+              ${spawnCount ? `<span class="badge" style="color:#f0883e">🔗 Spawns: ${spawnCount}</span>` : ''}
+            </div>
+          </div>
+          ${topTools ? `<div class="summary-section">
+            <div class="summary-section-title">Top Tools</div>
+            <div class="token-grid">${topTools}</div>
+          </div>` : ''}
+          <div class="summary-section">
+            <div class="summary-section-title">Tokens</div>
+            <div class="token-grid">${tokenBadges}</div>
+          </div>
         </div>
-        ${topTools ? `<div class="token-grid" style="margin-bottom:6px">${topTools}</div>` : ''}
-        <div class="token-grid">${tokenBadges}</div>
       `;
     }
 
