@@ -1315,7 +1315,8 @@
           lastTimestamp = timestampMs;
           if (previousTimed !== null) {
             meta.deltaMs = Math.max(0, timestampMs - previousTimed.timestampMs);
-            if (!slowestStep || meta.deltaMs > slowestStep.deltaMs) {
+            // Slowest step: skip user messages (that's human think time, not agent work)
+            if (message.role !== 'user' && (!slowestStep || meta.deltaMs > slowestStep.deltaMs)) {
               slowestStep = {
                 deltaMs: meta.deltaMs,
                 label: getMessageTypeLabel(message)
