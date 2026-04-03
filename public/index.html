@@ -720,6 +720,25 @@
       font-weight: 700;
     }
 
+    .slowest-step-link {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+      transition: color 0.15s;
+    }
+    .slowest-step-link:hover {
+      color: var(--accent);
+    }
+
+    @keyframes flash-highlight {
+      0% { box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.8); }
+      100% { box-shadow: 0 0 0 3px transparent; }
+    }
+    .flash-highlight {
+      animation: flash-highlight 1.5s ease-out;
+    }
+
     .markdown p {
       margin: 0 0 12px;
       line-height: 1.55;
@@ -1319,7 +1338,8 @@
             if (message.role !== 'user' && (!slowestStep || meta.deltaMs > slowestStep.deltaMs)) {
               slowestStep = {
                 deltaMs: meta.deltaMs,
-                label: getMessageTypeLabel(message)
+                label: getMessageTypeLabel(message),
+                messageId: message.id || message.toolCallId || null
               };
             }
           }
@@ -1776,8 +1796,8 @@
             <div class="summary-meta">
               <span>${escapeHtml(formatDate(state.sessionData.session?.timestamp))}</span>
               <span>${escapeHtml(state.sessionData.session?.cwd || 'Unknown cwd')}</span>
-              ${timing.totalDurationMs !== null ? `<span>⏱ Total duration: ${escapeHtml(formatDurationCompact(timing.totalDurationMs))}</span>` : ''}
-              ${timing.slowestStep ? `<span>🐌 Slowest step: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
+              ${timing.totalDurationMs !== null ? `<span title="Wall-clock time from first to last message (includes user idle time)">⏱ Total duration: ${escapeHtml(formatDurationCompact(timing.totalDurationMs))}</span>` : ''}
+              ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump to this message" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest step: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
             </div>
           </div>
         </div>
@@ -1817,6 +1837,25 @@
           state.msgFilter = (f === 'all') ? null : f;
           renderSummary();
           renderMessages();
+        });
+      });
+
+      // Bind slowest step jump
+      summary.querySelectorAll('.slowest-step-link').forEach((link) => {
+        link.addEventListener('click', () => {
+          const targetId = link.getAttribute('data-target-id');
+          if (!targetId) return;
+          // Try various id patterns used by renderMessage
+          const el = document.getElementById('message-' + targetId)
+            || document.getElementById('tool-result-' + targetId)
+            || document.getElementById('row-' + targetId)
+            || document.querySelector(`[id*="${CSS.escape(targetId)}"]`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.remove('flash-highlight');
+            void el.offsetWidth; // force reflow
+            el.classList.add('flash-highlight');
+          }
         });
       });
     }
