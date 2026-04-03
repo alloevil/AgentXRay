@@ -739,6 +739,29 @@
       animation: flash-highlight 1.5s ease-out;
     }
 
+    .load-more-bar {
+      text-align: center;
+      padding: 12px 0 8px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--bg);
+    }
+    .load-more-btn {
+      background: var(--panel);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 18px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .load-more-btn:hover {
+      color: var(--fg);
+      border-color: var(--accent);
+    }
+
     .markdown p {
       margin: 0 0 12px;
       line-height: 1.55;
@@ -1167,8 +1190,11 @@
       spawnMap: [],
       navStack: [],
       msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
+      visibleUnitCount: 60, // incremental rendering: show last N units initially
       settings: { openclawDir: '', codexDir: '', claudeCodeDir: '' }
     };
+
+    const MSG_BATCH_SIZE = 60; // how many units to add per "load more" click
 
     const platformBar = document.getElementById('platformBar');
     const sessionSearch = document.getElementById('sessionSearch');
@@ -2057,10 +2083,20 @@
         i++;
       }
 
-      // Render units
+      // Render units (paginated: only last N units, with "load more" button)
+      const totalUnits = units.length;
+      const startIdx = Math.max(0, totalUnits - state.visibleUnitCount);
+      const hasMore = startIdx > 0;
       let html = '';
+      if (hasMore) {
+        const remaining = startIdx;
+        html += `<div class="load-more-bar" id="loadMoreBar">
+          <button class="load-more-btn" id="loadMoreBtn">▲ Load ${Math.min(remaining, MSG_BATCH_SIZE)} earlier messages (${remaining} hidden)</button>
+        </div>`;
+      }
       let turnIdx = 0;
-      for (const unit of units) {
+      for (let ui = startIdx; ui < totalUnits; ui++) {
+        const unit = units[ui];
         if (unit.type === 'single') {
           html += `
             <div class="msg-row" id="row-${escapeHtml(unit.msg.id || '')}">
@@ -2142,6 +2178,19 @@
 
     function bindMessageInteractions() {
       const tooltip = document.getElementById('graphTooltip');
+
+      // "Load more" button for paginated rendering
+      const loadMoreBtn = document.getElementById('loadMoreBtn');
+      if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', () => {
+          const scrollBefore = messages.scrollHeight;
+          state.visibleUnitCount += MSG_BATCH_SIZE;
+          renderMessages();
+          // Maintain scroll position after prepending
+          const scrollAfter = messages.scrollHeight;
+          messages.scrollTop += (scrollAfter - scrollBefore);
+        });
+      }
 
       // Graph node hover tooltips
       messages.querySelectorAll('.graph-lane .node').forEach((node) => {
@@ -2364,6 +2413,7 @@
         payload = await fetchJson(`/api/claude-code/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
       }
       state.sessionData = payload;
+      state.visibleUnitCount = MSG_BATCH_SIZE; // reset pagination on session switch
       renderSummary();
       renderMessages();
       loading.hidden = true;
