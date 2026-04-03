@@ -1,6 +1,6 @@
-# Agent Logs Viewer
+# AgentXRay
 
-多平台 AI Agent 日志查看面板，支持 **OpenClaw**、**Codex** 和 **Claude Code**。
+AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex** 和 **Claude Code**。
 
 [English](README.md) | 中文
 
@@ -52,8 +52,8 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/alloevil/agent-logs-viewer.git
-cd agent-logs-viewer
+git clone https://github.com/alloevil/agent-xray.git
+cd agent-xray
 npm install
 npm start
 ```

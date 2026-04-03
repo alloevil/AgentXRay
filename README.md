@@ -1,6 +1,6 @@
-# Agent Logs Viewer
+# AgentXRay
 
-Web dashboard for viewing AI agent session logs. Supports **OpenClaw**, **Codex**, and **Claude Code** — all in one interface.
+X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, and **Claude Code** — all in one interface.
 
 English | [中文](README.zh-CN.md)
 
@@ -52,8 +52,8 @@ Configure platform directories from the UI. Changes are saved to localStorage �
 ## Quick Start
 
 ```bash
-git clone https://github.com/alloevil/agent-logs-viewer.git
-cd agent-logs-viewer
+git clone https://github.com/alloevil/agent-xray.git
+cd agent-xray
 npm install
 npm start
 ```

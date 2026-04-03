@@ -1097,7 +1097,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Agent Logs Viewer listening on http://localhost:${PORT}`);
+  console.log(`AgentXRay listening on http://localhost:${PORT}`);
   console.log(`  OpenClaw:    ${DATA_DIR}`);
   console.log(`  Codex:       ${CODEX_DIR}`);
   console.log(`  Claude Code: ${CLAUDE_CODE_DIR}`);

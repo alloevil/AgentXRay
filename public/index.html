@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Logs Viewer</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <title>AgentXRay</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>">
   <style>
     :root {
       --bg: #0d1117;
@@ -1038,7 +1038,7 @@
       <aside class="sidebar">
         <div class="sidebar-header">
           <div>
-            <h1>Agent Logs Viewer</h1>
+            <h1>AgentXRay</h1>
             <div class="subtle" id="sidebarSubtitle"></div>
           </div>
           <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
@@ -1125,7 +1125,7 @@
     const errorBanner = document.getElementById('errorBanner');
 
     // --- Settings ---
-    const SETTINGS_KEY = 'agent-logs-viewer-settings';
+    const SETTINGS_KEY = 'agent-xray-settings';
     const settingsBtn = document.getElementById('settingsBtn');
     const settingsOverlay = document.getElementById('settingsOverlay');
     const settingOpenclaw = document.getElementById('settingOpenclaw');
@@ -1240,7 +1240,7 @@
     function renderAgents() {
       // Update subtitle
       const subtitle = document.getElementById('sidebarSubtitle');
-      const platformLabels = { openclaw: 'OpenClaw session explorer', codex: 'Codex session explorer', 'claude-code': 'Claude Code session explorer' };
+      const platformLabels = { openclaw: 'OpenClaw sessions', codex: 'Codex sessions', 'claude-code': 'Claude Code sessions' };
       subtitle.textContent = platformLabels[state.platform] || '';
 
       // Platform tabs
