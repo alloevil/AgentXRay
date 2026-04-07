@@ -2095,6 +2095,24 @@
       `;
     }
 
+    function renderTimeSplit(timing) {
+      if (timing.totalDurationMs === null) return '';
+      const total = timing.totalDurationMs;
+      const toolMs = timing.totalToolDurationMs || 0;
+      const modelMs = Math.max(0, total - toolMs);
+      const toolPct = total > 0 ? Math.round(toolMs / total * 100) : 0;
+      const modelPct = total > 0 ? Math.round(modelMs / total * 100) : 0;
+      const hasSplit = timing.totalToolDurationMs !== null && total > 0;
+      let html = `<span title="Wall-clock time from first to last message">⏱ Total: ${escapeHtml(formatDurationCompact(total))}</span>`;
+      if (hasSplit) {
+        html += `<span title="Estimated breakdown: tool execution time vs model inference time (model = total − tool exec)">`
+          + `🔧 Tool exec: ${escapeHtml(formatDurationCompact(toolMs))} (${toolPct}%)`
+          + ` · 🤖 Model: ${escapeHtml(formatDurationCompact(modelMs))} (${modelPct}%)`
+          + `</span>`;
+      }
+      return html;
+    }
+
     function renderSummary() {
       if (!state.sessionData) {
         summary.innerHTML = `
@@ -2161,7 +2179,7 @@
             <div class="summary-meta">
               <span>${escapeHtml(formatDate(state.sessionData.session?.timestamp))}</span>
               <span>${escapeHtml(state.sessionData.session?.cwd || 'Unknown cwd')}</span>
-              ${timing.totalDurationMs !== null ? `<span title="Wall-clock time from first to last message (includes user idle time)">⏱ Total duration: ${escapeHtml(formatDurationCompact(timing.totalDurationMs))}</span>` : ''}
+              ${renderTimeSplit(timing)}
               ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump — total agent work time for this turn (user msg → last agent response)" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest turn: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
             </div>
           </div>
@@ -2188,7 +2206,6 @@
             <div class="token-grid">
               <span class="badge filter-badge${state.msgFilter === 'toolCall' ? ' active' : ''}" data-filter="toolCall" title="Click to show only tool calls">🔧 Tool Calls: ${toolCallCount}</span>
               <span class="badge filter-badge${state.msgFilter === 'toolResult' ? ' active' : ''}" data-filter="toolResult" title="Click to show only tool results">📋 Tool Results: ${toolResultCount}</span>
-              ${timing.totalToolDurationMs !== null ? `<span class="badge" title="Total time spent in tool execution (sum of all toolCall → toolResult pairs)">⏱ Tool time: ${escapeHtml(formatDurationCompact(timing.totalToolDurationMs))} (${timing.toolPairCount} calls)</span>` : ''}
               ${errorCount ? `<span class="badge filter-badge${state.msgFilter === 'error' ? ' active' : ''}" data-filter="error" title="Click to show only errors" style="color:#ff7b72">❌ Errors: ${errorCount}</span>` : ''}
               ${spawnCount ? `<span class="badge filter-badge${state.msgFilter === 'spawn' ? ' active' : ''}" data-filter="spawn" title="Click to show only spawn calls" style="color:#f0883e">🔗 Spawns: ${spawnCount}</span>` : ''}
             </div>
