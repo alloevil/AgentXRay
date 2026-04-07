@@ -548,6 +548,240 @@ app.get('/api/spawn-map', async (req, res) => {
   }
 });
 
+// Build spawn tree: recursive spawn relationships across sessions
+async function buildSpawnTree(baseDir) {
+  const dir = baseDir || DATA_DIR;
+
+  // Scan ALL sessions, collect spawn metadata, then build tree
+  const agents = await readAgents(dir);
+  const sessionInfo = new Map();
+  const spawnCalls = [];
+
+  for (const agentName of agents) {
+    const agentDir = path.join(dir, agentName, 'sessions');
+    let entries;
+    try {
+      entries = await fsp.readdir(agentDir, { withFileTypes: true });
+    } catch { continue; }
+
+    const sessionFiles = entries
+      .filter((e) => e.isFile() && isSessionLogFile(e.name))
+      .map((e) => e.name);
+
+    for (const fileName of sessionFiles) {
+      const sessionId = fileName.split('.jsonl')[0];
+      const filePath = path.join(agentDir, fileName);
+      const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+      let firstUserMsg = null;
+      let sessionTimestamp = null;
+      let lastActivity = null;
+
+      try {
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          let record;
+          try { record = JSON.parse(line); } catch { continue; }
+
+          if (record.type === 'session' && !sessionTimestamp) {
+            sessionTimestamp = record.timestamp || null;
+          }
+
+          if (record.type === 'message') {
+            const msg = record.message || {};
+            if (record.timestamp) lastActivity = record.timestamp;
+
+            if (msg.role === 'user' && !firstUserMsg) {
+              let texts = (Array.isArray(msg.content) ? msg.content : [])
+                .filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim();
+              texts = texts.replace(/^System:.*\n?/gm, '');
+              texts = texts.replace(/^[A-Za-z ]+\([^)]*\):\n```[\s\S]*?```\n?/gm, '');
+              texts = texts.replace(/^\[message_id:[^\]]*\].*\n?/gm, '');
+              texts = texts.replace(/^ou_[a-z0-9]+:\s*/gm, '');
+              texts = texts.replace(/^\[.*?\] \[Subagent Context\][\s\S]*/m, '');
+              texts = texts.replace(/^\[\w{3} \d{4}-\d{2}-\d{2}[^\]]*\][^\n]*\n?/gm, '');
+              texts = texts.replace(/^HEARTBEAT_OK.*\n?/gm, '');
+              texts = texts.trim();
+              if (texts) firstUserMsg = texts.slice(0, 120);
+            }
+
+            const content = Array.isArray(msg.content) ? msg.content : [];
+            for (const c of content) {
+              if (c.type !== 'toolCall') continue;
+              const args = c.arguments || {};
+
+              if (c.name === 'sessions_spawn' && args.agentId) {
+                spawnCalls.push({
+                  parentSession: sessionId,
+                  parentAgent: agentName,
+                  childAgent: args.agentId,
+                  childLabel: args.label || null,
+                  task: (args.task || '').slice(0, 120),
+                  toolCallId: c.id,
+                  timestamp: record.timestamp
+                });
+              }
+
+              if (c.name === 'exec' && typeof args.command === 'string') {
+                const cmd = args.command.toLowerCase();
+                if (cmd.includes('codex ') || cmd.includes('claude ')) {
+                  const inferredAgent = cmd.includes('codex') ? 'codex' : 'claude-code';
+                  spawnCalls.push({
+                    parentSession: sessionId,
+                    parentAgent: agentName,
+                    childAgent: inferredAgent,
+                    childLabel: null,
+                    task: (args.command || '').slice(0, 120),
+                    toolCallId: c.id,
+                    timestamp: record.timestamp,
+                    isExecSpawn: true
+                  });
+                }
+              }
+            }
+          }
+        }
+      } finally {
+        rl.close();
+        stream.destroy();
+      }
+
+      // Only set if not already set, or if this entry has better data
+      const existing = sessionInfo.get(sessionId);
+      if (!existing || (!existing.timestamp && sessionTimestamp)) {
+        sessionInfo.set(sessionId, {
+          agent: agentName,
+          firstUserMsg: firstUserMsg || existing?.firstUserMsg,
+          timestamp: sessionTimestamp || existing?.timestamp,
+          lastActivity: lastActivity || existing?.lastActivity
+        });
+      }
+    }
+  }
+
+  // Match spawn calls to actual child sessions by time proximity
+  const parentToChildren = new Map();
+
+  for (const sc of spawnCalls) {
+    const candidates = [];
+    const childAgentLower = (sc.childAgent || '').toLowerCase();
+    for (const [sid, info] of sessionInfo) {
+      if (sid === sc.parentSession) continue;
+      // Case-insensitive agent match
+      if (childAgentLower && info.agent.toLowerCase() !== childAgentLower) continue;
+      // If no agentId, we can't match by agent alone — skip (would be too noisy)
+      if (!childAgentLower) continue;
+      if (info.timestamp && sc.timestamp) {
+        const spawnTime = new Date(sc.timestamp).getTime();
+        const sessionTime = new Date(info.timestamp).getTime();
+        // Match within 5 minutes (wider window for slower agents)
+        if (sessionTime >= spawnTime && sessionTime - spawnTime < 300000) {
+          candidates.push({ sid, diff: sessionTime - spawnTime });
+        }
+      }
+    }
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.diff - b.diff);
+      const childId = candidates[0].sid;
+      if (!parentToChildren.has(sc.parentSession)) {
+        parentToChildren.set(sc.parentSession, []);
+      }
+      // Dedup: don't add same child twice
+      const existing = parentToChildren.get(sc.parentSession);
+      if (!existing.some(e => e.sessionId === childId)) {
+        existing.push({
+          sessionId: childId,
+          task: sc.task,
+          label: sc.childLabel,
+          timestamp: sc.timestamp,
+          isExecSpawn: sc.isExecSpawn || false
+        });
+      }
+    }
+  }
+
+  // Build tree recursively
+  const visited = new Set();
+  function buildNode(sessionId, depth) {
+    if (depth > 6 || visited.has(sessionId)) return null;
+    visited.add(sessionId);
+
+    const info = sessionInfo.get(sessionId);
+    if (!info) return null;
+
+    const rawChildren = parentToChildren.get(sessionId) || [];
+    const children = rawChildren
+      .map(child => {
+        const childInfo = sessionInfo.get(child.sessionId);
+        return {
+          id: child.sessionId,
+          agent: childInfo?.agent || child.label || 'unknown',
+          label: child.label,
+          task: child.task || childInfo?.firstUserMsg || '(no task)',
+          timestamp: child.timestamp || childInfo?.timestamp,
+          isExecSpawn: child.isExecSpawn,
+          children: []
+        };
+      })
+      .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+
+    for (const child of children) {
+      const subtree = buildNode(child.id, depth + 1);
+      if (subtree) {
+        child.children = subtree.children;
+        child.agent = subtree.agent;
+        if (!child.task || child.task === '(no task)') {
+          child.task = subtree.task;
+        }
+      }
+    }
+
+    return {
+      id: sessionId,
+      agent: info.agent,
+      task: info.firstUserMsg || '(no task)',
+      timestamp: info.timestamp,
+      lastActivity: info.lastActivity,
+      children
+    };
+  }
+
+  // Find root sessions: appear as parents but not as children
+  const childSessionIds = new Set();
+  for (const children of parentToChildren.values()) {
+    for (const c of children) childSessionIds.add(c.sessionId);
+  }
+
+  const roots = [];
+  for (const [parentId] of parentToChildren) {
+    if (!childSessionIds.has(parentId)) {
+      visited.clear();
+      const tree = buildNode(parentId, 0);
+      if (tree) roots.push(tree);
+    }
+  }
+
+  roots.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+  return {
+    trees: roots,
+    totalSessions: sessionInfo.size,
+    totalSpawnCalls: spawnCalls.length,
+    matchedLinks: parentToChildren.size
+  };
+}
+
+app.get('/api/spawn-tree', async (req, res) => {
+  try {
+    const dir = resolveDir(req.query.dir, DATA_DIR);
+    const tree = await buildSpawnTree(dir);
+    res.json(tree);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Codex platform ---
 
 function codexSessionIdFromFile(fileName) {

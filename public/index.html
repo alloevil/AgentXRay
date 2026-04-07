@@ -239,6 +239,161 @@
       padding-right: 2px;
     }
 
+    /* Spawn Tree */
+    .spawn-tree-toggle {
+      padding: 6px 10px;
+      margin: 4px 0;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      text-align: center;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .spawn-tree-toggle:hover { color: #f0883e; border-color: rgba(240,136,62,0.4); }
+    .spawn-tree-toggle.active { color: #f0883e; background: rgba(240,136,62,0.1); border-color: rgba(240,136,62,0.4); }
+
+    .spawn-tree-panel {
+      display: none;
+      height: 100%;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+    .spawn-tree-panel.visible { display: block; }
+
+    .spawn-tree-panel h2 {
+      font-size: 16px;
+      color: var(--text);
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .spawn-tree-panel .tree-stats {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .spawn-tree-panel .tree-empty {
+      color: var(--muted);
+      font-size: 14px;
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    /* Tree node */
+    .tree-node {
+      position: relative;
+      margin-left: 20px;
+      padding-left: 20px;
+    }
+    .tree-node::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      border-left: 2px solid var(--border);
+      height: 100%;
+    }
+    .tree-node::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 18px;
+      width: 16px;
+      border-top: 2px solid var(--border);
+    }
+    .tree-node:last-child::before {
+      height: 18px;
+    }
+    .tree-node:first-child {
+      margin-left: 0;
+      padding-left: 0;
+    }
+    .tree-node:first-child::before,
+    .tree-node:first-child::after {
+      display: none;
+    }
+
+    .tree-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .tree-card:hover {
+      border-color: rgba(240,136,62,0.4);
+      background: rgba(240,136,62,0.05);
+    }
+    .tree-card.root { border-left: 3px solid #58a6ff; }
+    .tree-card.child { border-left: 3px solid #f0883e; }
+
+    .tree-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .tree-card-agent {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tree-card-agent .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .tree-card-agent .dot.root-dot { background: #58a6ff; }
+    .tree-card-agent .dot.child-dot { background: #f0883e; }
+
+    .tree-card-time {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .tree-card-task {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tree-card-meta {
+      display: flex;
+      gap: 12px;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .tree-card-link {
+      color: #58a6ff;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .tree-card-link:hover { text-decoration: underline; }
+
+    .tree-children-toggle {
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 0;
+      margin-left: 20px;
+    }
+    .tree-children-toggle:hover { color: var(--text); }
+    .tree-children.collapsed { display: none; }
+
     .session-item {
       background: var(--panel);
       border: 1px solid transparent;
@@ -1392,10 +1547,12 @@
           <span id="sseIndicator" class="sse-indicator" title="Real-time tail status"></span>
         </div>
         <div id="searchResults" class="search-results" hidden></div>
+        <div id="spawnTreeToggle" class="spawn-tree-toggle">🌳 Spawn Tree</div>
         <div id="sessionList" class="session-list"></div>
       </aside>
       <main class="main">
         <div id="breadcrumb" class="breadcrumb" hidden></div>
+        <div id="spawnTreePanel" class="spawn-tree-panel"></div>
         <section id="summary" class="summary">
           <div class="summary-top">
             <div>
@@ -1451,6 +1608,7 @@
       refreshTimer: null,
       sseSource: null,   // active EventSource for real-time tail
       spawnMap: [],
+      spawnTreeVisible: false,
       navStack: [],
       msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
       visibleUnitCount: 60, // incremental rendering: show last N units initially
@@ -3470,6 +3628,139 @@
     });
 
     refreshAll(false).then(restartRefreshLoop);
+
+    // ========== Spawn Tree ==========
+    const spawnTreeToggle = document.getElementById('spawnTreeToggle');
+    const spawnTreePanel = document.getElementById('spawnTreePanel');
+    const summarySection = document.getElementById('summary');
+    const messagesSection = document.getElementById('messages');
+
+    spawnTreeToggle.addEventListener('click', async () => {
+      state.spawnTreeVisible = !state.spawnTreeVisible;
+      spawnTreeToggle.classList.toggle('active', state.spawnTreeVisible);
+      if (state.spawnTreeVisible) {
+        // Hide session view, show tree
+        summarySection.style.display = 'none';
+        if (messagesSection) messagesSection.style.display = 'none';
+        spawnTreePanel.classList.add('visible');
+        await renderSpawnTree();
+      } else {
+        // Restore session view
+        summarySection.style.display = '';
+        if (messagesSection) messagesSection.style.display = '';
+        spawnTreePanel.classList.remove('visible');
+      }
+    });
+
+    async function renderSpawnTree() {
+      const dir = state.settings.openclawDir || '';
+      const url = dir ? `/api/spawn-tree?dir=${encodeURIComponent(dir)}` : '/api/spawn-tree';
+      spawnTreePanel.innerHTML = '<div class="tree-stats">Loading spawn tree...</div>';
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+
+        const { trees, totalSessions, totalSpawnCalls, matchedLinks } = data;
+
+        if (!trees.length) {
+          spawnTreePanel.innerHTML = `
+            <h2>🌳 Spawn Tree</h2>
+            <div class="tree-stats">${totalSessions} sessions scanned, ${totalSpawnCalls} spawn calls found, 0 matched</div>
+            <div class="tree-empty">No spawn relationships found in loaded sessions.<br>Sessions are matched by agent name + time proximity (&lt;60s).</div>`;
+          return;
+        }
+
+        let html = `<h2>🌳 Spawn Tree</h2>
+          <div class="tree-stats">${totalSessions} sessions · ${totalSpawnCalls} spawn calls · ${matchedLinks} matched links · ${trees.length} root${trees.length > 1 ? 's' : ''}</div>`;
+
+        for (const tree of trees) {
+          html += renderTreeNode(tree, 0, true);
+        }
+
+        spawnTreePanel.innerHTML = html;
+
+        // Click handlers for cards
+        spawnTreePanel.querySelectorAll('.tree-card').forEach(card => {
+          card.addEventListener('click', () => {
+            const sid = card.dataset.sessionId;
+            // Find session info
+            const found = state.sessions.find(s => s.id === sid);
+            if (found) {
+              state.spawnTreeVisible = false;
+              spawnTreeToggle.classList.remove('active');
+              summarySection.style.display = '';
+              if (messagesSection) messagesSection.style.display = '';
+              spawnTreePanel.classList.remove('visible');
+              state.selectedSessionId = found.id;
+              state.sessionId = found.id;
+              state.sessionFile = found.file;
+              renderSessions();
+              loadSession();
+            }
+          });
+        });
+
+        // Toggle children
+        spawnTreePanel.querySelectorAll('.tree-children-toggle').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const target = document.getElementById(btn.dataset.target);
+            if (target) {
+              target.classList.toggle('collapsed');
+              btn.textContent = target.classList.contains('collapsed')
+                ? btn.textContent.replace('▾', '▸')
+                : btn.textContent.replace('▸', '▾');
+            }
+          });
+        });
+
+      } catch (err) {
+        spawnTreePanel.innerHTML = `<h2>🌳 Spawn Tree</h2>
+          <div class="tree-empty">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderTreeNode(node, depth, isRoot) {
+      const isRootNode = depth === 0;
+      const dotClass = isRootNode ? 'root-dot' : 'child-dot';
+      const cardClass = isRootNode ? 'root' : 'child';
+      const time = node.timestamp ? formatDate(node.timestamp) : '';
+      const task = escapeHtml(truncate(node.task || '(no task)', 80));
+      const childCount = node.children ? node.children.length : 0;
+      const toggleId = 'tree-children-' + node.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      let html = `<div class="tree-node">`;
+      html += `<div class="tree-card ${cardClass}" data-session-id="${escapeHtml(node.id)}">`;
+      html += `<div class="tree-card-header">`;
+      html += `<span class="tree-card-agent"><span class="dot ${dotClass}"></span>${escapeHtml(node.agent)}</span>`;
+      if (time) html += `<span class="tree-card-time">${time}</span>`;
+      html += `</div>`;
+      html += `<div class="tree-card-task" title="${task}">${task}</div>`;
+      html += `<div class="tree-card-meta">`;
+      html += `<span class="tree-card-link">🔗 Open</span>`;
+      if (node.label) html += `<span>label: ${escapeHtml(node.label)}</span>`;
+      html += `</div></div>`;
+
+      if (childCount > 0) {
+        const collapsed = depth >= 2 && childCount > 2;
+        html += `<div class="tree-children-toggle" data-target="${toggleId}">${collapsed ? '▸' : '▾'} ${childCount} child${childCount > 1 ? 'ren' : ''}</div>`;
+        html += `<div class="tree-children${collapsed ? ' collapsed' : ''}" id="${toggleId}">`;
+        for (const child of node.children) {
+          html += renderTreeNode(child, depth + 1, false);
+        }
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+      return html;
+    }
+
+    function truncate(str, len) {
+      if (!str) return '';
+      return str.length > len ? str.slice(0, len) + '...' : str;
+    }
   </script>
 </body>
 </html>
