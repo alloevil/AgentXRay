@@ -212,6 +212,13 @@
       gap: 8px;
     }
 
+    .sse-indicator {
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 14px;
+      padding-left: 2px;
+    }
+
     .toggle {
       display: flex;
       justify-content: space-between;
@@ -1354,6 +1361,7 @@
           <label class="toggle" id="archivedToggle"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
           <label class="toggle"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
           <label class="toggle"><span>Auto-scroll</span><input id="autoScroll" type="checkbox"></label>
+          <span id="sseIndicator" class="sse-indicator" title="Real-time tail status"></span>
         </div>
         <div id="searchResults" class="search-results" hidden></div>
         <div id="sessionList" class="session-list"></div>
@@ -1413,6 +1421,7 @@
       autoScroll: false,
       sessionData: null,
       refreshTimer: null,
+      sseSource: null,   // active EventSource for real-time tail
       spawnMap: [],
       navStack: [],
       msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
@@ -2935,6 +2944,7 @@
     async function loadSession() {
       if (!state.selectedSessionId) {
         state.sessionData = null;
+        closeSse();
         renderSummary();
         renderMessages();
         return;
@@ -2954,21 +2964,108 @@
       renderSummary();
       renderMessages();
       loading.hidden = true;
+      // Start SSE real-time tail for this session
+      startSse();
     }
 
     function restartRefreshLoop() {
       window.clearInterval(state.refreshTimer);
+      // If SSE is active, we don't need the polling loop for the session itself
+      // but still poll the session list for new sessions appearing
       if (!state.autoRefresh) return;
       state.refreshTimer = window.setInterval(async () => {
         try {
           await loadSessions(true);
-          if (state.selectedSessionId) {
+          // Only poll full session reload if SSE is NOT active
+          if (!state.sseSource && state.selectedSessionId) {
             await loadSession();
           }
         } catch (error) {
           showError(error.message);
         }
       }, 5000);
+    }
+
+    // ========= SSE real-time tail =========
+
+    function closeSse() {
+      if (state.sseSource) {
+        state.sseSource.close();
+        state.sseSource = null;
+      }
+    }
+
+    function buildWatchUrl() {
+      if (!state.selectedSessionId) return null;
+      const dp = dirParam();
+      const params = new URLSearchParams();
+      params.set('platform', state.platform || 'openclaw');
+      params.set('sessionId', state.selectedSessionId);
+      if (state.selectedAgent) params.set('agent', state.selectedAgent);
+      // Extract dir from dirParam (format: ?dir=X or '')
+      if (dp) {
+        const m = dp.match(/[?&]dir=([^&]*)/);
+        if (m) params.set('dir', decodeURIComponent(m[1]));
+      }
+      return `/api/watch?${params.toString()}`;
+    }
+
+    function startSse() {
+      closeSse();
+      if (!state.autoRefresh || !state.selectedSessionId) return;
+      const url = buildWatchUrl();
+      if (!url) return;
+
+      const es = new EventSource(url);
+      state.sseSource = es;
+
+      es.addEventListener('connected', (e) => {
+        // SSE connected — server confirmed the file exists and we're watching
+        const data = JSON.parse(e.data || '{}');
+        const indicator = document.getElementById('sseIndicator');
+        if (indicator) {
+          indicator.textContent = '🟢 Live';
+          indicator.title = `Real-time tail active (${data.messageCount} messages loaded)`;
+        }
+      });
+
+      es.addEventListener('newMessages', (e) => {
+        if (!state.sessionData) return;
+        const { messages: newMsgs, session } = JSON.parse(e.data || '{}');
+        if (!Array.isArray(newMsgs) || newMsgs.length === 0) return;
+
+        // Append new messages to session data
+        state.sessionData.messages.push(...newMsgs);
+        if (session) Object.assign(state.sessionData.session || {}, session);
+
+        // Expand visibleUnitCount to show new messages
+        state.visibleUnitCount += newMsgs.length + 5;
+
+        // Re-render
+        renderSummary();
+        renderMessages();
+
+        // Auto-scroll to bottom if enabled
+        if (state.autoScroll) {
+          const messages = document.getElementById('messages');
+          if (messages) messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Invalidate session list to refresh sidebar counters
+        loadSessions(true).catch(() => {});
+      });
+
+      es.addEventListener('error', (e) => {
+        const indicator = document.getElementById('sseIndicator');
+        if (indicator) {
+          indicator.textContent = '🔴 Live';
+          indicator.title = 'Real-time connection lost, will retry';
+        }
+      });
+
+      es.onerror = () => {
+        // EventSource auto-reconnects on error — no manual action needed
+      };
     }
 
     async function refreshAll(preserveSelection) {
@@ -3094,6 +3191,13 @@
 
     autoRefresh.addEventListener('change', () => {
       state.autoRefresh = autoRefresh.checked;
+      if (!state.autoRefresh) {
+        closeSse();
+        const indicator = document.getElementById('sseIndicator');
+        if (indicator) indicator.textContent = '';
+      } else {
+        startSse();
+      }
       restartRefreshLoop();
     });
 
