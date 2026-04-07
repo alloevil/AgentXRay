@@ -2250,7 +2250,7 @@
               <span class="badge filter-badge${state.msgFilter === 'toolCall' ? ' active' : ''}" data-filter="toolCall" title="Click to show only tool calls">🔧 Tool Calls: ${toolCallCount}</span>
               <span class="badge filter-badge${state.msgFilter === 'toolResult' ? ' active' : ''}" data-filter="toolResult" title="Click to show only tool results">📋 Tool Results: ${toolResultCount}</span>
               ${errorCount ? `<span class="badge filter-badge${state.msgFilter === 'error' ? ' active' : ''}" data-filter="error" title="Click to show only error tool results" style="color:#ff7b72">❌ Errors: ${errorCount}</span>` : ''}
-              ${totalRetryTools > 0 ? `<span class="badge" title="${totalRetryTools} tool${totalRetryTools>1?'s were':' was'} retried after errors (${totalRetryAttempts} extra attempt${totalRetryAttempts>1?'s':''})" style="color:#a5d6ff">🔄 Retried: ${totalRetryTools} tool${totalRetryTools>1?'s':''} · ${totalRetryAttempts} extra attempt${totalRetryAttempts>1?'s':''}</span>` : ''}
+              ${totalRetryTools > 0 ? `<span class="badge retry-jump-btn" id="retryJumpBtn" title="Click to jump to first retry · ${totalRetryTools} tool${totalRetryTools>1?'s':''} retried (${totalRetryAttempts} extra attempt${totalRetryAttempts>1?'s':''})" style="color:#a5d6ff;cursor:pointer">🔄 Retried: ${totalRetryTools} tool${totalRetryTools>1?'s':''} · ${totalRetryAttempts} extra attempt${totalRetryAttempts>1?'s':''}</span>` : ''}
               ${spawnCount ? `<span class="badge filter-badge${state.msgFilter === 'spawn' ? ' active' : ''}" data-filter="spawn" title="Click to show only spawn calls" style="color:#f0883e">🔗 Spawns: ${spawnCount}</span>` : ''}
             </div>
           </div>
@@ -2291,6 +2291,33 @@
           scrollToMessage(link.getAttribute('data-target-id'));
         });
       });
+
+      // Retry jump: click → expand all + scroll to first retry annotation
+      const retryJumpBtn = document.getElementById('retryJumpBtn');
+      if (retryJumpBtn) {
+        retryJumpBtn.addEventListener('click', () => {
+          // Expand all messages first
+          state.visibleUnitCount = Infinity;
+          renderMessages();
+          // Find first retry-error annotation and scroll to its parent msg-row
+          const firstRetry = document.querySelector('.retry-annotation.retry-error, .retry-annotation.retry-error-final');
+          if (firstRetry) {
+            const row = firstRetry.closest('.msg-row') || firstRetry;
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Also expand the parent turn-group-body if collapsed
+            const body = row.closest('.turn-group-body');
+            if (body && !body.classList.contains('open')) {
+              body.classList.add('open');
+              const tid = body.id.replace('body-', '');
+              const chevron = document.getElementById('chevron-' + tid);
+              if (chevron) chevron.classList.add('open');
+            }
+            // Flash highlight
+            firstRetry.style.outline = '2px solid #a5d6ff';
+            setTimeout(() => { firstRetry.style.outline = ''; }, 2000);
+          }
+        });
+      }
 
       // Export dropdown
       const exportBtn = document.getElementById('exportBtn');
