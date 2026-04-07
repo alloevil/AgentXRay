@@ -2159,12 +2159,29 @@
       // Compute stats from loaded messages
       let userCount = 0, assistantCount = 0, toolCallCount = 0, toolResultCount = 0, errorCount = 0, spawnCount = 0;
       const toolNames = {};
+      // Retry stats: per turn, track toolName -> error count; if same name succeeds after error = retry
+      let totalRetryTools = 0; // number of distinct tools that were retried (across all turns)
+      let totalRetryAttempts = 0; // total extra attempts due to retries
+      let turnToolErrors = {}; // toolName -> errorCount within current turn
       for (const msg of msgs) {
+        if (msg.role === 'user') {
+          // New turn — tally retries from previous turn
+          turnToolErrors = {};
+        }
         if (msg.role === 'user') userCount++;
         if (msg.role === 'assistant') assistantCount++;
         if (msg.role === 'toolResult') {
           toolResultCount++;
-          if (msg.isError) errorCount++;
+          const name = msg.toolName || msg.name || '?';
+          if (msg.isError) {
+            errorCount++;
+            turnToolErrors[name] = (turnToolErrors[name] || 0) + 1;
+          } else if (turnToolErrors[name] > 0) {
+            // Success after error(s) for same tool in same turn = retry
+            totalRetryTools++;
+            totalRetryAttempts += turnToolErrors[name];
+            turnToolErrors[name] = 0; // reset so we don't double-count
+          }
         }
         // Codex-style: toolCall is a separate role
         if (msg.role === 'toolCall') {
@@ -2232,7 +2249,8 @@
             <div class="token-grid">
               <span class="badge filter-badge${state.msgFilter === 'toolCall' ? ' active' : ''}" data-filter="toolCall" title="Click to show only tool calls">🔧 Tool Calls: ${toolCallCount}</span>
               <span class="badge filter-badge${state.msgFilter === 'toolResult' ? ' active' : ''}" data-filter="toolResult" title="Click to show only tool results">📋 Tool Results: ${toolResultCount}</span>
-              ${errorCount ? `<span class="badge filter-badge${state.msgFilter === 'error' ? ' active' : ''}" data-filter="error" title="Click to show only errors" style="color:#ff7b72">❌ Errors: ${errorCount}</span>` : ''}
+              ${errorCount ? `<span class="badge filter-badge${state.msgFilter === 'error' ? ' active' : ''}" data-filter="error" title="Click to show only error tool results" style="color:#ff7b72">❌ Errors: ${errorCount}</span>` : ''}
+              ${totalRetryTools > 0 ? `<span class="badge" title="${totalRetryTools} tool${totalRetryTools>1?'s were':' was'} retried after errors (${totalRetryAttempts} extra attempt${totalRetryAttempts>1?'s':''})" style="color:#a5d6ff">🔄 Retried: ${totalRetryTools} tool${totalRetryTools>1?'s':''} · ${totalRetryAttempts} extra attempt${totalRetryAttempts>1?'s':''}</span>` : ''}
               ${spawnCount ? `<span class="badge filter-badge${state.msgFilter === 'spawn' ? ' active' : ''}" data-filter="spawn" title="Click to show only spawn calls" style="color:#f0883e">🔗 Spawns: ${spawnCount}</span>` : ''}
             </div>
           </div>
