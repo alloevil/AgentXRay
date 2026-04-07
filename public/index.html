@@ -2104,24 +2104,36 @@
       // Bind slowest step jump
       summary.querySelectorAll('.slowest-step-link').forEach((link) => {
         link.addEventListener('click', () => {
-          const targetId = link.getAttribute('data-target-id');
-          if (!targetId) return;
-          // Try various id patterns used by renderMessage
-          const el = document.getElementById('message-' + targetId)
-            || document.getElementById('tool-result-' + targetId)
-            || document.getElementById('row-' + targetId)
-            || document.querySelector(`[id*="${CSS.escape(targetId)}"]`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            el.classList.remove('flash-highlight');
-            void el.offsetWidth; // force reflow
-            el.classList.add('flash-highlight');
-          }
+          scrollToMessage(link.getAttribute('data-target-id'));
         });
       });
 
       // Render overview timeline
       renderTimeline(msgs);
+    }
+
+    // Scroll to a message by ID, expanding pagination if needed
+    function scrollToMessage(msgId) {
+      if (!msgId) return;
+      let el = document.getElementById('message-' + CSS.escape(msgId))
+        || document.getElementById('tool-result-' + CSS.escape(msgId))
+        || document.getElementById('row-' + CSS.escape(msgId))
+        || document.querySelector(`[id*="${CSS.escape(msgId)}"]`);
+      if (!el) {
+        // Message not in DOM — expand all units and re-render
+        state.visibleUnitCount = Infinity;
+        renderMessages();
+        el = document.getElementById('message-' + CSS.escape(msgId))
+          || document.getElementById('tool-result-' + CSS.escape(msgId))
+          || document.getElementById('row-' + CSS.escape(msgId))
+          || document.querySelector(`[id*="${CSS.escape(msgId)}"]`);
+      }
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('flash-highlight');
+        void el.offsetWidth;
+        el.classList.add('flash-highlight');
+      }
     }
 
     function renderTimeline(msgs) {
@@ -2198,17 +2210,7 @@
       // Bind segment clicks -> jump to message
       bar.querySelectorAll('.tl-segment').forEach(seg => {
         seg.addEventListener('click', () => {
-          const msgId = seg.dataset.msgId;
-          if (!msgId) return;
-          const el = document.getElementById('message-' + CSS.escape(msgId))
-            || document.getElementById('tool-result-' + CSS.escape(msgId))
-            || document.getElementById('row-' + CSS.escape(msgId));
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            el.classList.remove('flash-highlight');
-            void el.offsetWidth;
-            el.classList.add('flash-highlight');
-          }
+          scrollToMessage(seg.dataset.msgId);
         });
       });
 
@@ -2585,7 +2587,13 @@
       messages.querySelectorAll('[data-scroll-to-result]').forEach((button) => {
         button.addEventListener('click', () => {
           const toolCallId = button.getAttribute('data-scroll-to-result');
-          const resultEl = document.getElementById(`tool-result-${CSS.escape(toolCallId)}`);
+          let resultEl = document.getElementById(`tool-result-${CSS.escape(toolCallId)}`);
+          if (!resultEl) {
+            // Message not in DOM — expand all units and re-render
+            state.visibleUnitCount = Infinity;
+            renderMessages();
+            resultEl = document.getElementById(`tool-result-${CSS.escape(toolCallId)}`);
+          }
           if (resultEl) {
             resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             // Auto-expand the collapsed panel
