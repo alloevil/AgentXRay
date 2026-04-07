@@ -212,6 +212,13 @@
       gap: 8px;
     }
 
+    .sse-indicator {
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 14px;
+      padding-left: 2px;
+    }
+
     .toggle {
       display: flex;
       justify-content: space-between;
@@ -335,6 +342,102 @@
       font-size: 13px;
     }
 
+    /* ========= Overview Timeline ========= */
+    .timeline-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      width: 100%;
+      flex-basis: 100%;
+    }
+    .timeline-section h3 {
+      font-size: 11px;
+      color: var(--muted);
+      margin: 0 0 8px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .timeline-bar {
+      position: relative;
+      height: 48px;
+      background: rgba(13, 17, 23, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: crosshair;
+    }
+    .timeline-bar .tl-segment {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      min-width: 1px;
+      transition: opacity 0.15s;
+      cursor: pointer;
+    }
+    .timeline-bar .tl-segment:hover {
+      opacity: 0.7;
+    }
+    .timeline-bar .tl-segment.user {
+      background: rgba(88, 166, 255, 0.7);
+    }
+    .timeline-bar .tl-segment.assistant {
+      background: rgba(126, 231, 135, 0.5);
+    }
+    .timeline-bar .tl-segment.tool {
+      background: rgba(210, 153, 34, 0.35);
+    }
+    .timeline-bar .tl-segment.spawn {
+      background: rgba(240, 136, 62, 0.6);
+    }
+    .timeline-bar .tl-gap {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-left: 1.5px dashed rgba(248, 81, 73, 0.6);
+      pointer-events: none;
+    }
+    .timeline-bar .tl-gap-label {
+      position: absolute;
+      top: 2px;
+      font-size: 8px;
+      color: rgba(248, 81, 73, 0.8);
+      white-space: nowrap;
+      transform: translateX(3px);
+      pointer-events: none;
+      font-family: var(--mono);
+    }
+    .timeline-bar .tl-viewport {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border: 1px solid rgba(88, 166, 255, 0.4);
+      background: rgba(88, 166, 255, 0.06);
+      border-radius: 2px;
+      pointer-events: none;
+      transition: left 0.15s, width 0.15s;
+    }
+    .timeline-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .timeline-legend span::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      margin-right: 3px;
+      vertical-align: middle;
+    }
+    .timeline-legend .tl-leg-user::before { background: #58a6ff; }
+    .timeline-legend .tl-leg-assistant::before { background: #7ee787; }
+    .timeline-legend .tl-leg-tool::before { background: #d29922; }
+    .timeline-legend .tl-leg-gap::before { background: transparent; border-left: 2px dashed #f85149; width: 0; height: 10px; border-radius: 0; }
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -394,6 +497,62 @@
       gap: 16px;
       align-items: center;
       flex-wrap: wrap;
+    }
+
+    /* Export dropdown */
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .export-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: var(--sans);
+      transition: background 0.15s;
+    }
+    .export-btn:hover {
+      background: var(--panel-alt);
+    }
+    .export-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      z-index: 100;
+      min-width: 180px;
+      overflow: hidden;
+    }
+    .export-menu.open {
+      display: block;
+    }
+    .export-menu button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--sans);
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .export-menu button:hover {
+      background: rgba(255,255,255,0.06);
+    }
+    .export-menu button + button {
+      border-top: 1px solid var(--border);
     }
 
     .summary h2 {
@@ -553,6 +712,8 @@
     .turn-chip.ok { border-color: rgba(35, 134, 54, 0.3); color: #7ee787; }
     .turn-chip.err { border-color: rgba(248, 81, 73, 0.3); color: #ff7b72; }
     .turn-chip.spawn { border-color: rgba(240, 136, 62, 0.3); color: #f0883e; }
+    .turn-chip.warn { border-color: rgba(210, 153, 34, 0.4); color: #d29922; }
+    .turn-chip.danger { border-color: rgba(248, 81, 73, 0.3); color: #ff7b72; }
 
     .graph-lane {
       width: 52px;
@@ -1202,6 +1363,7 @@
           <label class="toggle" id="archivedToggle"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
           <label class="toggle"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
           <label class="toggle"><span>Auto-scroll</span><input id="autoScroll" type="checkbox"></label>
+          <span id="sseIndicator" class="sse-indicator" title="Real-time tail status"></span>
         </div>
         <div id="searchResults" class="search-results" hidden></div>
         <div id="sessionList" class="session-list"></div>
@@ -1261,6 +1423,7 @@
       autoScroll: false,
       sessionData: null,
       refreshTimer: null,
+      sseSource: null,   // active EventSource for real-time tail
       spawnMap: [],
       navStack: [],
       msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
@@ -1429,7 +1592,7 @@
       // Per-message delta (for badges)
       visibleMessages.forEach((message) => {
         const timestampMs = parseTimestampMs(message.timestamp);
-        const meta = { timestampMs, deltaMs: null };
+        const meta = { timestampMs, deltaMs: null, toolDurationMs: null };
         if (timestampMs !== null) {
           if (firstTimestamp === null) firstTimestamp = timestampMs;
           lastTimestamp = timestampMs;
@@ -1440,6 +1603,40 @@
         }
         timingByMessage.set(message, meta);
       });
+
+      // ── Tool call durations: pair toolCall ↔ toolResult by toolCallId ──
+      // Also works for OpenClaw-style where toolCalls are inline in assistant content
+      const toolCallTsById = new Map(); // toolCallId → {timestampMs, message}
+      let totalToolDurationMs = 0;
+      let toolPairCount = 0;
+
+      for (const msg of visibleMessages) {
+        const ts = parseTimestampMs(msg.timestamp);
+        if (ts === null) continue;
+
+        if (msg.role === 'toolCall') {
+          // Codex-style: separate toolCall record
+          if (msg.toolCallId) toolCallTsById.set(msg.toolCallId, { ts, msg });
+        } else if (msg.role === 'assistant') {
+          // OpenClaw-style: toolCalls embedded in assistant content
+          for (const c of (msg.content || [])) {
+            if (c.type === 'toolCall' && c.id) {
+              toolCallTsById.set(c.id, { ts, msg });
+            }
+          }
+        } else if (msg.role === 'toolResult') {
+          const id = msg.toolCallId;
+          if (id && toolCallTsById.has(id)) {
+            const { ts: callTs } = toolCallTsById.get(id);
+            const duration = Math.max(0, ts - callTs);
+            const meta = timingByMessage.get(msg);
+            if (meta) meta.toolDurationMs = duration;
+            totalToolDurationMs += duration;
+            toolPairCount++;
+            toolCallTsById.delete(id);
+          }
+        }
+      }
 
       // Slowest turn: from user message to end of agent work (next user or end)
       let slowestTurn = null;
@@ -1506,7 +1703,9 @@
         visibleMessages,
         timingByMessage,
         totalDurationMs: firstTimestamp !== null && lastTimestamp !== null ? Math.max(0, lastTimestamp - firstTimestamp) : null,
-        slowestStep: slowestTurn
+        slowestStep: slowestTurn,
+        totalToolDurationMs: toolPairCount > 0 ? totalToolDurationMs : null,
+        toolPairCount
       };
     }
 
@@ -1518,10 +1717,20 @@
       return `<span class="delta-badge${cls}">+${escapeHtml(formatDurationCompact(deltaMs))}</span>`;
     }
 
-    function renderMessageHead(roleHtml, metaHtml, timestamp, deltaMs) {
+    // Badge for tool call duration (shown on toolResult) — show all durations ≥ 200ms
+    function getToolDurationBadge(durationMs) {
+      if (!Number.isFinite(durationMs) || durationMs < 200) return '';
+      let cls = '';
+      if (durationMs >= 60000) cls = ' danger';
+      else if (durationMs >= 10000) cls = ' warn';
+      return `<span class="delta-badge${cls}" title="Tool execution time">⏱ ${escapeHtml(formatDurationCompact(durationMs))}</span>`;
+    }
+
+    function renderMessageHead(roleHtml, metaHtml, timestamp, deltaMs, toolDurationMs) {
       const deltaBadge = getDeltaBadge(deltaMs);
+      const toolBadge = getToolDurationBadge(toolDurationMs);
       const timestampHtml = timestamp ? `<span>${escapeHtml(formatDate(timestamp))}</span>` : '';
-      const rightSide = [timestampHtml, deltaBadge].filter(Boolean).join('');
+      const rightSide = [timestampHtml, toolBadge, deltaBadge].filter(Boolean).join('');
       return `
         <div class="message-head">
           <div class="message-head-main">${roleHtml}${metaHtml || ''}</div>
@@ -1816,6 +2025,7 @@
 
     function renderMessage(message, timingMeta) {
       const deltaMs = timingMeta?.deltaMs ?? null;
+      const toolDurationMs = timingMeta?.toolDurationMs ?? null;
       const text = getTextContent(message.content);
       if (message.role === 'user') {
         const longText = text.length > 1400;
@@ -1878,11 +2088,29 @@
       return `
         <article class="message toolResult ${resultClass} session-anchor" id="tool-result-${escapeHtml(message.toolCallId || message.id)}">
           <div class="card">
-            ${renderMessageHead(`<span class="message-role">${message.isError ? 'Tool Error' : 'Tool Result'}</span>`, `<span class="tool-meta">${escapeHtml(message.toolName || 'tool result')}</span>`, message.timestamp, deltaMs)}
+            ${renderMessageHead(`<span class="message-role">${message.isError ? 'Tool Error' : 'Tool Result'}</span>`, `<span class="tool-meta">${escapeHtml(message.toolName || 'tool result')}</span>`, message.timestamp, deltaMs, toolDurationMs)}
             ${renderToolResult(message)}
           </div>
         </article>
       `;
+    }
+
+    function renderTimeSplit(timing) {
+      if (timing.totalDurationMs === null) return '';
+      const total = timing.totalDurationMs;
+      const toolMs = timing.totalToolDurationMs || 0;
+      const modelMs = Math.max(0, total - toolMs);
+      const toolPct = total > 0 ? Math.round(toolMs / total * 100) : 0;
+      const modelPct = total > 0 ? Math.round(modelMs / total * 100) : 0;
+      const hasSplit = timing.totalToolDurationMs !== null && total > 0;
+      let html = `<span title="Wall-clock time from first to last message">⏱ Total: ${escapeHtml(formatDurationCompact(total))}</span>`;
+      if (hasSplit) {
+        html += `<span title="Estimated breakdown: tool execution time vs model inference time (model = total − tool exec)">`
+          + `🔧 Tool exec: ${escapeHtml(formatDurationCompact(toolMs))} (${toolPct}%)`
+          + ` · 🤖 Model: ${escapeHtml(formatDurationCompact(modelMs))} (${modelPct}%)`
+          + `</span>`;
+      }
+      return html;
     }
 
     function renderSummary() {
@@ -1951,8 +2179,16 @@
             <div class="summary-meta">
               <span>${escapeHtml(formatDate(state.sessionData.session?.timestamp))}</span>
               <span>${escapeHtml(state.sessionData.session?.cwd || 'Unknown cwd')}</span>
-              ${timing.totalDurationMs !== null ? `<span title="Wall-clock time from first to last message (includes user idle time)">⏱ Total duration: ${escapeHtml(formatDurationCompact(timing.totalDurationMs))}</span>` : ''}
+              ${renderTimeSplit(timing)}
               ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump — total agent work time for this turn (user msg → last agent response)" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest turn: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
+            </div>
+          </div>
+          <div class="export-dropdown" id="exportDropdown">
+            <button class="export-btn" id="exportBtn">📥 Export</button>
+            <div class="export-menu" id="exportMenu">
+              <button data-export="markdown">📝 Markdown (.md)</button>
+              <button data-export="json">📦 JSON (.json)</button>
+              <button data-export="clipboard">📋 Copy to clipboard</button>
             </div>
           </div>
         </div>
@@ -1983,6 +2219,16 @@
             <div class="token-grid">${tokenBadges}</div>
           </div>
         </div>
+        <div class="timeline-section">
+          <h3>📊 Timeline</h3>
+          <div class="timeline-bar" id="timelineBar"></div>
+          <div class="timeline-legend">
+            <span class="tl-leg-user">User</span>
+            <span class="tl-leg-assistant">Assistant</span>
+            <span class="tl-leg-tool">Tool</span>
+            <span class="tl-leg-gap">Gap &gt;30s</span>
+          </div>
+        </div>
       `;
 
       // Bind filter badge clicks
@@ -1998,21 +2244,306 @@
       // Bind slowest step jump
       summary.querySelectorAll('.slowest-step-link').forEach((link) => {
         link.addEventListener('click', () => {
-          const targetId = link.getAttribute('data-target-id');
-          if (!targetId) return;
-          // Try various id patterns used by renderMessage
-          const el = document.getElementById('message-' + targetId)
-            || document.getElementById('tool-result-' + targetId)
-            || document.getElementById('row-' + targetId)
-            || document.querySelector(`[id*="${CSS.escape(targetId)}"]`);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            el.classList.remove('flash-highlight');
-            void el.offsetWidth; // force reflow
-            el.classList.add('flash-highlight');
-          }
+          scrollToMessage(link.getAttribute('data-target-id'));
         });
       });
+
+      // Export dropdown
+      const exportBtn = document.getElementById('exportBtn');
+      const exportMenu = document.getElementById('exportMenu');
+      if (exportBtn && exportMenu) {
+        exportBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          exportMenu.classList.toggle('open');
+        });
+        // Close menu when clicking outside
+        document.addEventListener('click', () => exportMenu.classList.remove('open'));
+        exportMenu.querySelectorAll('button[data-export]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            exportMenu.classList.remove('open');
+            const fmt = btn.dataset.export;
+            if (fmt === 'markdown') exportAsMarkdown();
+            else if (fmt === 'json') exportAsJson();
+            else if (fmt === 'clipboard') exportToClipboard();
+          });
+        });
+      }
+
+      // Render overview timeline
+      renderTimeline(msgs);
+    }
+
+    // ========= Export Functions =========
+
+    function sessionToMarkdown() {
+      if (!state.sessionData) return '';
+      const session = state.sessionData.session || {};
+      const msgs = state.sessionData.messages || [];
+      const lines = [];
+
+      lines.push(`# Session: ${session.id || state.selectedSessionId}`);
+      lines.push('');
+      if (session.timestamp) lines.push(`**Date:** ${formatDate(session.timestamp)}`);
+      if (session.cwd) lines.push(`**Working Directory:** ${session.cwd}`);
+      lines.push(`**Platform:** ${state.platform || 'unknown'}`);
+      lines.push(`**Messages:** ${msgs.length}`);
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+
+      for (const msg of msgs) {
+        const ts = msg.timestamp ? formatDate(msg.timestamp) : '';
+        const text = getTextContent(msg.content);
+
+        if (msg.role === 'user') {
+          lines.push(`## 👤 User ${ts ? `(${ts})` : ''}`);
+          lines.push('');
+          lines.push(text);
+          lines.push('');
+        } else if (msg.role === 'assistant') {
+          const toolCalls = (msg.content || []).filter(c => c.type === 'toolCall');
+          if (text.trim()) {
+            lines.push(`## 🤖 Assistant ${ts ? `(${ts})` : ''}`);
+            lines.push('');
+            lines.push(text);
+            lines.push('');
+          }
+          for (const tc of toolCalls) {
+            lines.push(`### 🔧 Tool Call: ${tc.name || 'unknown'}`);
+            lines.push('');
+            const args = tc.arguments || tc.input || {};
+            lines.push('```json');
+            lines.push(JSON.stringify(args, null, 2));
+            lines.push('```');
+            lines.push('');
+          }
+        } else if (msg.role === 'toolResult') {
+          const name = msg.toolName || msg.name || '';
+          const isErr = msg.isError;
+          lines.push(`### ${isErr ? '❌' : '📋'} Tool Result${name ? ': ' + name : ''} ${ts ? `(${ts})` : ''}`);
+          lines.push('');
+          const output = text || (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2));
+          // Truncate very long tool outputs
+          const maxLen = 2000;
+          if (output.length > maxLen) {
+            lines.push('```');
+            lines.push(output.slice(0, maxLen) + `\n\n... (truncated, ${output.length} chars total)`);
+            lines.push('```');
+          } else {
+            lines.push('```');
+            lines.push(output);
+            lines.push('```');
+          }
+          lines.push('');
+        } else if (msg.role === 'toolCall') {
+          // Codex-style separate toolCall
+          const name = msg.toolName || msg.name || 'unknown';
+          lines.push(`### 🔧 Tool Call: ${name} ${ts ? `(${ts})` : ''}`);
+          lines.push('');
+          const args = msg.details || msg.arguments || {};
+          lines.push('```json');
+          lines.push(JSON.stringify(args, null, 2));
+          lines.push('```');
+          lines.push('');
+        } else if (msg.role === 'reasoning') {
+          if (text.trim()) {
+            lines.push(`### 💭 Reasoning ${ts ? `(${ts})` : ''}`);
+            lines.push('');
+            lines.push(text);
+            lines.push('');
+          }
+        }
+      }
+
+      return lines.join('\n');
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function getExportFilename(ext) {
+      const id = state.sessionData?.session?.id || state.selectedSessionId || 'session';
+      // Sanitize: keep alphanumeric, dash, underscore
+      const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
+      return `agentxray-${safe}.${ext}`;
+    }
+
+    function exportAsMarkdown() {
+      const md = sessionToMarkdown();
+      downloadFile(md, getExportFilename('md'), 'text/markdown;charset=utf-8');
+    }
+
+    function exportAsJson() {
+      if (!state.sessionData) return;
+      const json = JSON.stringify(state.sessionData, null, 2);
+      downloadFile(json, getExportFilename('json'), 'application/json;charset=utf-8');
+    }
+
+    async function exportToClipboard() {
+      const md = sessionToMarkdown();
+      try {
+        await navigator.clipboard.writeText(md);
+        // Brief visual feedback on the export button
+        const btn = document.getElementById('exportBtn');
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = '✅ Copied!';
+          setTimeout(() => { btn.textContent = original; }, 1500);
+        }
+      } catch {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = md;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    }
+
+    // Scroll to a message by ID, expanding pagination if needed
+    function scrollToMessage(msgId) {
+      if (!msgId) return;
+      let el = document.getElementById('message-' + CSS.escape(msgId))
+        || document.getElementById('tool-result-' + CSS.escape(msgId))
+        || document.getElementById('row-' + CSS.escape(msgId))
+        || document.querySelector(`[id*="${CSS.escape(msgId)}"]`);
+      if (!el) {
+        // Message not in DOM — expand all units and re-render
+        state.visibleUnitCount = Infinity;
+        renderMessages();
+        el = document.getElementById('message-' + CSS.escape(msgId))
+          || document.getElementById('tool-result-' + CSS.escape(msgId))
+          || document.getElementById('row-' + CSS.escape(msgId))
+          || document.querySelector(`[id*="${CSS.escape(msgId)}"]`);
+      }
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('flash-highlight');
+        void el.offsetWidth;
+        el.classList.add('flash-highlight');
+      }
+    }
+
+    function renderTimeline(msgs) {
+      const bar = document.getElementById('timelineBar');
+      if (!bar || !msgs.length) return;
+
+      // Collect timestamps
+      const points = [];
+      for (const m of msgs) {
+        const ts = m.timestamp ? new Date(m.timestamp).getTime() : null;
+        if (!ts || isNaN(ts)) continue;
+        let cls = 'tool';
+        if (m.role === 'user') cls = 'user';
+        else if (m.role === 'assistant') {
+          const hasToolCalls = Array.isArray(m.content) && m.content.some(c => c.type === 'tool_use');
+          const isSpawn = hasToolCalls && m.content.some(c => c.type === 'tool_use' && (c.name === 'sessions_spawn' || (c.name === 'exec' && /codex|claude/.test(JSON.stringify(c.input || {})))));
+          cls = isSpawn ? 'spawn' : 'assistant';
+        }
+        points.push({ ts, cls, id: m.id || '' });
+      }
+      if (points.length < 2) { bar.innerHTML = ''; return; }
+
+      const tMin = points[0].ts;
+      const tMax = points[points.length - 1].ts;
+      const totalSpan = tMax - tMin;
+      if (totalSpan <= 0) { bar.innerHTML = ''; return; }
+
+      // Build intervals for sqrt-compression scaling
+      // Long gaps get compressed so active periods get more visual space
+      const intervals = [];
+      for (let i = 0; i < points.length - 1; i++) {
+        intervals.push(points[i + 1].ts - points[i].ts);
+      }
+      const compressed = intervals.map(d => Math.sqrt(Math.max(d, 1)));
+      const compressedTotal = compressed.reduce((a, b) => a + b, 0) || 1;
+
+      // Build cumulative position array (0..1)
+      const pos = [0];
+      let cum = 0;
+      for (let i = 0; i < compressed.length; i++) {
+        cum += compressed[i];
+        pos.push(cum / compressedTotal);
+      }
+
+      let html = '';
+      const GAP_THRESHOLD = 120000; // 2 minutes
+
+      // Render message segments
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        const left = pos[i] * 100;
+        const nextLeft = (i < points.length - 1) ? pos[i + 1] * 100 : 100;
+        const w = Math.max(0.15, nextLeft - left);
+        html += `<div class="tl-segment ${p.cls}" style="left:${left.toFixed(3)}%;width:${Math.min(w, 100 - left).toFixed(3)}%" data-msg-id="${escapeHtml(p.id)}" title="${p.cls} · ${escapeHtml(formatDate(p.ts))}"></div>`;
+      }
+
+      // Render gap markers (>2min intervals)
+      for (let i = 1; i < points.length; i++) {
+        const gap = points[i].ts - points[i - 1].ts;
+        if (gap >= GAP_THRESHOLD) {
+          const left = pos[i - 1] * 100;
+          const label = formatDurationCompact(gap);
+          html += `<div class="tl-gap" style="left:${left.toFixed(3)}%"></div>`;
+          if (gap >= 300000) {
+            html += `<div class="tl-gap-label" style="left:${left.toFixed(3)}%">${escapeHtml(label)}</div>`;
+          }
+        }
+      }
+
+      // Viewport indicator (synced with message scroll)
+      html += `<div class="tl-viewport" id="timelineViewport"></div>`;
+      bar.innerHTML = html;
+
+      // Bind segment clicks -> jump to message
+      bar.querySelectorAll('.tl-segment').forEach(seg => {
+        seg.addEventListener('click', () => {
+          scrollToMessage(seg.dataset.msgId);
+        });
+      });
+
+      // Bind click on bar background -> jump to rough position
+      bar.addEventListener('click', (e) => {
+        if (e.target !== bar) return; // only background clicks
+        const rect = bar.getBoundingClientRect();
+        const pct = (e.clientX - rect.left) / rect.width;
+        const msgEl = document.getElementById('messages');
+        if (msgEl) {
+          msgEl.scrollTop = pct * msgEl.scrollHeight;
+        }
+      });
+
+      // Sync viewport indicator with messages scroll
+      syncTimelineViewport();
+    }
+
+    function syncTimelineViewport() {
+      const msgEl = document.getElementById('messages');
+      const vp = document.getElementById('timelineViewport');
+      if (!msgEl || !vp) return;
+
+      function updateVP() {
+        const total = msgEl.scrollHeight;
+        if (total <= 0) return;
+        const top = msgEl.scrollTop / total;
+        const h = msgEl.clientHeight / total;
+        vp.style.left = (top * 100).toFixed(2) + '%';
+        vp.style.width = (h * 100).toFixed(2) + '%';
+      }
+
+      msgEl.removeEventListener('scroll', msgEl._tlScrollHandler);
+      msgEl._tlScrollHandler = updateVP;
+      msgEl.addEventListener('scroll', updateVP, { passive: true });
+      updateVP();
     }
 
     function renderMessages() {
@@ -2205,6 +2736,38 @@
           const errChip = errCount ? `<span class="turn-chip err">❌ ${errCount} error${errCount>1?'s':''}</span>` : '';
           const spawnChip = spawnCount ? `<span class="turn-chip spawn">🔗 ${spawnCount} spawn</span>` : '';
 
+          // Tool batch duration: first toolCall start → last toolResult finish
+          let turnToolDurationChip = '';
+          {
+            // First toolCall timestamp
+            let firstCallTs = null;
+            if (isCodex) {
+              // Codex: unit.tools are separate toolCall records
+              for (const t of unit.tools) {
+                const ts = parseTimestampMs(t.timestamp);
+                if (ts !== null && (firstCallTs === null || ts < firstCallTs)) firstCallTs = ts;
+              }
+            } else {
+              // OpenClaw: toolCalls are embedded in assistant content — use assistant message ts
+              firstCallTs = parseTimestampMs(unit.assistant.timestamp);
+            }
+            // Last toolResult timestamp
+            let lastResultTs = null;
+            for (const step of unit.steps) {
+              if (step.role === 'toolResult') {
+                const ts = parseTimestampMs(step.timestamp);
+                if (ts !== null && (lastResultTs === null || ts > lastResultTs)) lastResultTs = ts;
+              }
+            }
+            if (firstCallTs !== null && lastResultTs !== null && lastResultTs > firstCallTs) {
+              const dur = lastResultTs - firstCallTs;
+              let cls = '';
+              if (dur >= 60000) cls = ' danger';
+              else if (dur >= 10000) cls = ' warn';
+              turnToolDurationChip = `<span class="turn-chip${cls}" title="Total tool execution time for this turn">⏱ ${escapeHtml(formatDurationCompact(dur))}</span>`;
+            }
+          }
+
           // Render the assistant text (if any) outside the fold
           const assistantText = getTextContent(unit.assistant.content);
           const assistantTextHtml = assistantText ? renderMessage(unit.assistant, timing.timingByMessage.get(unit.assistant)) : '';
@@ -2222,7 +2785,7 @@
                       <strong>🔧 ${toolCount} tool call${toolCount>1?'s':''}</strong>
                       <span>· ${stepCount} result${stepCount>1?'s':''}</span>
                     </div>
-                    <div class="turn-group-chips">${chips}${errChip}${spawnChip}</div>
+                    <div class="turn-group-chips">${turnToolDurationChip}${chips}${errChip}${spawnChip}</div>
                   </div>
                   <div class="turn-group-body" id="body-${tid}">`;
 
@@ -2353,7 +2916,13 @@
       messages.querySelectorAll('[data-scroll-to-result]').forEach((button) => {
         button.addEventListener('click', () => {
           const toolCallId = button.getAttribute('data-scroll-to-result');
-          const resultEl = document.getElementById(`tool-result-${CSS.escape(toolCallId)}`);
+          let resultEl = document.getElementById(`tool-result-${CSS.escape(toolCallId)}`);
+          if (!resultEl) {
+            // Message not in DOM — expand all units and re-render
+            state.visibleUnitCount = Infinity;
+            renderMessages();
+            resultEl = document.getElementById(`tool-result-${CSS.escape(toolCallId)}`);
+          }
           if (resultEl) {
             resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             // Auto-expand the collapsed panel
@@ -2474,6 +3043,7 @@
     async function loadSession() {
       if (!state.selectedSessionId) {
         state.sessionData = null;
+        closeSse();
         renderSummary();
         renderMessages();
         return;
@@ -2493,21 +3063,108 @@
       renderSummary();
       renderMessages();
       loading.hidden = true;
+      // Start SSE real-time tail for this session
+      startSse();
     }
 
     function restartRefreshLoop() {
       window.clearInterval(state.refreshTimer);
+      // If SSE is active, we don't need the polling loop for the session itself
+      // but still poll the session list for new sessions appearing
       if (!state.autoRefresh) return;
       state.refreshTimer = window.setInterval(async () => {
         try {
           await loadSessions(true);
-          if (state.selectedSessionId) {
+          // Only poll full session reload if SSE is NOT active
+          if (!state.sseSource && state.selectedSessionId) {
             await loadSession();
           }
         } catch (error) {
           showError(error.message);
         }
       }, 5000);
+    }
+
+    // ========= SSE real-time tail =========
+
+    function closeSse() {
+      if (state.sseSource) {
+        state.sseSource.close();
+        state.sseSource = null;
+      }
+    }
+
+    function buildWatchUrl() {
+      if (!state.selectedSessionId) return null;
+      const dp = dirParam();
+      const params = new URLSearchParams();
+      params.set('platform', state.platform || 'openclaw');
+      params.set('sessionId', state.selectedSessionId);
+      if (state.selectedAgent) params.set('agent', state.selectedAgent);
+      // Extract dir from dirParam (format: ?dir=X or '')
+      if (dp) {
+        const m = dp.match(/[?&]dir=([^&]*)/);
+        if (m) params.set('dir', decodeURIComponent(m[1]));
+      }
+      return `/api/watch?${params.toString()}`;
+    }
+
+    function startSse() {
+      closeSse();
+      if (!state.autoRefresh || !state.selectedSessionId) return;
+      const url = buildWatchUrl();
+      if (!url) return;
+
+      const es = new EventSource(url);
+      state.sseSource = es;
+
+      es.addEventListener('connected', (e) => {
+        // SSE connected — server confirmed the file exists and we're watching
+        const data = JSON.parse(e.data || '{}');
+        const indicator = document.getElementById('sseIndicator');
+        if (indicator) {
+          indicator.textContent = '🟢 Live';
+          indicator.title = `Real-time tail active (${data.messageCount} messages loaded)`;
+        }
+      });
+
+      es.addEventListener('newMessages', (e) => {
+        if (!state.sessionData) return;
+        const { messages: newMsgs, session } = JSON.parse(e.data || '{}');
+        if (!Array.isArray(newMsgs) || newMsgs.length === 0) return;
+
+        // Append new messages to session data
+        state.sessionData.messages.push(...newMsgs);
+        if (session) Object.assign(state.sessionData.session || {}, session);
+
+        // Expand visibleUnitCount to show new messages
+        state.visibleUnitCount += newMsgs.length + 5;
+
+        // Re-render
+        renderSummary();
+        renderMessages();
+
+        // Auto-scroll to bottom if enabled
+        if (state.autoScroll) {
+          const messages = document.getElementById('messages');
+          if (messages) messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Invalidate session list to refresh sidebar counters
+        loadSessions(true).catch(() => {});
+      });
+
+      es.addEventListener('error', (e) => {
+        const indicator = document.getElementById('sseIndicator');
+        if (indicator) {
+          indicator.textContent = '🔴 Live';
+          indicator.title = 'Real-time connection lost, will retry';
+        }
+      });
+
+      es.onerror = () => {
+        // EventSource auto-reconnects on error — no manual action needed
+      };
     }
 
     async function refreshAll(preserveSelection) {
@@ -2633,6 +3290,13 @@
 
     autoRefresh.addEventListener('change', () => {
       state.autoRefresh = autoRefresh.checked;
+      if (!state.autoRefresh) {
+        closeSse();
+        const indicator = document.getElementById('sseIndicator');
+        if (indicator) indicator.textContent = '';
+      } else {
+        startSse();
+      }
       restartRefreshLoop();
     });
 

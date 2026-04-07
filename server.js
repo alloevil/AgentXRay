@@ -8,6 +8,10 @@ const app = express();
 const PORT = process.env.PORT || 3800;
 const HOME = process.env.HOME || '/root';
 const DATA_DIR = process.env.OPENCLAW_DIR || path.join(HOME, '.openclaw', 'agents');
+
+// ========= Session Metadata Cache =========
+// Key: absolute file path  →  { mtime: number, data: sessionMetadataObject }
+const sessionMetaCache = new Map();
 const CODEX_DIR = process.env.CODEX_DIR || path.join(HOME, '.codex', 'sessions');
 const CLAUDE_CODE_DIR = process.env.CLAUDE_CODE_DIR || path.join(HOME, '.claude', 'projects');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -55,6 +59,32 @@ async function readAgents(baseDir) {
 }
 
 async function parseSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseSessionMetadataRaw(filePath, fileName) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let session = null;
@@ -547,6 +577,32 @@ async function findCodexSessionFile(baseDir, sessionId) {
 }
 
 async function parseCodexSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseCodexSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseCodexSessionMetadataRaw(filePath, fileName) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let sessionMeta = null;
@@ -896,6 +952,32 @@ function parseClaudeCodeSessionIdFromFilename(fileName) {
 }
 
 async function parseClaudeCodeSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseClaudeCodeSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseClaudeCodeSessionMetadataRaw(filePath, fileName) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let sessionId = null;
@@ -1218,6 +1300,165 @@ app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
     }
     res.status(500).json({ error: error.message });
   }
+});
+
+// ========= Real-time SSE tail endpoint =========
+// GET /api/watch?platform=openclaw&agent=NAME&sessionId=ID[&dir=PATH]
+// GET /api/watch?platform=codex&sessionId=ID[&dir=PATH]
+// GET /api/watch?platform=claude-code&sessionId=ID[&dir=PATH]
+// Streams Server-Sent Events:
+//   event: connected     data: {"messageCount": N}
+//   event: newMessages   data: {"messages": [...normalized], "session": {...}}
+//   event: error         data: {"error": "..."}
+
+app.get('/api/watch', async (req, res) => {
+  const platform  = req.query.platform || 'openclaw';
+  const agentName = sanitizeAgentName(req.query.agent || '');
+  const sessionId = sanitizeSessionId(req.query.sessionId || '');
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+
+  // Resolve the JSONL file path
+  let filePath;
+  try {
+    if (platform === 'openclaw') {
+      if (!agentName) return res.status(400).json({ error: 'agent required for openclaw' });
+      const dir = resolveDir(req.query.dir, DATA_DIR);
+      filePath = await resolveSessionFile(dir, agentName, sessionId);
+    } else if (platform === 'codex') {
+      const dir = resolveDir(req.query.dir, CODEX_DIR);
+      filePath = await findCodexSessionFile(dir, sessionId);
+    } else if (platform === 'claude-code') {
+      const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
+      filePath = await findClaudeCodeSessionFile(dir, sessionId);
+    } else {
+      return res.status(400).json({ error: 'Unknown platform' });
+    }
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+  if (!filePath) return res.status(404).json({ error: 'Session not found' });
+
+  // Helper: read new lines from a byte offset, return {lines, newOffset}
+  async function readNewLines(byteOffset) {
+    const stat = await fsp.stat(filePath);
+    if (stat.size <= byteOffset) return { lines: [], newOffset: byteOffset };
+    const buf = Buffer.alloc(stat.size - byteOffset);
+    const fd = await fsp.open(filePath, 'r');
+    try {
+      await fd.read(buf, 0, buf.length, byteOffset);
+    } finally {
+      await fd.close();
+    }
+    const text = buf.toString('utf8');
+    const lines = text.split('\n').filter(l => l.trim());
+    return { lines, newOffset: stat.size };
+  }
+
+  // Helper: normalize lines according to platform
+  function parseLines(lines) {
+    const messages = [];
+    let sessionMeta = null;
+    for (const line of lines) {
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+      if (platform === 'openclaw') {
+        if (rec.type === 'session') {
+          sessionMeta = { id: rec.id, cwd: rec.cwd, timestamp: rec.timestamp };
+        } else if (rec.type === 'message') {
+          messages.push(normalizeMessage(rec));
+        }
+      } else if (platform === 'codex') {
+        const normalized = normalizeCodexRecord(rec);
+        if (normalized) messages.push(normalized);
+      } else if (platform === 'claude-code') {
+        const normalized = normalizeClaudeCodeRecord(rec);
+        if (normalized) messages.push(normalized);
+      }
+    }
+    return { messages, sessionMeta };
+  }
+
+  // SSE setup
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+  res.flushHeaders();
+
+  function send(eventName, data) {
+    res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  // Do initial full parse to know current message count + byte offset
+  let byteOffset = 0;
+  let initialMessageCount = 0;
+  try {
+    const stat = await fsp.stat(filePath);
+    byteOffset = stat.size;
+    // Count existing messages without sending them (client already has them)
+    const { lines } = await readNewLines(0).then(async () => {
+      const all = await fsp.readFile(filePath, 'utf8');
+      const ls = all.split('\n').filter(l => l.trim());
+      return { lines: ls };
+    });
+    const { messages: existingMsgs } = parseLines(lines);
+    initialMessageCount = existingMsgs.length;
+  } catch (e) {
+    send('error', { error: e.message });
+    return res.end();
+  }
+
+  send('connected', { messageCount: initialMessageCount });
+
+  // Watch for file changes
+  let watcher;
+  let debounceTimer = null;
+  let closed = false;
+
+  const onFileChange = async () => {
+    if (closed) return;
+    try {
+      const { lines, newOffset } = await readNewLines(byteOffset);
+      if (lines.length === 0) return;
+      byteOffset = newOffset;
+      const { messages, sessionMeta } = parseLines(lines);
+      if (messages.length > 0) {
+        const payload = { messages };
+        if (sessionMeta) payload.session = sessionMeta;
+        send('newMessages', payload);
+      }
+      // Invalidate metadata cache so next session list refresh picks up changes
+      sessionMetaCache.delete(filePath);
+    } catch (e) {
+      send('error', { error: e.message });
+    }
+  };
+
+  try {
+    watcher = fs.watch(filePath, (eventType) => {
+      if (eventType === 'change') {
+        // Debounce: batch rapid writes (e.g. multiple lines written close together)
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(onFileChange, 80);
+      }
+    });
+  } catch (e) {
+    send('error', { error: `Cannot watch file: ${e.message}` });
+    return res.end();
+  }
+
+  // Keepalive ping every 15s to prevent proxy timeouts
+  const pingTimer = setInterval(() => {
+    if (!closed) res.write(': ping\n\n');
+  }, 15000);
+
+  // Cleanup on client disconnect
+  req.on('close', () => {
+    closed = true;
+    clearTimeout(debounceTimer);
+    clearInterval(pingTimer);
+    if (watcher) watcher.close();
+  });
 });
 
 app.get('*', (req, res) => {
