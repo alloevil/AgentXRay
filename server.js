@@ -8,6 +8,10 @@ const app = express();
 const PORT = process.env.PORT || 3800;
 const HOME = process.env.HOME || '/root';
 const DATA_DIR = process.env.OPENCLAW_DIR || path.join(HOME, '.openclaw', 'agents');
+
+// ========= Session Metadata Cache =========
+// Key: absolute file path  →  { mtime: number, data: sessionMetadataObject }
+const sessionMetaCache = new Map();
 const CODEX_DIR = process.env.CODEX_DIR || path.join(HOME, '.codex', 'sessions');
 const CLAUDE_CODE_DIR = process.env.CLAUDE_CODE_DIR || path.join(HOME, '.claude', 'projects');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -55,6 +59,32 @@ async function readAgents(baseDir) {
 }
 
 async function parseSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseSessionMetadataRaw(filePath, fileName) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let session = null;
@@ -547,6 +577,32 @@ async function findCodexSessionFile(baseDir, sessionId) {
 }
 
 async function parseCodexSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseCodexSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseCodexSessionMetadataRaw(filePath, fileName) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let sessionMeta = null;
@@ -896,6 +952,32 @@ function parseClaudeCodeSessionIdFromFilename(fileName) {
 }
 
 async function parseClaudeCodeSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseClaudeCodeSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseClaudeCodeSessionMetadataRaw(filePath, fileName) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let sessionId = null;
