@@ -712,6 +712,8 @@
     .turn-chip.ok { border-color: rgba(35, 134, 54, 0.3); color: #7ee787; }
     .turn-chip.err { border-color: rgba(248, 81, 73, 0.3); color: #ff7b72; }
     .turn-chip.spawn { border-color: rgba(240, 136, 62, 0.3); color: #f0883e; }
+    .turn-chip.warn { border-color: rgba(210, 153, 34, 0.4); color: #d29922; }
+    .turn-chip.danger { border-color: rgba(248, 81, 73, 0.3); color: #ff7b72; }
 
     .graph-lane {
       width: 52px;
@@ -2717,6 +2719,38 @@
           const errChip = errCount ? `<span class="turn-chip err">❌ ${errCount} error${errCount>1?'s':''}</span>` : '';
           const spawnChip = spawnCount ? `<span class="turn-chip spawn">🔗 ${spawnCount} spawn</span>` : '';
 
+          // Tool batch duration: first toolCall start → last toolResult finish
+          let turnToolDurationChip = '';
+          {
+            // First toolCall timestamp
+            let firstCallTs = null;
+            if (isCodex) {
+              // Codex: unit.tools are separate toolCall records
+              for (const t of unit.tools) {
+                const ts = parseTimestampMs(t.timestamp);
+                if (ts !== null && (firstCallTs === null || ts < firstCallTs)) firstCallTs = ts;
+              }
+            } else {
+              // OpenClaw: toolCalls are embedded in assistant content — use assistant message ts
+              firstCallTs = parseTimestampMs(unit.assistant.timestamp);
+            }
+            // Last toolResult timestamp
+            let lastResultTs = null;
+            for (const step of unit.steps) {
+              if (step.role === 'toolResult') {
+                const ts = parseTimestampMs(step.timestamp);
+                if (ts !== null && (lastResultTs === null || ts > lastResultTs)) lastResultTs = ts;
+              }
+            }
+            if (firstCallTs !== null && lastResultTs !== null && lastResultTs > firstCallTs) {
+              const dur = lastResultTs - firstCallTs;
+              let cls = '';
+              if (dur >= 60000) cls = ' danger';
+              else if (dur >= 10000) cls = ' warn';
+              turnToolDurationChip = `<span class="turn-chip${cls}" title="Total tool execution time for this turn">⏱ ${escapeHtml(formatDurationCompact(dur))}</span>`;
+            }
+          }
+
           // Render the assistant text (if any) outside the fold
           const assistantText = getTextContent(unit.assistant.content);
           const assistantTextHtml = assistantText ? renderMessage(unit.assistant, timing.timingByMessage.get(unit.assistant)) : '';
@@ -2734,7 +2768,7 @@
                       <strong>🔧 ${toolCount} tool call${toolCount>1?'s':''}</strong>
                       <span>· ${stepCount} result${stepCount>1?'s':''}</span>
                     </div>
-                    <div class="turn-group-chips">${chips}${errChip}${spawnChip}</div>
+                    <div class="turn-group-chips">${turnToolDurationChip}${chips}${errChip}${spawnChip}</div>
                   </div>
                   <div class="turn-group-body" id="body-${tid}">`;
 
