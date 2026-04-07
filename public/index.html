@@ -714,6 +714,32 @@
     .turn-chip.spawn { border-color: rgba(240, 136, 62, 0.3); color: #f0883e; }
     .turn-chip.warn { border-color: rgba(210, 153, 34, 0.4); color: #d29922; }
     .turn-chip.danger { border-color: rgba(248, 81, 73, 0.3); color: #ff7b72; }
+    .turn-chip.retry { border-color: rgba(139, 148, 158, 0.3); color: #a5d6ff; }
+
+    /* Retry chain annotations */
+    .retry-annotation {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      font-family: var(--mono);
+    }
+    .retry-error {
+      background: rgba(248, 81, 73, 0.08);
+      border-left: 3px solid #f85149;
+      color: #ff7b72;
+    }
+    .retry-error-final {
+      background: rgba(248, 81, 73, 0.12);
+      border-left: 3px solid #f85149;
+      color: #ff7b72;
+      font-weight: 600;
+    }
+    .retry-recovered {
+      background: rgba(35, 134, 54, 0.08);
+      border-left: 3px solid #238636;
+      color: #7ee787;
+    }
 
     .graph-lane {
       width: 52px;
@@ -2546,6 +2572,74 @@
       updateVP();
     }
 
+    // Analyze retry chains within a turn.
+    // Returns: { retryCount, retryMap: Map<stepMsg, {status, attempt, totalAttempts, toolName}> }
+    // status: 'error-retried' | 'error-final' | 'success-recovered' | 'success-first'
+    function buildRetryChains(unit) {
+      // Collect toolResults keyed by toolName in order
+      // A retry = same toolName appears multiple times in steps
+      const byName = {}; // toolName -> [{msg, isError, idx}]
+
+      unit.steps.forEach((step, idx) => {
+        if (step.role !== 'toolResult') return;
+        const name = step.toolName || step.name || '?';
+        if (!byName[name]) byName[name] = [];
+        byName[name].push({ msg: step, isError: step.isError, idx });
+      });
+
+      const retryMap = new Map();
+      let retryCount = 0;
+
+      for (const [toolName, attempts] of Object.entries(byName)) {
+        if (attempts.length < 2) {
+          // Only one attempt, no retry
+          const a = attempts[0];
+          retryMap.set(a.msg, {
+            status: a.isError ? 'error-final' : 'success-first',
+            attempt: 1, totalAttempts: 1, toolName
+          });
+          continue;
+        }
+
+        // Multiple attempts for same tool
+        const hasAnyError = attempts.some(a => a.isError);
+        if (hasAnyError) retryCount++;
+
+        attempts.forEach((a, i) => {
+          const isLast = i === attempts.length - 1;
+          let status;
+          if (a.isError) {
+            status = 'error-retried'; // error, and there's a next attempt
+          } else if (!isLast) {
+            status = 'success-first'; // success but more calls follow (parallel calls, not retry)
+          } else {
+            // Last attempt and success: check if any prior was error
+            status = hasAnyError ? 'success-recovered' : 'success-first';
+          }
+          retryMap.set(a.msg, {
+            status,
+            attempt: i + 1,
+            totalAttempts: attempts.length,
+            toolName
+          });
+        });
+      }
+
+      return { retryCount, retryMap };
+    }
+
+    function renderRetryAnnotation(retryInfo) {
+      const { status, attempt, totalAttempts, toolName } = retryInfo;
+      if (status === 'error-retried') {
+        return `<div class="retry-annotation retry-error">❌ Attempt ${attempt}/${totalAttempts} failed — agent will retry</div>`;
+      } else if (status === 'error-final') {
+        return `<div class="retry-annotation retry-error-final">❌ All ${totalAttempts} attempt${totalAttempts>1?'s':''} failed</div>`;
+      } else if (status === 'success-recovered') {
+        return `<div class="retry-annotation retry-recovered">✅ Attempt ${attempt}/${totalAttempts} — recovered after ${attempt-1} error${attempt-1>1?'s':''}</div>`;
+      }
+      return '';
+    }
+
     function renderMessages() {
       if (!state.sessionData) {
         messages.innerHTML = '<div class="empty">Session messages will appear here.</div>';
@@ -2736,6 +2830,12 @@
           const errChip = errCount ? `<span class="turn-chip err">❌ ${errCount} error${errCount>1?'s':''}</span>` : '';
           const spawnChip = spawnCount ? `<span class="turn-chip spawn">🔗 ${spawnCount} spawn</span>` : '';
 
+          // Retry chain analysis
+          const { retryCount, retryMap } = buildRetryChains(unit);
+          const retryChip = retryCount > 0
+            ? `<span class="turn-chip retry" title="${retryCount} tool${retryCount>1?'s were':' was'} retried after errors">🔄 ${retryCount} retr${retryCount>1?'ies':'y'}</span>`
+            : '';
+
           // Tool batch duration: first toolCall start → last toolResult finish
           let turnToolDurationChip = '';
           {
@@ -2785,7 +2885,7 @@
                       <strong>🔧 ${toolCount} tool call${toolCount>1?'s':''}</strong>
                       <span>· ${stepCount} result${stepCount>1?'s':''}</span>
                     </div>
-                    <div class="turn-group-chips">${turnToolDurationChip}${chips}${errChip}${spawnChip}</div>
+                    <div class="turn-group-chips">${turnToolDurationChip}${chips}${retryChip}${errChip}${spawnChip}</div>
                   </div>
                   <div class="turn-group-body" id="body-${tid}">`;
 
@@ -2793,10 +2893,14 @@
 
           // Render each step inside the fold
           for (const step of unit.steps) {
+            const retryInfo = retryMap.get(step);
+            const retryAnnotation = retryInfo && retryInfo.totalAttempts > 1
+              ? renderRetryAnnotation(retryInfo)
+              : '';
             html += `
                     <div class="msg-row" id="row-${escapeHtml(step.id || '')}">
                       ${renderGraphLane(step)}
-                      <div class="msg-content">${renderMessage(step, timing.timingByMessage.get(step))}</div>
+                      <div class="msg-content">${retryAnnotation}${renderMessage(step, timing.timingByMessage.get(step))}</div>
                     </div>`;
           }
 
