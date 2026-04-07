@@ -1,6 +1,6 @@
 {
   "name": "agent-xray",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Web dashboard for viewing AI agent session logs — supports OpenClaw, Codex, and Claude Code",
   "main": "server.js",
   "scripts": {
