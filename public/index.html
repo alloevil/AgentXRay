@@ -492,6 +492,62 @@
       flex-wrap: wrap;
     }
 
+    /* Export dropdown */
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .export-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: var(--sans);
+      transition: background 0.15s;
+    }
+    .export-btn:hover {
+      background: var(--panel-alt);
+    }
+    .export-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      z-index: 100;
+      min-width: 180px;
+      overflow: hidden;
+    }
+    .export-menu.open {
+      display: block;
+    }
+    .export-menu button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--sans);
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .export-menu button:hover {
+      background: rgba(255,255,255,0.06);
+    }
+    .export-menu button + button {
+      border-top: 1px solid var(--border);
+    }
+
     .summary h2 {
       margin: 0 0 6px;
       font-size: 20px;
@@ -2051,6 +2107,14 @@
               ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump — total agent work time for this turn (user msg → last agent response)" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest turn: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
             </div>
           </div>
+          <div class="export-dropdown" id="exportDropdown">
+            <button class="export-btn" id="exportBtn">📥 Export</button>
+            <div class="export-menu" id="exportMenu">
+              <button data-export="markdown">📝 Markdown (.md)</button>
+              <button data-export="json">📦 JSON (.json)</button>
+              <button data-export="clipboard">📋 Copy to clipboard</button>
+            </div>
+          </div>
         </div>
         <div class="summary-sections">
           <div class="summary-section">
@@ -2108,8 +2172,165 @@
         });
       });
 
+      // Export dropdown
+      const exportBtn = document.getElementById('exportBtn');
+      const exportMenu = document.getElementById('exportMenu');
+      if (exportBtn && exportMenu) {
+        exportBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          exportMenu.classList.toggle('open');
+        });
+        // Close menu when clicking outside
+        document.addEventListener('click', () => exportMenu.classList.remove('open'));
+        exportMenu.querySelectorAll('button[data-export]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            exportMenu.classList.remove('open');
+            const fmt = btn.dataset.export;
+            if (fmt === 'markdown') exportAsMarkdown();
+            else if (fmt === 'json') exportAsJson();
+            else if (fmt === 'clipboard') exportToClipboard();
+          });
+        });
+      }
+
       // Render overview timeline
       renderTimeline(msgs);
+    }
+
+    // ========= Export Functions =========
+
+    function sessionToMarkdown() {
+      if (!state.sessionData) return '';
+      const session = state.sessionData.session || {};
+      const msgs = state.sessionData.messages || [];
+      const lines = [];
+
+      lines.push(`# Session: ${session.id || state.selectedSessionId}`);
+      lines.push('');
+      if (session.timestamp) lines.push(`**Date:** ${formatDate(session.timestamp)}`);
+      if (session.cwd) lines.push(`**Working Directory:** ${session.cwd}`);
+      lines.push(`**Platform:** ${state.platform || 'unknown'}`);
+      lines.push(`**Messages:** ${msgs.length}`);
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+
+      for (const msg of msgs) {
+        const ts = msg.timestamp ? formatDate(msg.timestamp) : '';
+        const text = getTextContent(msg.content);
+
+        if (msg.role === 'user') {
+          lines.push(`## 👤 User ${ts ? `(${ts})` : ''}`);
+          lines.push('');
+          lines.push(text);
+          lines.push('');
+        } else if (msg.role === 'assistant') {
+          const toolCalls = (msg.content || []).filter(c => c.type === 'toolCall');
+          if (text.trim()) {
+            lines.push(`## 🤖 Assistant ${ts ? `(${ts})` : ''}`);
+            lines.push('');
+            lines.push(text);
+            lines.push('');
+          }
+          for (const tc of toolCalls) {
+            lines.push(`### 🔧 Tool Call: ${tc.name || 'unknown'}`);
+            lines.push('');
+            const args = tc.arguments || tc.input || {};
+            lines.push('```json');
+            lines.push(JSON.stringify(args, null, 2));
+            lines.push('```');
+            lines.push('');
+          }
+        } else if (msg.role === 'toolResult') {
+          const name = msg.toolName || msg.name || '';
+          const isErr = msg.isError;
+          lines.push(`### ${isErr ? '❌' : '📋'} Tool Result${name ? ': ' + name : ''} ${ts ? `(${ts})` : ''}`);
+          lines.push('');
+          const output = text || (typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2));
+          // Truncate very long tool outputs
+          const maxLen = 2000;
+          if (output.length > maxLen) {
+            lines.push('```');
+            lines.push(output.slice(0, maxLen) + `\n\n... (truncated, ${output.length} chars total)`);
+            lines.push('```');
+          } else {
+            lines.push('```');
+            lines.push(output);
+            lines.push('```');
+          }
+          lines.push('');
+        } else if (msg.role === 'toolCall') {
+          // Codex-style separate toolCall
+          const name = msg.toolName || msg.name || 'unknown';
+          lines.push(`### 🔧 Tool Call: ${name} ${ts ? `(${ts})` : ''}`);
+          lines.push('');
+          const args = msg.details || msg.arguments || {};
+          lines.push('```json');
+          lines.push(JSON.stringify(args, null, 2));
+          lines.push('```');
+          lines.push('');
+        } else if (msg.role === 'reasoning') {
+          if (text.trim()) {
+            lines.push(`### 💭 Reasoning ${ts ? `(${ts})` : ''}`);
+            lines.push('');
+            lines.push(text);
+            lines.push('');
+          }
+        }
+      }
+
+      return lines.join('\n');
+    }
+
+    function downloadFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function getExportFilename(ext) {
+      const id = state.sessionData?.session?.id || state.selectedSessionId || 'session';
+      // Sanitize: keep alphanumeric, dash, underscore
+      const safe = id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60);
+      return `agentxray-${safe}.${ext}`;
+    }
+
+    function exportAsMarkdown() {
+      const md = sessionToMarkdown();
+      downloadFile(md, getExportFilename('md'), 'text/markdown;charset=utf-8');
+    }
+
+    function exportAsJson() {
+      if (!state.sessionData) return;
+      const json = JSON.stringify(state.sessionData, null, 2);
+      downloadFile(json, getExportFilename('json'), 'application/json;charset=utf-8');
+    }
+
+    async function exportToClipboard() {
+      const md = sessionToMarkdown();
+      try {
+        await navigator.clipboard.writeText(md);
+        // Brief visual feedback on the export button
+        const btn = document.getElementById('exportBtn');
+        if (btn) {
+          const original = btn.textContent;
+          btn.textContent = '✅ Copied!';
+          setTimeout(() => { btn.textContent = original; }, 1500);
+        }
+      } catch {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = md;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
     }
 
     // Scroll to a message by ID, expanding pagination if needed
