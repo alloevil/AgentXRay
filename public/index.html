@@ -1590,7 +1590,7 @@
       // Per-message delta (for badges)
       visibleMessages.forEach((message) => {
         const timestampMs = parseTimestampMs(message.timestamp);
-        const meta = { timestampMs, deltaMs: null };
+        const meta = { timestampMs, deltaMs: null, toolDurationMs: null };
         if (timestampMs !== null) {
           if (firstTimestamp === null) firstTimestamp = timestampMs;
           lastTimestamp = timestampMs;
@@ -1601,6 +1601,40 @@
         }
         timingByMessage.set(message, meta);
       });
+
+      // ── Tool call durations: pair toolCall ↔ toolResult by toolCallId ──
+      // Also works for OpenClaw-style where toolCalls are inline in assistant content
+      const toolCallTsById = new Map(); // toolCallId → {timestampMs, message}
+      let totalToolDurationMs = 0;
+      let toolPairCount = 0;
+
+      for (const msg of visibleMessages) {
+        const ts = parseTimestampMs(msg.timestamp);
+        if (ts === null) continue;
+
+        if (msg.role === 'toolCall') {
+          // Codex-style: separate toolCall record
+          if (msg.toolCallId) toolCallTsById.set(msg.toolCallId, { ts, msg });
+        } else if (msg.role === 'assistant') {
+          // OpenClaw-style: toolCalls embedded in assistant content
+          for (const c of (msg.content || [])) {
+            if (c.type === 'toolCall' && c.id) {
+              toolCallTsById.set(c.id, { ts, msg });
+            }
+          }
+        } else if (msg.role === 'toolResult') {
+          const id = msg.toolCallId;
+          if (id && toolCallTsById.has(id)) {
+            const { ts: callTs } = toolCallTsById.get(id);
+            const duration = Math.max(0, ts - callTs);
+            const meta = timingByMessage.get(msg);
+            if (meta) meta.toolDurationMs = duration;
+            totalToolDurationMs += duration;
+            toolPairCount++;
+            toolCallTsById.delete(id);
+          }
+        }
+      }
 
       // Slowest turn: from user message to end of agent work (next user or end)
       let slowestTurn = null;
@@ -1667,7 +1701,9 @@
         visibleMessages,
         timingByMessage,
         totalDurationMs: firstTimestamp !== null && lastTimestamp !== null ? Math.max(0, lastTimestamp - firstTimestamp) : null,
-        slowestStep: slowestTurn
+        slowestStep: slowestTurn,
+        totalToolDurationMs: toolPairCount > 0 ? totalToolDurationMs : null,
+        toolPairCount
       };
     }
 
@@ -1679,10 +1715,20 @@
       return `<span class="delta-badge${cls}">+${escapeHtml(formatDurationCompact(deltaMs))}</span>`;
     }
 
-    function renderMessageHead(roleHtml, metaHtml, timestamp, deltaMs) {
+    // Badge for tool call duration (shown on toolResult) — show all durations ≥ 200ms
+    function getToolDurationBadge(durationMs) {
+      if (!Number.isFinite(durationMs) || durationMs < 200) return '';
+      let cls = '';
+      if (durationMs >= 60000) cls = ' danger';
+      else if (durationMs >= 10000) cls = ' warn';
+      return `<span class="delta-badge${cls}" title="Tool execution time">⏱ ${escapeHtml(formatDurationCompact(durationMs))}</span>`;
+    }
+
+    function renderMessageHead(roleHtml, metaHtml, timestamp, deltaMs, toolDurationMs) {
       const deltaBadge = getDeltaBadge(deltaMs);
+      const toolBadge = getToolDurationBadge(toolDurationMs);
       const timestampHtml = timestamp ? `<span>${escapeHtml(formatDate(timestamp))}</span>` : '';
-      const rightSide = [timestampHtml, deltaBadge].filter(Boolean).join('');
+      const rightSide = [timestampHtml, toolBadge, deltaBadge].filter(Boolean).join('');
       return `
         <div class="message-head">
           <div class="message-head-main">${roleHtml}${metaHtml || ''}</div>
@@ -1977,6 +2023,7 @@
 
     function renderMessage(message, timingMeta) {
       const deltaMs = timingMeta?.deltaMs ?? null;
+      const toolDurationMs = timingMeta?.toolDurationMs ?? null;
       const text = getTextContent(message.content);
       if (message.role === 'user') {
         const longText = text.length > 1400;
@@ -2039,7 +2086,7 @@
       return `
         <article class="message toolResult ${resultClass} session-anchor" id="tool-result-${escapeHtml(message.toolCallId || message.id)}">
           <div class="card">
-            ${renderMessageHead(`<span class="message-role">${message.isError ? 'Tool Error' : 'Tool Result'}</span>`, `<span class="tool-meta">${escapeHtml(message.toolName || 'tool result')}</span>`, message.timestamp, deltaMs)}
+            ${renderMessageHead(`<span class="message-role">${message.isError ? 'Tool Error' : 'Tool Result'}</span>`, `<span class="tool-meta">${escapeHtml(message.toolName || 'tool result')}</span>`, message.timestamp, deltaMs, toolDurationMs)}
             ${renderToolResult(message)}
           </div>
         </article>
@@ -2139,6 +2186,7 @@
             <div class="token-grid">
               <span class="badge filter-badge${state.msgFilter === 'toolCall' ? ' active' : ''}" data-filter="toolCall" title="Click to show only tool calls">🔧 Tool Calls: ${toolCallCount}</span>
               <span class="badge filter-badge${state.msgFilter === 'toolResult' ? ' active' : ''}" data-filter="toolResult" title="Click to show only tool results">📋 Tool Results: ${toolResultCount}</span>
+              ${timing.totalToolDurationMs !== null ? `<span class="badge" title="Total time spent in tool execution (sum of all toolCall → toolResult pairs)">⏱ Tool time: ${escapeHtml(formatDurationCompact(timing.totalToolDurationMs))} (${timing.toolPairCount} calls)</span>` : ''}
               ${errorCount ? `<span class="badge filter-badge${state.msgFilter === 'error' ? ' active' : ''}" data-filter="error" title="Click to show only errors" style="color:#ff7b72">❌ Errors: ${errorCount}</span>` : ''}
               ${spawnCount ? `<span class="badge filter-badge${state.msgFilter === 'spawn' ? ' active' : ''}" data-filter="spawn" title="Click to show only spawn calls" style="color:#f0883e">🔗 Spawns: ${spawnCount}</span>` : ''}
             </div>
