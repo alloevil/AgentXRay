@@ -125,9 +125,21 @@ async function _parseSessionMetadataRaw(filePath, fileName) {
           userCount++;
           if (!firstUserMessage) {
             let texts = content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim();
-            // Strip OpenClaw system envelope prefix to get actual user content
-            texts = texts.replace(/^System:.*?\n/m, '').trim();
-            texts = texts.replace(/^(?:Conversation info|Sender|Replied message)[\s\S]*?```\n/gm, '').trim();
+            // Strip all System: lines
+            texts = texts.replace(/^System:.*\n?/gm, '');
+            // Strip metadata blocks: any block ending with ```json...```
+            texts = texts.replace(/^[A-Za-z ]+\([^)]*\):\n```[\s\S]*?```\n?/gm, '');
+            // Strip [message_id: ...] lines
+            texts = texts.replace(/^\[message_id:[^\]]*\].*\n?/gm, '');
+            // Strip ou_xxx: sender prefix from quoted message lines
+            texts = texts.replace(/^ou_[a-z0-9]+:\s*/gm, '');
+            // Strip subagent context injection
+            texts = texts.replace(/^\[.*?\] \[Subagent Context\][\s\S]*/m, '');
+            // Strip bare timestamp+channel prefix lines
+            texts = texts.replace(/^\[\w{3} \d{4}-\d{2}-\d{2}[^\]]*\][^\n]*\n?/gm, '');
+            // Strip heartbeat lines
+            texts = texts.replace(/^HEARTBEAT_OK.*\n?/gm, '');
+            texts = texts.trim();
             if (texts) firstUserMessage = texts.slice(0, 120);
           }
         }
