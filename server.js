@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const readline = require('readline');
+const Database = require('better-sqlite3');
 
 const app = express();
 const PORT = process.env.PORT || 3800;
@@ -14,6 +15,7 @@ const DATA_DIR = process.env.OPENCLAW_DIR || path.join(HOME, '.openclaw', 'agent
 const sessionMetaCache = new Map();
 const CODEX_DIR = process.env.CODEX_DIR || path.join(HOME, '.codex', 'sessions');
 const CLAUDE_CODE_DIR = process.env.CLAUDE_CODE_DIR || path.join(HOME, '.claude', 'projects');
+const HERMES_DIR = process.env.HERMES_DIR || path.join(HOME, '.hermes');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SESSION_ID_RE = /^[0-9a-zA-Z._:-]+$/;
 const AGENT_NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -97,6 +99,7 @@ async function _parseSessionMetadataRaw(filePath, fileName) {
   let lastTimestamp = null;
   let firstUserMessage = null;
   const toolNames = {};
+  const modelCounts = {};
 
   try {
     for await (const line of rl) {
@@ -166,6 +169,12 @@ async function _parseSessionMetadataRaw(filePath, fileName) {
         }
 
         if (record.timestamp) lastTimestamp = record.timestamp;
+
+        // Track model usage
+        const msgModel = msg.model;
+        if (msgModel && msgModel !== 'delivery-mirror') {
+          modelCounts[msgModel] = (modelCounts[msgModel] || 0) + 1;
+        }
       }
     }
   } finally {
@@ -179,6 +188,9 @@ async function _parseSessionMetadataRaw(filePath, fileName) {
     .slice(0, 5)
     .map(([name, count]) => ({ name, count }));
 
+  // Most common model (skip delivery-mirror)
+  const model = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
   return {
     id: session?.id || fileName.split('.jsonl')[0],
     timestamp: session?.timestamp || null,
@@ -190,6 +202,7 @@ async function _parseSessionMetadataRaw(filePath, fileName) {
     toolResultCount,
     spawnCount,
     topTools,
+    model,
     firstUserMessage: firstUserMessage || null,
     status: isArchivedFile(fileName) ? 'archived' : 'active',
     file: fileName
@@ -349,6 +362,10 @@ app.get('/api/search', async (req, res) => {
           try { await fsp.access(jsonlPath); sessionFiles.push({ path: jsonlPath, file: e.name, platform: 'codex' }); } catch {}
         }
       } catch {}
+    } else if (platform === 'hermes') {
+      const dir = resolveDir(req.query.dir, HERMES_DIR);
+      const hermesResults = searchHermesSessions(dir, q, maxResults);
+      return res.json(hermesResults);
     } else if (platform === 'claude-code') {
       const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
       try {
@@ -782,6 +799,37 @@ app.get('/api/spawn-tree', async (req, res) => {
   }
 });
 
+app.get('/api/spawn-tree/:sessionId', async (req, res) => {
+  try {
+    const dir = resolveDir(req.query.dir, DATA_DIR);
+    const full = await buildSpawnTree(dir);
+    const sid = req.params.sessionId;
+    // Find tree rooted at this session, or find this session as a child
+    function findNode(nodes, targetId) {
+      for (const n of nodes) {
+        if (n.id === targetId) return n;
+        const found = findNode(n.children || [], targetId);
+        if (found) return found;
+      }
+      return null;
+    }
+    // Find parent of this session
+    function findParent(nodes, targetId, parent) {
+      for (const n of nodes) {
+        if (n.id === targetId) return parent;
+        const found = findParent(n.children || [], targetId, n);
+        if (found) return found;
+      }
+      return null;
+    }
+    const node = findNode(full.trees, sid);
+    const parent = findParent(full.trees, sid, null);
+    res.json({ node: node || null, parent: parent || null, totalSessions: full.totalSessions, totalSpawnCalls: full.totalSpawnCalls, matchedLinks: full.matchedLinks });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Codex platform ---
 
 function codexSessionIdFromFile(fileName) {
@@ -1150,6 +1198,310 @@ app.get('/api/codex/sessions/:sessionId', async (req, res) => {
     if (error.code === 'ENOENT') {
       return res.status(404).json({ error: 'Session not found' });
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Hermes platform (SQLite) ---
+
+function getHermesDbPath(dir) {
+  const base = dir || HERMES_DIR;
+  return path.join(base, 'state.db');
+}
+
+function openHermesDb(dir) {
+  const dbPath = getHermesDbPath(dir);
+  if (!fs.existsSync(dbPath)) return null;
+  try {
+    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    db.pragma('journal_mode = WAL');
+    return db;
+  } catch {
+    return null;
+  }
+}
+
+function unixToIso(ts) {
+  if (!ts) return null;
+  return new Date(ts * 1000).toISOString();
+}
+
+function listHermesSessions(dir) {
+  const db = openHermesDb(dir);
+  if (!db) return [];
+  try {
+    const sessions = db.prepare(`
+      SELECT s.id, s.source, s.user_id, s.model, s.title, s.started_at, s.ended_at,
+             s.message_count, s.tool_call_count, s.input_tokens, s.output_tokens,
+             s.estimated_cost_usd, s.parent_session_id
+      FROM sessions s ORDER BY s.started_at DESC
+    `).all();
+
+    // Batch query: per-session role counts and first user message
+    const countStmt = db.prepare(`
+      SELECT role, COUNT(*) as cnt FROM messages WHERE session_id = ? GROUP BY role
+    `);
+    const toolCountStmt = db.prepare(`
+      SELECT tool_name, COUNT(*) as cnt FROM messages
+      WHERE session_id = ? AND tool_name IS NOT NULL AND tool_name != ''
+      GROUP BY tool_name ORDER BY cnt DESC LIMIT 5
+    `);
+    const firstUserStmt = db.prepare(`
+      SELECT content FROM messages WHERE session_id = ? AND role = 'user'
+      ORDER BY timestamp ASC LIMIT 1
+    `);
+
+    return sessions.map((s) => {
+      const counts = {};
+      for (const row of countStmt.all(s.id)) {
+        counts[row.role] = row.cnt;
+      }
+      const topTools = toolCountStmt.all(s.id).map(r => ({ name: r.tool_name, count: r.cnt }));
+      const firstUser = firstUserStmt.get(s.id);
+      let firstUserMessage = null;
+      if (firstUser && firstUser.content) {
+        firstUserMessage = firstUser.content.trim().slice(0, 120);
+      }
+
+      return {
+        id: s.id,
+        timestamp: unixToIso(s.started_at),
+        lastActivity: unixToIso(s.ended_at),
+        messageCount: s.message_count || 0,
+        userCount: counts['user'] || 0,
+        assistantCount: counts['assistant'] || 0,
+        toolCallCount: s.tool_call_count || 0,
+        toolResultCount: counts['tool'] || 0,
+        topTools,
+        firstUserMessage,
+        model: s.model || null,
+        source: s.source || null,
+        title: s.title || null,
+        inputTokens: s.input_tokens || 0,
+        outputTokens: s.output_tokens || 0,
+        estimatedCost: s.estimated_cost_usd || null,
+        parentSessionId: s.parent_session_id || null,
+        file: 'state.db'
+      };
+    });
+  } finally {
+    db.close();
+  }
+}
+
+function getHermesSession(dir, sessionId) {
+  const db = openHermesDb(dir);
+  if (!db) return null;
+  try {
+    const s = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+    if (!s) return null;
+
+    const rows = db.prepare(`
+      SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC
+    `).all(sessionId);
+
+    const messages = [];
+    for (const row of rows) {
+      const msg = normalizeHermesMessage(row);
+      if (msg) messages.push(msg);
+    }
+
+    const session = {
+      id: s.id,
+      source: s.source,
+      model: s.model,
+      title: s.title,
+      cwd: null,
+      timestamp: unixToIso(s.started_at),
+      inputTokens: s.input_tokens || 0,
+      outputTokens: s.output_tokens || 0,
+      cacheReadTokens: s.cache_read_tokens || 0,
+      cacheWriteTokens: s.cache_write_tokens || 0,
+      reasoningTokens: s.reasoning_tokens || 0,
+      estimatedCost: s.estimated_cost_usd || null,
+      actualCost: s.actual_cost_usd || null
+    };
+
+    return { session, messages };
+  } finally {
+    db.close();
+  }
+}
+
+function normalizeHermesMessage(row) {
+  const role = row.role;
+  const content = row.content || '';
+  let toolCalls = null;
+  if (row.tool_calls) {
+    try { toolCalls = JSON.parse(row.tool_calls); } catch { toolCalls = null; }
+  }
+
+  if (role === 'user') {
+    return {
+      id: String(row.id),
+      timestamp: unixToIso(row.timestamp),
+      role: 'user',
+      content: [{ type: 'text', text: content }],
+      usage: null,
+      model: null,
+      provider: null,
+      toolCallId: null,
+      toolName: null,
+      details: null,
+      isError: false,
+      reasoning: null
+    };
+  }
+
+  if (role === 'assistant') {
+    const unifiedContent = [];
+    if (content) {
+      unifiedContent.push({ type: 'text', text: content });
+    }
+    if (Array.isArray(toolCalls)) {
+      for (const tc of toolCalls) {
+        unifiedContent.push({
+          type: 'toolCall',
+          id: tc.id || null,
+          name: tc.function?.name || tc.name || 'unknown',
+          arguments: (() => {
+            const raw = tc.function?.arguments || tc.arguments || '{}';
+            if (typeof raw === 'string') {
+              try { return JSON.parse(raw); } catch { return { _raw: raw }; }
+            }
+            return raw;
+          })()
+        });
+      }
+    }
+    return {
+      id: String(row.id),
+      timestamp: unixToIso(row.timestamp),
+      role: 'assistant',
+      content: unifiedContent,
+      usage: row.token_count ? { total_tokens: row.token_count } : null,
+      model: null,
+      provider: null,
+      toolCallId: null,
+      toolName: null,
+      details: null,
+      isError: false,
+      reasoning: row.reasoning || null
+    };
+  }
+
+  if (role === 'tool') {
+    return {
+      id: String(row.id),
+      timestamp: unixToIso(row.timestamp),
+      role: 'toolResult',
+      content: [{ type: 'text', text: content }],
+      usage: null,
+      model: null,
+      provider: null,
+      toolCallId: row.tool_call_id || null,
+      toolName: row.tool_name || null,
+      details: null,
+      isError: false,
+      reasoning: null
+    };
+  }
+
+  // system or other roles
+  if (content) {
+    return {
+      id: String(row.id),
+      timestamp: unixToIso(row.timestamp),
+      role: role || 'system',
+      content: [{ type: 'text', text: content }],
+      usage: null,
+      model: null,
+      provider: null,
+      toolCallId: null,
+      toolName: null,
+      details: null,
+      isError: false,
+      reasoning: null
+    };
+  }
+
+  return null;
+}
+
+function searchHermesSessions(dir, query, maxResults) {
+  const db = openHermesDb(dir);
+  if (!db) return [];
+  try {
+    // Use FTS5 if available, otherwise fall back to LIKE
+    let rows;
+    try {
+      rows = db.prepare(`
+        SELECT m.session_id, m.role, m.content, m.timestamp
+        FROM messages_fts fts
+        JOIN messages m ON m.id = fts.rowid
+        WHERE messages_fts MATCH ?
+        LIMIT ?
+      `).all(query, maxResults * 3);
+    } catch {
+      const likeQ = `%${query}%`;
+      rows = db.prepare(`
+        SELECT session_id, role, content, timestamp
+        FROM messages
+        WHERE content LIKE ?
+        LIMIT ?
+      `).all(likeQ, maxResults * 3);
+    }
+
+    // Group by session
+    const bySession = new Map();
+    for (const row of rows) {
+      if (!bySession.has(row.session_id)) bySession.set(row.session_id, []);
+      const matches = bySession.get(row.session_id);
+      if (matches.length < 3) {
+        const text = row.content || '';
+        const idx = text.toLowerCase().indexOf(query.toLowerCase());
+        const start = Math.max(0, idx - 40);
+        const end = Math.min(text.length, idx + query.length + 60);
+        const snippet = (start > 0 ? '\u2026' : '') + text.slice(start, end) + (end < text.length ? '\u2026' : '');
+        matches.push({ role: row.role, snippet, timestamp: unixToIso(row.timestamp) });
+      }
+    }
+
+    const results = [];
+    for (const [sessionId, matches] of bySession) {
+      if (results.length >= maxResults) break;
+      results.push({ sessionId, file: 'state.db', platform: 'hermes', matches });
+    }
+    return results;
+  } finally {
+    db.close();
+  }
+}
+
+app.get('/api/hermes/sessions', async (req, res) => {
+  try {
+    const dir = resolveDir(req.query.dir, HERMES_DIR);
+    const sessions = listHermesSessions(dir);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/hermes/sessions/:sessionId', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
+  try {
+    const dir = resolveDir(req.query.dir, HERMES_DIR);
+    const payload = getHermesSession(dir, sessionId);
+    if (!payload) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(payload);
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -1552,6 +1904,7 @@ app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
 // GET /api/watch?platform=openclaw&agent=NAME&sessionId=ID[&dir=PATH]
 // GET /api/watch?platform=codex&sessionId=ID[&dir=PATH]
 // GET /api/watch?platform=claude-code&sessionId=ID[&dir=PATH]
+// GET /api/watch?platform=hermes&sessionId=ID[&dir=PATH]
 // Streams Server-Sent Events:
 //   event: connected     data: {"messageCount": N}
 //   event: newMessages   data: {"messages": [...normalized], "session": {...}}
@@ -1576,13 +1929,75 @@ app.get('/api/watch', async (req, res) => {
     } else if (platform === 'claude-code') {
       const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
       filePath = await findClaudeCodeSessionFile(dir, sessionId);
+    } else if (platform === 'hermes') {
+      // Hermes uses SQLite, not file-based SSE — handle separately below
     } else {
       return res.status(400).json({ error: 'Unknown platform' });
     }
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
-  if (!filePath) return res.status(404).json({ error: 'Session not found' });
+  if (!filePath && platform !== 'hermes') return res.status(404).json({ error: 'Session not found' });
+
+  // Hermes: polling-based SSE (SQLite has no file-watch)
+  if (platform === 'hermes') {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    function sendHermes(eventName, data) {
+      res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+    }
+
+    const hermesDir = resolveDir(req.query.dir, HERMES_DIR);
+    let lastMsgCount = 0;
+    try {
+      const db = openHermesDb(hermesDir);
+      if (db) {
+        const row = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?').get(sessionId);
+        lastMsgCount = row ? row.cnt : 0;
+        db.close();
+      }
+    } catch {}
+    sendHermes('connected', { messageCount: lastMsgCount });
+
+    let closed = false;
+    const pollTimer = setInterval(() => {
+      if (closed) return;
+      try {
+        const db = openHermesDb(hermesDir);
+        if (!db) return;
+        const row = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?').get(sessionId);
+        const currentCount = row ? row.cnt : 0;
+        if (currentCount > lastMsgCount) {
+          const newRows = db.prepare(`
+            SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?
+          `).all(sessionId, currentCount - lastMsgCount, lastMsgCount);
+          const newMsgs = newRows.map(normalizeHermesMessage).filter(Boolean);
+          lastMsgCount = currentCount;
+          if (newMsgs.length > 0) {
+            sendHermes('newMessages', { messages: newMsgs });
+          }
+        }
+        db.close();
+      } catch (e) {
+        sendHermes('error', { error: e.message });
+      }
+    }, 2000);
+
+    const pingTimer = setInterval(() => {
+      if (!closed) res.write(': ping\n\n');
+    }, 15000);
+
+    req.on('close', () => {
+      closed = true;
+      clearInterval(pollTimer);
+      clearInterval(pingTimer);
+    });
+    return;
+  }
 
   // Helper: read new lines from a byte offset, return {lines, newOffset}
   async function readNewLines(byteOffset) {
@@ -1716,4 +2131,5 @@ app.listen(PORT, () => {
   console.log(`  OpenClaw:    ${DATA_DIR}`);
   console.log(`  Codex:       ${CODEX_DIR}`);
   console.log(`  Claude Code: ${CLAUDE_CODE_DIR}`);
+  console.log(`  Hermes:      ${path.join(HERMES_DIR, 'state.db')}`);
 });

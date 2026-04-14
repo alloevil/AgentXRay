@@ -1,6 +1,6 @@
 # AgentXRay
 
-X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, and **Claude Code** — all in one interface.
+X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, and **Hermes** — all in one interface.
 
 English | [中文](README.zh-CN.md)
 
@@ -8,7 +8,7 @@ English | [中文](README.zh-CN.md)
 
 ## Features
 
-- **Multi-platform** — Unified view across OpenClaw, Codex, and Claude Code sessions
+- **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, and Hermes sessions
 - **Session browser** — Browse agents, filter/search sessions, view message history
 - **Tool call inspection** — Expandable tool calls with arguments and results
 - **Spawn tracking** — Detect and navigate parent/child agent relationships
@@ -39,7 +39,7 @@ Sessions that spawn sub-agents are marked with a 🔗 badge. Click to navigate t
 
 ### Multi-Platform Support
 
-Switch between OpenClaw, Codex, and Claude Code with one click. Each platform's sessions are parsed from their native log format.
+Switch between OpenClaw, Codex, Claude Code, and Hermes with one click. Each platform's sessions are parsed from their native log format.
 
 ![Codex View](screenshots/codex-view.png)
 
@@ -64,7 +64,7 @@ Open http://localhost:3800
 
 ### Basic Workflow
 
-1. **Select a platform** — Click `OpenClaw`, `Codex`, or `Claude Code` in the top bar
+1. **Select a platform** — Click `OpenClaw`, `Codex`, `Claude Code`, or `Hermes` in the top bar
 2. **Pick an agent** — For OpenClaw, choose an agent from the dropdown (e.g. `xiaot`, `mimo`)
 3. **Browse sessions** — Sessions are sorted by date, newest first. Each card shows:
    - Timestamp and status (`active` / `archived`)
@@ -97,6 +97,7 @@ Open http://localhost:3800
 | OpenClaw    | `~/.openclaw/agents`          |
 | Codex       | `~/.codex/sessions`           |
 | Claude Code | `~/.claude/projects`          |
+| Hermes      | `~/.hermes`                   |
 
 ### Custom directories
 
@@ -108,6 +109,7 @@ Open http://localhost:3800
 OPENCLAW_DIR=/custom/path/openclaw \
 CODEX_DIR=/custom/path/codex \
 CLAUDE_CODE_DIR=/custom/path/claude \
+HERMES_DIR=/custom/path/hermes \
 npm start
 ```
 
@@ -124,6 +126,8 @@ npm start
 | `GET /api/codex/sessions/:id` | Get Codex session messages |
 | `GET /api/claude-code/sessions` | List Claude Code sessions |
 | `GET /api/claude-code/sessions/:id` | Get Claude Code session messages |
+| `GET /api/hermes/sessions` | List Hermes sessions |
+| `GET /api/hermes/sessions/:id` | Get Hermes session messages |
 | `GET /api/spawn-map` | Build agent spawn relationship map |
 
 All list/detail endpoints accept an optional `?dir=` parameter to override the default directory.
@@ -142,6 +146,7 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 | OpenClaw | JSONL | `~/.openclaw/agents/{agent}/sessions/{id}.jsonl` |
 | Codex | JSONL | `~/.codex/sessions/{id}.jsonl` |
 | Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
+| Hermes | SQLite | `~/.hermes/state.db` |
 
 Archived sessions (`.jsonl.reset.*`, `.jsonl.deleted.*`) are also supported when "Include archived" is enabled.
 
