@@ -1607,7 +1607,7 @@
       spawnMap: [],
       navStack: [],
       msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
-      visibleUnitCount: 60, // incremental rendering: show last N units initially
+      visibleUnitCount: 60, // incremental rendering: show newest N units initially
       settings: { openclawDir: '', codexDir: '', claudeCodeDir: '', hermesDir: '' }
     };
 
@@ -2998,19 +2998,14 @@
         i++;
       }
 
-      // Render units (paginated: only last N units, with "load more" button)
+      // Render units (paginated: newest first, with "load more" button for older)
+      units.reverse(); // newest on top
       const totalUnits = units.length;
-      const startIdx = Math.max(0, totalUnits - state.visibleUnitCount);
-      const hasMore = startIdx > 0;
+      const endIdx = Math.min(totalUnits, state.visibleUnitCount);
+      const hasMore = endIdx < totalUnits;
       let html = '';
-      if (hasMore) {
-        const remaining = startIdx;
-        html += `<div class="load-more-bar" id="loadMoreBar">
-          <button class="load-more-btn" id="loadMoreBtn">▲ Load ${Math.min(remaining, MSG_BATCH_SIZE)} earlier messages (${remaining} hidden)</button>
-        </div>`;
-      }
       let turnIdx = 0;
-      for (let ui = startIdx; ui < totalUnits; ui++) {
+      for (let ui = 0; ui < endIdx; ui++) {
         const unit = units[ui];
         if (unit.type === 'single') {
           html += `
@@ -3126,10 +3121,16 @@
         }
       }
 
+      if (hasMore) {
+        const remaining = totalUnits - endIdx;
+        html += `<div class="load-more-bar" id="loadMoreBar">
+          <button class="load-more-btn" id="loadMoreBtn">▼ Load ${Math.min(remaining, MSG_BATCH_SIZE)} earlier messages (${remaining} hidden)</button>
+        </div>`;
+      }
       messages.innerHTML = html;
       bindMessageInteractions();
       if (state.autoScroll) {
-        messages.scrollTop = messages.scrollHeight;
+        messages.scrollTop = 0;
       }
     }
 
@@ -3140,12 +3141,11 @@
       const loadMoreBtn = document.getElementById('loadMoreBtn');
       if (loadMoreBtn) {
         loadMoreBtn.addEventListener('click', () => {
-          const scrollBefore = messages.scrollHeight;
           state.visibleUnitCount += MSG_BATCH_SIZE;
           renderMessages();
-          // Maintain scroll position after prepending
-          const scrollAfter = messages.scrollHeight;
-          messages.scrollTop += (scrollAfter - scrollBefore);
+          // Scroll down to where the new messages start
+          const loadMoreBar = document.getElementById('loadMoreBar');
+          if (loadMoreBar) loadMoreBar.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
 
