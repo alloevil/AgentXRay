@@ -2127,6 +2127,7 @@
       let spawnNav = '';
       const args = item.arguments || {};
       const isSpawn = item.name === 'sessions_spawn' && args.agentId;
+      const isDelegateSpawn = item.name === 'delegate_task';
       const isExecSpawn = item.name === 'exec' && typeof args.command === 'string' &&
         (args.command.toLowerCase().includes('codex ') || args.command.toLowerCase().includes('claude '));
 
@@ -2149,9 +2150,16 @@
             📋 查看 ${escapeHtml(childAgent)} 执行输出 ↓
           </button>
         `;
+      } else if (isDelegateSpawn) {
+        const taskPreview = escapeHtml((args.task || args.prompt || '').toString().slice(0, 80));
+        spawnNav = `
+          <button class="spawn-link-btn" data-scroll-to-result="${escapeHtml(item.id || '')}">
+            🔗 Sub-agent delegated${taskPreview ? ` — ${taskPreview}…` : ''}
+          </button>
+        `;
       }
 
-      const header = `<span>🔧 ${escapeHtml(item.name || 'tool')}</span>${isSpawn || isExecSpawn ? '<span class="spawn-badge">SPAWN</span>' : ''}<span class="tool-meta">${escapeHtml(truncateId(item.id || ''))}</span>`;
+      const header = `<span>🔧 ${escapeHtml(item.name || 'tool')}</span>${isSpawn || isExecSpawn || isDelegateSpawn ? '<span class="spawn-badge">SPAWN</span>' : ''}<span class="tool-meta">${escapeHtml(truncateId(item.id || ''))}</span>`;
 
       return createCollapse(item.id, header, body, '') + spawnNav;
     }
@@ -2375,6 +2383,7 @@
             const name = c.name || 'unknown';
             toolNames[name] = (toolNames[name] || 0) + 1;
             if (name === 'sessions_spawn') spawnCount++;
+            if (name === 'delegate_task') spawnCount++;
             if (name === 'exec' && typeof (c.arguments || {}).command === 'string') {
               const cmd = c.arguments.command.toLowerCase();
               if (cmd.includes('codex ') || cmd.includes('claude ')) spawnCount++;
@@ -3043,6 +3052,7 @@
           const errCount = unit.steps.filter(s => s.role === 'toolResult' && s.isError).length;
           const spawnCount = unit.tools.filter(t => {
             if (t.name === 'sessions_spawn') return true;
+            if (t.name === 'delegate_task') return true;
             if (t.name === 'exec' && typeof (t.arguments||{}).command === 'string') {
               const cmd = t.arguments.command.toLowerCase();
               return cmd.includes('codex ') || cmd.includes('claude ');

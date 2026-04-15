@@ -764,13 +764,52 @@ async function buildSpawnTree(baseDir) {
     };
   }
 
-  // Find root sessions: appear as parents but not as children
+  // Add Hermes sessions with parent_session_id
+  try {
+    const hermesDb = openHermesDb(HERMES_DIR);
+    if (hermesDb) {
+      // Add all Hermes sessions to sessionInfo
+      const allHermes = hermesDb.prepare(`
+        SELECT id, source, title, started_at, ended_at, parent_session_id
+        FROM sessions
+      `).all();
+      for (const hs of allHermes) {
+        if (!sessionInfo.has(hs.id)) {
+          sessionInfo.set(hs.id, {
+            agent: hs.source || 'hermes',
+            firstUserMsg: hs.title || null,
+            timestamp: unixToIso(hs.started_at),
+            lastActivity: unixToIso(hs.ended_at)
+          });
+        }
+        if (hs.parent_session_id) {
+          if (!parentToChildren.has(hs.parent_session_id)) {
+            parentToChildren.set(hs.parent_session_id, []);
+          }
+          const existing = parentToChildren.get(hs.parent_session_id);
+          if (!existing.some(e => e.sessionId === hs.id)) {
+            existing.push({
+              sessionId: hs.id,
+              task: hs.title || '(Hermes sub-agent)',
+              label: hs.source,
+              timestamp: unixToIso(hs.started_at),
+              isExecSpawn: false
+            });
+          }
+        }
+      }
+      hermesDb.close();
+    }
+  } catch {}
+
+  // Rebuild roots with Hermes data included
   const childSessionIds = new Set();
   for (const children of parentToChildren.values()) {
     for (const c of children) childSessionIds.add(c.sessionId);
   }
 
   const roots = [];
+  visited.clear();
   for (const [parentId] of parentToChildren) {
     if (!childSessionIds.has(parentId)) {
       visited.clear();
@@ -1260,19 +1299,35 @@ function listHermesSessions(dir) {
     `).all();
     const firstUserMap = new Map(firstUsers.map(r => [r.session_id, r.content]));
 
-    // Top tools per session (one query, no per-session LIMIT — we limit in JS)
-    const toolRows = db.prepare(`
-      SELECT session_id, tool_name, COUNT(*) as cnt
-      FROM messages
-      WHERE tool_name IS NOT NULL AND tool_name != ''
-      GROUP BY session_id, tool_name
-      ORDER BY cnt DESC
+    // Top tools per session (parse tool_calls JSON from assistant messages)
+    const toolCallRows = db.prepare(`
+      SELECT session_id, tool_calls FROM messages
+      WHERE role = 'assistant' AND tool_calls IS NOT NULL AND tool_calls != ''
     `).all();
     const toolMap = new Map();
-    for (const row of toolRows) {
-      if (!toolMap.has(row.session_id)) toolMap.set(row.session_id, []);
-      const arr = toolMap.get(row.session_id);
-      if (arr.length < 5) arr.push({ name: row.tool_name, count: row.cnt });
+    const spawnMap = new Map();
+    for (const row of toolCallRows) {
+      let calls;
+      try { calls = JSON.parse(row.tool_calls); } catch { continue; }
+      if (!Array.isArray(calls)) continue;
+      for (const tc of calls) {
+        const name = tc?.function?.name || tc?.name;
+        if (!name) continue;
+        if (!toolMap.has(row.session_id)) toolMap.set(row.session_id, new Map());
+        const sessionTools = toolMap.get(row.session_id);
+        sessionTools.set(name, (sessionTools.get(name) || 0) + 1);
+        if (name === 'delegate_task') {
+          spawnMap.set(row.session_id, (spawnMap.get(row.session_id) || 0) + 1);
+        }
+      }
+    }
+    // Convert tool maps to sorted arrays
+    for (const [sid, tools] of toolMap) {
+      const arr = [...tools.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count }));
+      toolMap.set(sid, arr);
     }
 
     const result = sessions.map((s) => {
@@ -1290,6 +1345,7 @@ function listHermesSessions(dir) {
         toolCallCount: s.tool_call_count || 0,
         toolResultCount: st.tool_result_count || 0,
         topTools: toolMap.get(s.id) || [],
+        spawnCount: spawnMap.get(s.id) || 0,
         firstUserMessage: firstContent ? firstContent.trim().slice(0, 120) : null,
         model: s.model || null,
         source: s.source || null,
@@ -1346,7 +1402,8 @@ function getHermesSession(dir, sessionId) {
       cacheWriteTokens: s.cache_write_tokens || 0,
       reasoningTokens: s.reasoning_tokens || 0,
       estimatedCost: s.estimated_cost_usd || null,
-      actualCost: s.actual_cost_usd || null
+      actualCost: s.actual_cost_usd || null,
+      parentSessionId: s.parent_session_id || null
     };
 
     return { session, messages };
