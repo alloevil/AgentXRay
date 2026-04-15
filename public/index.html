@@ -1311,6 +1311,7 @@
     .session-item .stat-chip.spawn-tree-link:hover { background: rgba(240, 136, 62, 0.25); }
     .session-item .stat-chip.model { color: #bc8cff; background: rgba(188, 140, 255, 0.12); }
     .session-item .stat-chip.duration { color: #8b949e; background: rgba(139, 148, 158, 0.1); }
+    .session-item .stat-chip.source { color: #f78c6c; background: rgba(247, 140, 108, 0.12); font-weight: 600; }
 
     .session-anchor {
       scroll-margin-top: 16px;
@@ -2035,7 +2036,11 @@
         if (session.toolCallCount) chips.push(`<span class="stat-chip tool">🔧 ${session.toolCallCount}</span>`);
         if (session.spawnCount) chips.push(`<span class="stat-chip spawn spawn-tree-link" data-scroll-spawn-tree>\u{1F333} ${session.spawnCount} spawn</span>`);
         if (session.model) chips.push(`<span class="stat-chip model">🧠 ${escapeHtml(session.model.split('/').pop())}</span>`);
-        if (session.source) chips.push(`<span class="stat-chip">📡 ${escapeHtml(session.source)}</span>`);
+        if (session.source) {
+          const srcIcons = { cli: '⌨️', telegram: '✈️', discord: '🎮', weixin: '💬', wechat: '💬', slack: '💼', web: '🌐' };
+          const srcIcon = srcIcons[session.source.toLowerCase()] || '📡';
+          chips.push(`<span class="stat-chip source">${srcIcon} ${escapeHtml(session.source)}</span>`);
+        }
         // Duration from first to last message
         const startMs = parseTimestampMs(session.timestamp);
         const endMs = parseTimestampMs(session.lastActivity);

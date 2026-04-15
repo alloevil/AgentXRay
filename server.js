@@ -1298,6 +1298,7 @@ function listHermesSessions(dir) {
         outputTokens: s.output_tokens || 0,
         estimatedCost: s.estimated_cost_usd || null,
         parentSessionId: s.parent_session_id || null,
+        status: s.ended_at ? 'archived' : 'active',
         file: 'state.db'
       };
     });
