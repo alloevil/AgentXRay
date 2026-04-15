@@ -3381,7 +3381,8 @@
         payload = await fetchJson(`/api/hermes/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
       }
       state.sessionData = payload;
-      state.visibleUnitCount = MSG_BATCH_SIZE; // reset pagination on session switch
+      // Show all messages if <= 200, otherwise first 60 with load-more
+      state.visibleUnitCount = (payload?.messages?.length || 0) <= 200 ? Infinity : MSG_BATCH_SIZE;
       renderSummary();
       renderMessages();
       loadSpawnTree(state.selectedSessionId);
@@ -3467,10 +3468,10 @@
         renderSummary();
         renderMessages();
 
-        // Auto-scroll to bottom if enabled
+        // Auto-scroll to top if enabled (newest-first)
         if (state.autoScroll) {
           const messages = document.getElementById('messages');
-          if (messages) messages.scrollTop = messages.scrollHeight;
+          if (messages) messages.scrollTop = 0;
         }
 
         // Invalidate session list to refresh sidebar counters

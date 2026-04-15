@@ -1250,8 +1250,11 @@ function listHermesSessions(dir) {
       SELECT content FROM messages WHERE session_id = ? AND role = 'user'
       ORDER BY timestamp ASC LIMIT 1
     `);
+    const lastMsgTimeStmt = db.prepare(`
+      SELECT MAX(timestamp) as last_ts FROM messages WHERE session_id = ?
+    `);
 
-    return sessions.map((s) => {
+    const result = sessions.map((s) => {
       const counts = {};
       for (const row of countStmt.all(s.id)) {
         counts[row.role] = row.cnt;
@@ -1262,11 +1265,13 @@ function listHermesSessions(dir) {
       if (firstUser && firstUser.content) {
         firstUserMessage = firstUser.content.trim().slice(0, 120);
       }
+      const lastMsg = lastMsgTimeStmt.get(s.id);
+      const lastActivity = lastMsg?.last_ts ? unixToIso(lastMsg.last_ts) : unixToIso(s.ended_at);
 
       return {
         id: s.id,
         timestamp: unixToIso(s.started_at),
-        lastActivity: unixToIso(s.ended_at),
+        lastActivity,
         messageCount: s.message_count || 0,
         userCount: counts['user'] || 0,
         assistantCount: counts['assistant'] || 0,
@@ -1284,6 +1289,15 @@ function listHermesSessions(dir) {
         file: 'state.db'
       };
     });
+
+    // Sort by last activity (latest message time) descending
+    result.sort((a, b) => {
+      const aTime = a.lastActivity ? Date.parse(a.lastActivity) : 0;
+      const bTime = b.lastActivity ? Date.parse(b.lastActivity) : 0;
+      return bTime - aTime;
+    });
+
+    return result;
   } finally {
     db.close();
   }
@@ -1985,7 +1999,7 @@ app.get('/api/watch', async (req, res) => {
       } catch (e) {
         sendHermes('error', { error: e.message });
       }
-    }, 2000);
+    }, 500);
 
     const pingTimer = setInterval(() => {
       if (!closed) res.write(': ping\n\n');
