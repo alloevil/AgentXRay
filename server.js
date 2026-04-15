@@ -1234,51 +1234,63 @@ function listHermesSessions(dir) {
       SELECT s.id, s.source, s.user_id, s.model, s.title, s.started_at, s.ended_at,
              s.message_count, s.tool_call_count, s.input_tokens, s.output_tokens,
              s.estimated_cost_usd, s.parent_session_id
-      FROM sessions s ORDER BY s.started_at DESC
+      FROM sessions s
     `).all();
 
-    // Batch query: per-session role counts and first user message
-    const countStmt = db.prepare(`
-      SELECT role, COUNT(*) as cnt FROM messages WHERE session_id = ? GROUP BY role
-    `);
-    const toolCountStmt = db.prepare(`
-      SELECT tool_name, COUNT(*) as cnt FROM messages
-      WHERE session_id = ? AND tool_name IS NOT NULL AND tool_name != ''
-      GROUP BY tool_name ORDER BY cnt DESC LIMIT 5
-    `);
-    const firstUserStmt = db.prepare(`
-      SELECT content FROM messages WHERE session_id = ? AND role = 'user'
-      ORDER BY timestamp ASC LIMIT 1
-    `);
-    const lastMsgTimeStmt = db.prepare(`
-      SELECT MAX(timestamp) as last_ts FROM messages WHERE session_id = ?
-    `);
+    if (sessions.length === 0) return [];
+
+    // One query: aggregate all per-session stats from messages
+    const stats = db.prepare(`
+      SELECT session_id,
+             SUM(CASE WHEN role='user' THEN 1 ELSE 0 END) as user_count,
+             SUM(CASE WHEN role='assistant' THEN 1 ELSE 0 END) as assistant_count,
+             SUM(CASE WHEN role='tool' THEN 1 ELSE 0 END) as tool_result_count,
+             MAX(timestamp) as last_ts
+      FROM messages
+      GROUP BY session_id
+    `).all();
+    const statsMap = new Map(stats.map(r => [r.session_id, r]));
+
+    // First user message per session (one query)
+    const firstUsers = db.prepare(`
+      SELECT session_id, content FROM messages
+      WHERE role = 'user' AND rowid IN (
+        SELECT MIN(rowid) FROM messages WHERE role = 'user' GROUP BY session_id
+      )
+    `).all();
+    const firstUserMap = new Map(firstUsers.map(r => [r.session_id, r.content]));
+
+    // Top tools per session (one query, no per-session LIMIT — we limit in JS)
+    const toolRows = db.prepare(`
+      SELECT session_id, tool_name, COUNT(*) as cnt
+      FROM messages
+      WHERE tool_name IS NOT NULL AND tool_name != ''
+      GROUP BY session_id, tool_name
+      ORDER BY cnt DESC
+    `).all();
+    const toolMap = new Map();
+    for (const row of toolRows) {
+      if (!toolMap.has(row.session_id)) toolMap.set(row.session_id, []);
+      const arr = toolMap.get(row.session_id);
+      if (arr.length < 5) arr.push({ name: row.tool_name, count: row.cnt });
+    }
 
     const result = sessions.map((s) => {
-      const counts = {};
-      for (const row of countStmt.all(s.id)) {
-        counts[row.role] = row.cnt;
-      }
-      const topTools = toolCountStmt.all(s.id).map(r => ({ name: r.tool_name, count: r.cnt }));
-      const firstUser = firstUserStmt.get(s.id);
-      let firstUserMessage = null;
-      if (firstUser && firstUser.content) {
-        firstUserMessage = firstUser.content.trim().slice(0, 120);
-      }
-      const lastMsg = lastMsgTimeStmt.get(s.id);
-      const lastActivity = lastMsg?.last_ts ? unixToIso(lastMsg.last_ts) : unixToIso(s.ended_at);
+      const st = statsMap.get(s.id) || {};
+      const firstContent = firstUserMap.get(s.id);
+      const lastActivity = st.last_ts ? unixToIso(st.last_ts) : unixToIso(s.ended_at);
 
       return {
         id: s.id,
         timestamp: unixToIso(s.started_at),
         lastActivity,
         messageCount: s.message_count || 0,
-        userCount: counts['user'] || 0,
-        assistantCount: counts['assistant'] || 0,
+        userCount: st.user_count || 0,
+        assistantCount: st.assistant_count || 0,
         toolCallCount: s.tool_call_count || 0,
-        toolResultCount: counts['tool'] || 0,
-        topTools,
-        firstUserMessage,
+        toolResultCount: st.tool_result_count || 0,
+        topTools: toolMap.get(s.id) || [],
+        firstUserMessage: firstContent ? firstContent.trim().slice(0, 120) : null,
         model: s.model || null,
         source: s.source || null,
         title: s.title || null,
@@ -1966,36 +1978,40 @@ app.get('/api/watch', async (req, res) => {
     }
 
     const hermesDir = resolveDir(req.query.dir, HERMES_DIR);
-    let lastMsgCount = 0;
+    const dbPath = getHermesDbPath(hermesDir);
+
+    // Keep one persistent read-only connection
+    let db = null;
+    let lastTimestamp = 0;
     try {
-      const db = openHermesDb(hermesDir);
-      if (db) {
+      if (fs.existsSync(dbPath)) {
+        db = new Database(dbPath, { readonly: true });
+        db.pragma('journal_mode = WAL');
         const row = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?').get(sessionId);
-        lastMsgCount = row ? row.cnt : 0;
-        db.close();
+        sendHermes('connected', { messageCount: row ? row.cnt : 0 });
+        const lastMsg = db.prepare('SELECT MAX(timestamp) as ts FROM messages WHERE session_id = ?').get(sessionId);
+        lastTimestamp = lastMsg?.ts || 0;
+      } else {
+        sendHermes('connected', { messageCount: 0 });
       }
-    } catch {}
-    sendHermes('connected', { messageCount: lastMsgCount });
+    } catch (e) {
+      sendHermes('error', { error: e.message });
+    }
+
+    const newMsgStmt = db ? db.prepare('SELECT * FROM messages WHERE session_id = ? AND timestamp > ? ORDER BY timestamp ASC') : null;
 
     let closed = false;
     const pollTimer = setInterval(() => {
-      if (closed) return;
+      if (closed || !db || !newMsgStmt) return;
       try {
-        const db = openHermesDb(hermesDir);
-        if (!db) return;
-        const row = db.prepare('SELECT COUNT(*) as cnt FROM messages WHERE session_id = ?').get(sessionId);
-        const currentCount = row ? row.cnt : 0;
-        if (currentCount > lastMsgCount) {
-          const newRows = db.prepare(`
-            SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?
-          `).all(sessionId, currentCount - lastMsgCount, lastMsgCount);
+        const newRows = newMsgStmt.all(sessionId, lastTimestamp);
+        if (newRows.length > 0) {
+          lastTimestamp = newRows[newRows.length - 1].timestamp;
           const newMsgs = newRows.map(normalizeHermesMessage).filter(Boolean);
-          lastMsgCount = currentCount;
           if (newMsgs.length > 0) {
             sendHermes('newMessages', { messages: newMsgs });
           }
         }
-        db.close();
       } catch (e) {
         sendHermes('error', { error: e.message });
       }
@@ -2009,6 +2025,7 @@ app.get('/api/watch', async (req, res) => {
       closed = true;
       clearInterval(pollTimer);
       clearInterval(pingTimer);
+      if (db) { try { db.close(); } catch {} db = null; }
     });
     return;
   }
