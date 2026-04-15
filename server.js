@@ -1965,7 +1965,7 @@ app.get('/api/watch', async (req, res) => {
   }
   if (!filePath && platform !== 'hermes') return res.status(404).json({ error: 'Session not found' });
 
-  // Hermes: polling-based SSE (SQLite has no file-watch)
+  // Hermes: WAL file watch-based SSE
   if (platform === 'hermes') {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -1979,6 +1979,7 @@ app.get('/api/watch', async (req, res) => {
 
     const hermesDir = resolveDir(req.query.dir, HERMES_DIR);
     const dbPath = getHermesDbPath(hermesDir);
+    const walPath = dbPath + '-wal';
 
     // Keep one persistent read-only connection
     let db = null;
@@ -2000,9 +2001,8 @@ app.get('/api/watch', async (req, res) => {
 
     const newMsgStmt = db ? db.prepare('SELECT * FROM messages WHERE session_id = ? AND timestamp > ? ORDER BY timestamp ASC') : null;
 
-    let closed = false;
-    const pollTimer = setInterval(() => {
-      if (closed || !db || !newMsgStmt) return;
+    function checkNewMessages() {
+      if (!db || !newMsgStmt) return;
       try {
         const newRows = newMsgStmt.all(sessionId, lastTimestamp);
         if (newRows.length > 0) {
@@ -2015,7 +2015,30 @@ app.get('/api/watch', async (req, res) => {
       } catch (e) {
         sendHermes('error', { error: e.message });
       }
-    }, 500);
+    }
+
+    // Watch WAL file for changes (Hermes writes trigger WAL updates)
+    let closed = false;
+    let debounceTimer = null;
+    let watcher = null;
+    try {
+      watcher = fs.watch(walPath, (eventType) => {
+        if (eventType === 'change') {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(checkNewMessages, 50);
+        }
+      });
+    } catch {
+      // WAL file may not exist yet — watch dbPath as fallback
+      try {
+        watcher = fs.watch(dbPath, (eventType) => {
+          if (eventType === 'change') {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(checkNewMessages, 50);
+          }
+        });
+      } catch {}
+    }
 
     const pingTimer = setInterval(() => {
       if (!closed) res.write(': ping\n\n');
@@ -2023,8 +2046,9 @@ app.get('/api/watch', async (req, res) => {
 
     req.on('close', () => {
       closed = true;
-      clearInterval(pollTimer);
+      clearTimeout(debounceTimer);
       clearInterval(pingTimer);
+      if (watcher) try { watcher.close(); } catch {}
       if (db) { try { db.close(); } catch {} db = null; }
     });
     return;
