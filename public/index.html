@@ -1313,6 +1313,13 @@
     .session-item .stat-chip.duration { color: #8b949e; background: rgba(139, 148, 158, 0.1); }
     .session-item .stat-chip.source { color: #f78c6c; background: rgba(247, 140, 108, 0.12); font-weight: 600; }
 
+    .reasoning-block { margin: 6px 0; }
+    .reasoning-block summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 4px 0; user-select: none; }
+    .reasoning-block summary:hover { color: #58a6ff; }
+    .reasoning-content { padding: 8px 12px; margin: 4px 0; background: rgba(139, 148, 158, 0.06); border-left: 3px solid rgba(139, 148, 158, 0.3); border-radius: 4px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .reasoning-content p { margin: 0 0 6px; }
+    .reasoning-content p:last-child { margin-bottom: 0; }
+
     .session-anchor {
       scroll-margin-top: 16px;
     }
@@ -2268,10 +2275,14 @@
           .join('');
         const tokenBadge = message.usage?.totalTokens ? `<span class="badge">${escapeHtml(formatNumber(message.usage.totalTokens))} tokens</span>` : '';
         const modelBadge = `<span class="tool-meta">${escapeHtml(message.model || 'unknown model')}</span>`;
+        const reasoningHtml = message.reasoning
+          ? `<details class="reasoning-block"><summary>💭 Reasoning</summary><div class="reasoning-content">${renderMarkdown(message.reasoning)}</div></details>`
+          : '';
         return `
           <article class="message assistant session-anchor" id="message-${escapeHtml(message.id)}">
             <div class="card">
               ${renderMessageHead('<span class="message-role">Assistant</span>', `${modelBadge}${tokenBadge}`, message.timestamp, deltaMs)}
+              ${reasoningHtml}
               ${text ? renderMarkdown(text) : ''}
               ${toolCalls}
             </div>
@@ -2548,6 +2559,12 @@
           lines.push('');
         } else if (msg.role === 'assistant') {
           const toolCalls = (msg.content || []).filter(c => c.type === 'toolCall');
+          if (msg.reasoning) {
+            lines.push(`### 💭 Reasoning ${ts ? `(${ts})` : ''}`);
+            lines.push('');
+            lines.push(msg.reasoning);
+            lines.push('');
+          }
           if (text.trim()) {
             lines.push(`## 🤖 Assistant ${ts ? `(${ts})` : ''}`);
             lines.push('');
