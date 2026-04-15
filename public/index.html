@@ -2037,7 +2037,7 @@
         if (session.spawnCount) chips.push(`<span class="stat-chip spawn spawn-tree-link" data-scroll-spawn-tree>\u{1F333} ${session.spawnCount} spawn</span>`);
         if (session.model) chips.push(`<span class="stat-chip model">🧠 ${escapeHtml(session.model.split('/').pop())}</span>`);
         if (session.source) {
-          const srcIcons = { cli: '⌨️', telegram: '✈️', discord: '🎮', weixin: '💬', wechat: '💬', slack: '💼', web: '🌐' };
+          const srcIcons = { cli: '⌨️', telegram: '✈️', discord: '🎮', weixin: '💬', wechat: '💬', slack: '💼', web: '🌐', feishu: '🐦', whatsapp: '📱' };
           const srcIcon = srcIcons[session.source.toLowerCase()] || '📡';
           chips.push(`<span class="stat-chip source">${srcIcon} ${escapeHtml(session.source)}</span>`);
         }
