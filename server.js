@@ -311,6 +311,474 @@ async function parseSessionFile(filePath) {
   return { session, messages };
 }
 
+// ========= Insights: aggregate analytics across sessions =========
+const insightsCache = new Map(); // key → { expires: number, data: object }
+const INSIGHTS_TTL_MS = 60_000;
+
+function getInsightsCacheKey(platform, agent, dir) {
+  return `${platform}|${agent || ''}|${dir || ''}`;
+}
+
+// Collect all JSONL session file paths for a given platform
+async function collectSessionFiles(platform, agentName, dirOverride) {
+  const files = []; // { path, sessionId }
+
+  if (platform === 'openclaw') {
+    const dir = resolveDir(dirOverride, DATA_DIR);
+    const agents = agentName ? [agentName] : await readAgents(dir).catch(() => []);
+    for (const agent of agents) {
+      const agentDir = path.join(dir, agent, 'sessions');
+      let entries;
+      try { entries = await fsp.readdir(agentDir, { withFileTypes: true }); } catch { continue; }
+      for (const e of entries) {
+        if (e.isFile() && e.name.endsWith('.jsonl') && !isArchivedFile(e.name)) {
+          files.push({ path: path.join(agentDir, e.name), sessionId: e.name.replace(/\.jsonl$/, '') });
+        }
+      }
+    }
+  } else if (platform === 'codex') {
+    const dir = resolveDir(dirOverride, CODEX_DIR);
+    const years = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const y of years) {
+      if (!y.isDirectory()) continue;
+      const months = await fsp.readdir(path.join(dir, y.name), { withFileTypes: true }).catch(() => []);
+      for (const m of months) {
+        if (!m.isDirectory()) continue;
+        const days = await fsp.readdir(path.join(dir, y.name, m.name), { withFileTypes: true }).catch(() => []);
+        for (const d of days) {
+          if (!d.isDirectory()) continue;
+          const dirPath = path.join(dir, y.name, m.name, d.name);
+          const entries = await fsp.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+          for (const f of entries) {
+            if (f.isFile() && f.name.endsWith('.jsonl')) {
+              files.push({ path: path.join(dirPath, f.name), sessionId: f.name.replace(/\.jsonl$/, '') });
+            }
+          }
+        }
+      }
+    }
+  } else if (platform === 'claude-code') {
+    const dir = resolveDir(dirOverride, CLAUDE_CODE_DIR);
+    const projects = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const p of projects) {
+      if (!p.isDirectory()) continue;
+      const projDir = path.join(dir, p.name);
+      const entries = await fsp.readdir(projDir, { withFileTypes: true }).catch(() => []);
+      for (const f of entries) {
+        if (f.isFile() && f.name.endsWith('.jsonl')) {
+          files.push({ path: path.join(projDir, f.name), sessionId: f.name.replace(/\.jsonl$/, '') });
+        }
+      }
+      // Also check subagents/
+      const subDir = path.join(projDir, 'subagents');
+      const subEntries = await fsp.readdir(subDir, { withFileTypes: true }).catch(() => []);
+      for (const f of subEntries) {
+        if (f.isFile() && f.name.endsWith('.jsonl')) {
+          files.push({ path: path.join(subDir, f.name), sessionId: f.name.replace(/\.jsonl$/, '') });
+        }
+      }
+    }
+  }
+
+  return files;
+}
+
+// Extract first non-empty text line from content array
+function extractErrorSnippet(content) {
+  if (!Array.isArray(content)) return '';
+  for (const c of content) {
+    if (c.type === 'text' && c.text) {
+      const line = c.text.trim().split('\n')[0].trim();
+      if (line) return line.slice(0, 200);
+    }
+    if (typeof c === 'string') {
+      const line = c.trim().split('\n')[0].trim();
+      if (line) return line.slice(0, 200);
+    }
+  }
+  return '';
+}
+
+// Normalize error pattern: take first line, lowercase, strip variable parts
+function normalizeErrorPattern(snippet) {
+  if (!snippet) return '(empty)';
+  const line = snippet.split('\n')[0].trim().toLowerCase();
+  // Strip file paths
+  const stripped = line.replace(/\/[^\s]+/g, '/…');
+  // Strip hex ids
+  return stripped.replace(/[0-9a-f]{8,}/g, '…').slice(0, 120);
+}
+
+// Scan a single JSONL file for insights data
+// Supports both standard format (type:'message' with toolCall/toolResult roles)
+// and Claude Code format (type:'assistant'/'user' with tool_use/tool_result content blocks)
+async function scanFileForInsights(filePath, sessionId) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  let messageCount = 0;
+  let toolCallCount = 0;
+  let toolResultCount = 0;
+  let errorCount = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCacheRead = 0;
+  let sessionDate = null;
+  const toolStats = {};   // name → { calls, errors, totalDurationMs }
+  const errorExamples = []; // { toolName, snippet, pattern }
+
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+
+      // Session timestamp
+      if (rec.type === 'session' && rec.timestamp) {
+        sessionDate = rec.timestamp.slice(0, 10);
+      }
+      // Claude Code: timestamp at top level on type:'user'/'assistant'
+      if ((rec.type === 'user' || rec.type === 'assistant') && !sessionDate && rec.timestamp) {
+        sessionDate = rec.timestamp.slice(0, 10);
+      }
+
+      // --- Standard format: type === 'message' ---
+      if (rec.type === 'message') {
+        messageCount++;
+        const msg = rec.message || {};
+        const content = Array.isArray(msg.content) ? msg.content : [];
+
+        if (msg.usage) {
+          totalInputTokens += msg.usage.input || 0;
+          totalOutputTokens += msg.usage.output || 0;
+          totalCacheRead += msg.usage.cacheRead || msg.usage.cache_read || 0;
+        }
+
+        for (const c of content) {
+          if (c.type === 'toolCall') {
+            toolCallCount++;
+            const name = c.name || 'unknown';
+            if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+            toolStats[name].calls++;
+          }
+        }
+
+        if (msg.role === 'toolResult') {
+          toolResultCount++;
+          const name = msg.toolName || '?';
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+
+          if (msg.isError) {
+            errorCount++;
+            toolStats[name].errors++;
+            const snippet = extractErrorSnippet(msg.content);
+            const pattern = normalizeErrorPattern(snippet);
+            errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: rec.timestamp || null });
+          }
+
+          if (msg.details && typeof msg.details.durationMs === 'number') {
+            toolStats[name].totalDurationMs += msg.details.durationMs;
+          }
+        }
+      }
+
+      // --- Claude Code format: type === 'assistant' with tool_use blocks ---
+      if (rec.type === 'assistant') {
+        messageCount++;
+        const msg = rec.message || {};
+        const content = Array.isArray(msg.content) ? msg.content : [];
+
+        // Token usage
+        if (msg.usage) {
+          totalInputTokens += msg.usage.input_tokens || msg.usage.input || 0;
+          totalOutputTokens += msg.usage.output_tokens || msg.usage.output || 0;
+          totalCacheRead += msg.usage.cache_creation_input_tokens || msg.usage.cache_read_input_tokens || 0;
+        }
+
+        for (const c of content) {
+          if (c.type === 'tool_use') {
+            toolCallCount++;
+            const name = c.name || 'unknown';
+            if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+            toolStats[name].calls++;
+          }
+        }
+      }
+
+      // --- Claude Code format: type === 'user' with tool_result blocks ---
+      if (rec.type === 'user') {
+        messageCount++;
+        const msg = rec.message || {};
+        const content = Array.isArray(msg.content) ? msg.content : [];
+
+        for (const c of content) {
+          if (c.type === 'tool_result') {
+            toolResultCount++;
+            // tool_result blocks don't carry the tool name directly;
+            // we use a generic label since we can't easily correlate tool_use id
+            const name = 'tool';
+
+            if (c.is_error) {
+              errorCount++;
+              if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+              toolStats[name].errors++;
+              // Extract error text from tool_result content
+              let errorText = '';
+              if (typeof c.content === 'string') {
+                errorText = c.content;
+              } else if (Array.isArray(c.content)) {
+                errorText = c.content.filter(b => b.type === 'text').map(b => b.text || '').join(' ');
+              }
+              const snippet = errorText.trim().split('\n')[0].trim().slice(0, 200);
+              const pattern = normalizeErrorPattern(snippet);
+              errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: rec.timestamp || null });
+            }
+          }
+        }
+      }
+
+      // --- Codex format: type === 'response_item' with payload.type === 'function_call'/'function_call_output' ---
+      if (rec.type === 'response_item') {
+        const payload = rec.payload || {};
+        if (payload.type === 'message') {
+          messageCount++;
+        }
+        if (payload.type === 'function_call' || payload.type === 'custom_tool_call') {
+          toolCallCount++;
+          const name = payload.name || 'unknown';
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+          toolStats[name].calls++;
+        }
+        if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+          toolResultCount++;
+          const name = 'tool';
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+          const output = payload.output;
+          let outputText = '';
+          let isErr = false;
+          if (typeof output === 'string') {
+            outputText = output;
+            isErr = outputText.includes('Process exited with code') && !outputText.includes('exited with code 0');
+          } else if (output && typeof output === 'object') {
+            outputText = output.output || JSON.stringify(output);
+            if (output.metadata && output.metadata.exit_code !== undefined) {
+              isErr = output.metadata.exit_code !== 0;
+            }
+          }
+          if (isErr) {
+            errorCount++;
+            toolStats[name].errors++;
+            const snippet = outputText.trim().split('\n')[0].trim().slice(0, 200);
+            const pattern = normalizeErrorPattern(snippet);
+            errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: rec.timestamp || null });
+          }
+          if (output && typeof output === 'object' && output.metadata && output.metadata.duration_seconds) {
+            toolStats[name].totalDurationMs += Math.round(output.metadata.duration_seconds * 1000);
+          }
+        }
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+
+  return { messageCount, toolCallCount, toolResultCount, errorCount, totalInputTokens, totalOutputTokens, totalCacheRead, sessionDate, toolStats, errorExamples };
+}
+
+// Scan a single Hermes session for insights (from SQLite)
+function scanHermesSessionForInsights(db, sessionId) {
+  let messageCount = 0;
+  let toolCallCount = 0;
+  let toolResultCount = 0;
+  let errorCount = 0;
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let sessionDate = null;
+  const toolStats = {};
+  const errorExamples = [];
+
+  const rows = db.prepare(`
+    SELECT role, content, tool_calls, tool_name, token_count, timestamp
+    FROM messages WHERE session_id = ?
+    ORDER BY rowid
+  `).all(sessionId);
+
+  for (const row of rows) {
+    messageCount++;
+    totalInputTokens += row.token_count || 0;
+
+    if (!sessionDate && row.timestamp) {
+      sessionDate = new Date(row.timestamp * 1000).toISOString().slice(0, 10);
+    }
+
+    // Parse tool calls from assistant messages
+    if (row.role === 'assistant' && row.tool_calls) {
+      let calls;
+      try { calls = JSON.parse(row.tool_calls); } catch { continue; }
+      if (Array.isArray(calls)) {
+        for (const tc of calls) {
+          const name = tc?.function?.name || tc?.name || 'unknown';
+          toolCallCount++;
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+          toolStats[name].calls++;
+        }
+      }
+    }
+
+    // Tool results
+    if (row.role === 'tool') {
+      toolResultCount++;
+      const name = row.tool_name || 'tool';
+      if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+      // Detect errors from content (no is_error column in Hermes)
+      const content = row.content || '';
+      const isErr = content.includes('"isError":true') || content.includes('"isError": true') ||
+                    content.toLowerCase().includes('error') && content.includes('exit code') && !content.includes('exit code 0');
+      if (isErr) {
+        errorCount++;
+        toolStats[name].errors++;
+        const snippet = content.trim().split('\n')[0].trim().slice(0, 200);
+        const pattern = normalizeErrorPattern(snippet);
+        errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: row.timestamp ? new Date(row.timestamp * 1000).toISOString() : null });
+      }
+    }
+  }
+
+  return { messageCount, toolCallCount, toolResultCount, errorCount, totalInputTokens, totalOutputTokens, totalCacheRead: 0, sessionDate, toolStats, errorExamples };
+}
+
+async function computeInsights(platform, agentName, dirOverride) {
+  // Hermes uses SQLite
+  if (platform === 'hermes') {
+    const dir = resolveDir(dirOverride, HERMES_DIR);
+    const db = openHermesDb(dir);
+    if (!db) return null;
+    try {
+      const sessions = db.prepare('SELECT id FROM sessions').all();
+      let totalSessions = sessions.length;
+      let totalMessages = 0, totalToolCalls = 0, totalToolResultCount = 0, totalErrors = 0;
+      let totalInput = 0, totalOutput = 0;
+      const toolStats = {};
+      const allErrors = [];
+      const dailyTrend = {};
+
+      for (const s of sessions) {
+        const data = scanHermesSessionForInsights(db, s.id);
+        totalMessages += data.messageCount;
+        totalToolCalls += data.toolCallCount;
+        totalToolResultCount += data.toolResultCount;
+        totalErrors += data.errorCount;
+        totalInput += data.totalInputTokens;
+        totalOutput += data.totalOutputTokens;
+
+        for (const [name, st] of Object.entries(data.toolStats)) {
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+          toolStats[name].calls += st.calls;
+          toolStats[name].errors += st.errors;
+          toolStats[name].totalDurationMs += st.totalDurationMs;
+        }
+        allErrors.push(...data.errorExamples);
+
+        if (data.sessionDate) {
+          if (!dailyTrend[data.sessionDate]) dailyTrend[data.sessionDate] = { sessions: 0, errors: 0, toolCalls: 0 };
+          dailyTrend[data.sessionDate].sessions++;
+          dailyTrend[data.sessionDate].errors += data.errorCount;
+          dailyTrend[data.sessionDate].toolCalls += data.toolCallCount;
+        }
+      }
+
+      return buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, 0, toolStats, allErrors, dailyTrend);
+    } finally {
+      db.close();
+    }
+  }
+
+  // JSONL-based platforms: openclaw, codex, claude-code
+  const files = await collectSessionFiles(platform, agentName, dirOverride);
+  if (files.length === 0) return null;
+
+  let totalSessions = files.length;
+  let totalMessages = 0, totalToolCalls = 0, totalToolResultCount = 0, totalErrors = 0;
+  let totalInput = 0, totalOutput = 0, totalCacheRead = 0;
+  const toolStats = {};
+  const allErrors = [];
+  const dailyTrend = {};
+
+  for (const f of files) {
+    const data = await scanFileForInsights(f.path, f.sessionId).catch(() => null);
+    if (!data) continue;
+
+    totalMessages += data.messageCount;
+    totalToolCalls += data.toolCallCount;
+    totalToolResultCount += data.toolResultCount;
+    totalErrors += data.errorCount;
+    totalInput += data.totalInputTokens;
+    totalOutput += data.totalOutputTokens;
+    totalCacheRead += data.totalCacheRead;
+
+    for (const [name, st] of Object.entries(data.toolStats)) {
+      if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+      toolStats[name].calls += st.calls;
+      toolStats[name].errors += st.errors;
+      toolStats[name].totalDurationMs += st.totalDurationMs;
+    }
+    allErrors.push(...data.errorExamples);
+
+    if (data.sessionDate) {
+      if (!dailyTrend[data.sessionDate]) dailyTrend[data.sessionDate] = { sessions: 0, errors: 0, toolCalls: 0 };
+      dailyTrend[data.sessionDate].sessions++;
+      dailyTrend[data.sessionDate].errors += data.errorCount;
+      dailyTrend[data.sessionDate].toolCalls += data.toolCallCount;
+    }
+  }
+
+  return buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, totalCacheRead, toolStats, allErrors, dailyTrend);
+}
+
+function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, totalCacheRead, toolStats, allErrors, dailyTrend) {
+  const errorRate = totalToolResultCount > 0 ? totalErrors / totalToolResultCount : 0;
+
+  // Tool stats array
+  const toolStatsArray = Object.entries(toolStats)
+    .map(([name, st]) => ({
+      name,
+      calls: st.calls,
+      errors: st.errors,
+      errorRate: st.calls > 0 ? st.errors / st.calls : 0,
+      avgDurationMs: st.calls > 0 ? Math.round(st.totalDurationMs / st.calls) : null
+    }))
+    .sort((a, b) => b.calls - a.calls);
+
+  // Error clusters: group by normalized pattern
+  const clusters = {};
+  for (const err of allErrors) {
+    const key = err.pattern;
+    if (!clusters[key]) clusters[key] = { pattern: err.snippet, count: 0, examples: [] };
+    clusters[key].count++;
+    if (clusters[key].examples.length < 5) {
+      clusters[key].examples.push({ sessionId: err.sessionId, toolName: err.toolName, snippet: err.snippet, timestamp: err.timestamp });
+    }
+  }
+  const errorClusters = Object.values(clusters).sort((a, b) => b.count - a.count).slice(0, 20);
+
+  // Daily trend sorted by date
+  const trend = Object.entries(dailyTrend)
+    .map(([date, d]) => ({ date, sessions: d.sessions, errors: d.errors, toolCalls: d.toolCalls }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    totalSessions,
+    totalMessages,
+    totalToolCalls,
+    errorRate: Math.round(errorRate * 10000) / 10000,
+    tokenUsage: { input: totalInput, output: totalOutput, cacheRead: totalCacheRead },
+    toolStats: toolStatsArray,
+    errorClusters,
+    trend
+  };
+}
+
 app.use(express.static(PUBLIC_DIR, { maxAge: 0, etag: false, lastModified: false }));
 
 // Disable all caching
@@ -327,6 +795,31 @@ app.get('/api/agents', async (req, res) => {
     const dir = resolveDir(req.query.dir, DATA_DIR);
     const agents = await readAgents(dir);
     res.json(agents);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Insights: aggregate analytics across sessions
+app.get('/api/insights', async (req, res) => {
+  try {
+    const platform = req.query.platform || 'openclaw';
+    const agent = req.query.agent || '';
+    const dir = req.query.dir || '';
+
+    const cacheKey = getInsightsCacheKey(platform, agent, dir);
+    const cached = insightsCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+      return res.json(cached.data);
+    }
+
+    const data = await computeInsights(platform, agent, dir);
+    if (!data) {
+      return res.json({ totalSessions: 0, totalMessages: 0, totalToolCalls: 0, errorRate: 0, tokenUsage: { input: 0, output: 0, cacheRead: 0 }, toolStats: [], errorClusters: [], trend: [] });
+    }
+
+    insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_TTL_MS });
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

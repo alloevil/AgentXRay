@@ -1527,6 +1527,372 @@
         min-width: 36px;
       }
     }
+    /* --- View Toggle --- */
+    .view-toggle-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-alt);
+      flex-shrink: 0;
+    }
+
+    .view-toggle-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 20px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .view-toggle-btn:hover {
+      color: var(--text);
+    }
+
+    .view-toggle-btn.active {
+      color: #58a6ff;
+      border-bottom-color: #58a6ff;
+    }
+
+    /* --- Insights Dashboard --- */
+    .insights-panel {
+      padding: 20px 22px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .insights-panel h2 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    .insight-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .insight-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .insight-card .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .insight-card .label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
+
+    .insight-card.error-card .value { color: #f85149; }
+    .insight-card.token-card .value { color: #58a6ff; }
+
+    .insight-sections {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .insight-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .insight-section h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .tool-stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .tool-stats-table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 4px 8px 4px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .tool-stats-table td {
+      padding: 6px 8px 6px 0;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+      white-space: nowrap;
+    }
+
+    .tool-stats-table .bar-cell {
+      width: 100%;
+    }
+
+    .tool-stats-bar {
+      height: 6px;
+      background: rgba(88, 166, 255, 0.2);
+      border-radius: 3px;
+      overflow: hidden;
+      min-width: 4px;
+    }
+
+    .tool-stats-bar .fill {
+      height: 100%;
+      background: #58a6ff;
+      border-radius: 3px;
+    }
+
+    .tool-stats-bar .fill.error {
+      background: #f85149;
+    }
+
+    .error-cluster-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .error-cluster-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .error-cluster-item:hover {
+      border-color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .error-cluster-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .error-cluster-pattern {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #ffb3ad;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .error-cluster-count {
+      font-size: 11px;
+      color: #f85149;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .error-cluster-examples {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(48, 54, 61, 0.4);
+    }
+
+    .error-cluster-example {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 2px 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .error-cluster-example .session-link {
+      color: #58a6ff;
+      cursor: pointer;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .error-cluster-example .session-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Trend bar chart */
+    .trend-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+    }
+
+    .trend-section h3 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .trend-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 100px;
+      padding-bottom: 20px;
+      position: relative;
+    }
+
+    .trend-bar-group {
+      flex: 1;
+      display: flex;
+      gap: 1px;
+      align-items: flex-end;
+      position: relative;
+      min-width: 0;
+    }
+
+    .trend-bar {
+      flex: 1;
+      border-radius: 3px 3px 0 0;
+      min-height: 1px;
+      transition: height 0.3s ease;
+      cursor: default;
+      position: relative;
+    }
+
+    .trend-bar.sessions-bar { background: rgba(88, 166, 255, 0.5); }
+    .trend-bar.errors-bar { background: rgba(248, 81, 73, 0.5); }
+    .trend-bar.toolcalls-bar { background: rgba(35, 134, 54, 0.4); }
+
+    .trend-bar-group:hover .trend-bar { opacity: 0.8; }
+
+    .trend-bar-label {
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .trend-legend {
+      display: flex;
+      gap: 14px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .trend-legend span::before {
+      content: '';
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    .trend-legend .leg-sessions::before { background: rgba(88, 166, 255, 0.5); }
+    .trend-legend .leg-errors::before { background: rgba(248, 81, 73, 0.5); }
+    .trend-legend .leg-toolcalls::before { background: rgba(35, 134, 54, 0.4); }
+
+    .insights-loading {
+      color: var(--muted);
+      padding: 40px 22px;
+      text-align: center;
+    }
+
+    .insights-empty {
+      color: var(--muted);
+      padding: 40px 22px;
+      text-align: center;
+    }
+
+    .insight-session-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .tool-sequence {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      font-family: var(--mono);
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .tool-seq-item {
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: default;
+      white-space: nowrap;
+    }
+
+    .tool-seq-error {
+      outline: 1.5px solid #f85149;
+      outline-offset: -1px;
+    }
+
+    .tool-seq-arrow {
+      color: var(--muted);
+      margin: 0 1px;
+    }
+
+    .tool-seq-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+
+    .tool-seq-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--muted);
+    }
+
+    .tool-seq-legend-swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -1553,6 +1919,11 @@
         <div id="sessionList" class="session-list"></div>
       </aside>
       <main class="main">
+        <div class="view-toggle-bar" id="viewToggleBar">
+          <button class="view-toggle-btn active" data-view="sessions">Sessions</button>
+          <button class="view-toggle-btn" data-view="insights">Insights</button>
+        </div>
+        <div id="mainContent">
         <div id="breadcrumb" class="breadcrumb" hidden></div>
         <section id="summary" class="summary">
           <div class="summary-top">
@@ -1569,6 +1940,8 @@
         <section id="messages" class="messages">
           <div class="empty">Session messages will appear here.</div>
         </section>
+        </div><!-- /mainContent -->
+        <section id="insightsPanel" class="insights-panel" hidden></section>
       </main>
     </div>
   </div>
@@ -1991,6 +2364,7 @@
           renderBreadcrumb();
           renderAgents();
           await refreshAll(false);
+          if (currentView === 'insights') await loadInsights();
         });
       });
 
@@ -2013,12 +2387,442 @@
           state.navStack = [];
           renderBreadcrumb();
           await refreshAll(false);
+          if (currentView === 'insights') await loadInsights();
         });
       } else {
         archivedToggle.hidden = true;
         agentNav.hidden = true;
         agentNav.innerHTML = '';
       }
+    }
+
+    // --- Insights View ---
+    const viewToggleBar = document.getElementById('viewToggleBar');
+    const mainContent = document.getElementById('mainContent');
+    const insightsPanel = document.getElementById('insightsPanel');
+    let currentView = 'sessions';
+    let insightsData = null;
+
+    viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.getAttribute('data-view');
+        if (view === currentView) return;
+        currentView = view;
+        viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        if (view === 'insights') {
+          mainContent.hidden = true;
+          insightsPanel.hidden = false;
+          loadInsights();
+        } else {
+          mainContent.hidden = false;
+          insightsPanel.hidden = true;
+        }
+      });
+    });
+
+    async function loadInsights() {
+      insightsPanel.innerHTML = '<div class="insights-loading">Loading insights…</div>';
+
+      // If a session is selected and loaded, show session-level insights
+      if (state.sessionData && state.sessionData.messages && state.sessionData.messages.length > 0) {
+        renderSessionInsights(state.sessionData);
+        return;
+      }
+
+      // Otherwise show global insights
+      const params = new URLSearchParams({ platform: state.platform });
+      if (state.platform === 'openclaw' && state.selectedAgent) {
+        params.set('agent', state.selectedAgent);
+      }
+      const dirVal = dirParam();
+      if (dirVal) params.set('dir', dirVal);
+
+      try {
+        const data = await fetchJson('/api/insights?' + params.toString());
+        insightsData = data;
+        renderInsights(data);
+      } catch (e) {
+        insightsPanel.innerHTML = `<div class="insights-empty">Failed to load insights: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function renderSessionInsights(sessionData) {
+      const msgs = sessionData.messages;
+      const session = sessionData.session || {};
+
+      // --- Compute stats from messages ---
+      let userCount = 0, assistantCount = 0, toolCallCount = 0, toolResultCount = 0, errorCount = 0;
+      const toolStats = {}; // name → { calls, errors, totalDurationMs }
+      const errors = [];    // { toolName, snippet, timestamp }
+      const toolCallsList = []; // { index, name, args, timestamp }
+      let totalInputTokens = 0, totalOutputTokens = 0, totalCacheRead = 0;
+
+      // Retry detection
+      let turnToolErrors = {};
+      const retriedTools = [];
+
+      for (let i = 0; i < msgs.length; i++) {
+        const msg = msgs[i];
+        if (msg.role === 'user') {
+          // Check retries from previous turn
+          for (const [name, errCount] of Object.entries(turnToolErrors)) {
+            if (errCount > 0) retriedTools.push({ name, count: errCount });
+          }
+          turnToolErrors = {};
+          userCount++;
+        }
+        if (msg.role === 'assistant') {
+          assistantCount++;
+          if (msg.usage) {
+            totalInputTokens += msg.usage.input || msg.usage.input_tokens || 0;
+            totalOutputTokens += msg.usage.output || msg.usage.output_tokens || 0;
+            totalCacheRead += msg.usage.cacheRead || msg.usage.cache_read || 0;
+          }
+        }
+        if (msg.role === 'toolResult') {
+          toolResultCount++;
+          const name = msg.toolName || '?';
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+          if (msg.isError) {
+            errorCount++;
+            toolStats[name].errors++;
+            turnToolErrors[name] = (turnToolErrors[name] || 0) + 1;
+            const snippet = getTextContent(msg.content).trim().split('\n')[0].trim().slice(0, 200);
+            errors.push({ toolName: name, snippet, timestamp: msg.timestamp, index: i });
+          } else if (turnToolErrors[name] > 0) {
+            turnToolErrors[name] = 0;
+          }
+          if (msg.details && typeof msg.details.durationMs === 'number') {
+            toolStats[name].totalDurationMs += msg.details.durationMs;
+          }
+        }
+        for (const c of (msg.content || [])) {
+          if (c.type === 'toolCall') {
+            toolCallCount++;
+            const name = c.name || 'unknown';
+            if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+            toolStats[name].calls++;
+            toolCallsList.push({ index: i, name, args: c.arguments, timestamp: msg.timestamp, callId: c.id });
+          }
+        }
+      }
+
+      // --- Build HTML ---
+      const errorRate = toolResultCount > 0 ? (errorCount / toolResultCount * 100).toFixed(1) : '0.0';
+      const tokenTotal = totalInputTokens + totalOutputTokens;
+      const tokenFmt = tokenTotal >= 1_000_000 ? (tokenTotal / 1_000_000).toFixed(1) + 'M' : tokenTotal >= 1_000 ? (tokenTotal / 1_000).toFixed(1) + 'K' : tokenTotal.toString();
+
+      // Overview cards
+      const cardsHtml = `
+        <div class="insight-cards">
+          <div class="insight-card">
+            <div class="value">${toolCallCount}</div>
+            <div class="label">Tool Calls</div>
+          </div>
+          <div class="insight-card${errorCount > 0 ? ' error-card' : ''}">
+            <div class="value">${errorRate}%</div>
+            <div class="label">Error Rate</div>
+          </div>
+          <div class="insight-card">
+            <div class="value">${retriedTools.length}</div>
+            <div class="label">Retries</div>
+          </div>
+          <div class="insight-card token-card">
+            <div class="value">${tokenFmt}</div>
+            <div class="label">Tokens</div>
+          </div>
+        </div>
+      `;
+
+      // Tool stats table
+      const toolStatsArray = Object.entries(toolStats)
+        .map(([name, st]) => ({ name, ...st, errorRate: st.calls > 0 ? st.errors / st.calls : 0 }))
+        .sort((a, b) => b.calls - a.calls);
+      const maxCalls = toolStatsArray.length > 0 ? toolStatsArray[0].calls : 1;
+
+      const toolTableHtml = toolStatsArray.length > 0 ? `
+        <table class="tool-stats-table">
+          <thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Avg ms</th><th class="bar-cell"></th></tr></thead>
+          <tbody>
+            ${toolStatsArray.map(t => {
+              const barW = Math.max(2, Math.round((t.calls / maxCalls) * 100));
+              const avgMs = t.totalDurationMs > 0 && t.calls > 0 ? Math.round(t.totalDurationMs / t.calls) : null;
+              return `<tr>
+                <td>${escapeHtml(t.name)}</td>
+                <td>${t.calls}</td>
+                <td style="color:${t.errors > 0 ? '#f85149' : 'inherit'}">${t.errors || '—'}</td>
+                <td>${avgMs !== null ? formatDurationCompact(avgMs) : '—'}</td>
+                <td class="bar-cell">
+                  <div class="tool-stats-bar"><div class="fill" style="width:${barW}%"></div></div>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      ` : '<div style="color:var(--muted);font-size:13px">No tool calls in this session</div>';
+
+      // Errors list
+      const errorsHtml = errors.length > 0 ? errors.map(e => `
+        <div class="error-cluster-item" data-msg-index="${e.index}">
+          <div class="error-cluster-header">
+            <span class="error-cluster-pattern">${escapeHtml(e.snippet)}</span>
+            <span class="error-cluster-count">${escapeHtml(e.toolName)}</span>
+          </div>
+        </div>
+      `).join('') : '<div style="color:var(--muted);font-size:13px">No errors</div>';
+
+      // Token breakdown
+      const tokenBreakdown = totalInputTokens + totalOutputTokens + totalCacheRead > 0 ? `
+        <div class="insight-section">
+          <h3>Token Breakdown</h3>
+          <div class="token-grid">
+            <span class="badge">Input: ${formatNumber(totalInputTokens)}</span>
+            <span class="badge">Output: ${formatNumber(totalOutputTokens)}</span>
+            ${totalCacheRead > 0 ? `<span class="badge">Cache Read: ${formatNumber(totalCacheRead)}</span>` : ''}
+          </div>
+        </div>
+      ` : '';
+
+      // Tool call timeline (compact) — color per tool name
+      const toolColorPalette = [
+        { bg: 'rgba(88,166,255,0.15)',  color: '#58a6ff' },  // blue
+        { bg: 'rgba(63,185,80,0.15)',   color: '#3fb950' },  // green
+        { bg: 'rgba(210,153,34,0.15)',  color: '#d29922' },  // yellow
+        { bg: 'rgba(188,143,243,0.15)', color: '#bc8ff3' },  // purple
+        { bg: 'rgba(219,109,40,0.15)',  color: '#db6d28' },  // orange
+        { bg: 'rgba(121,192,255,0.15)', color: '#79c0ff' },  // light blue
+        { bg: 'rgba(255,123,114,0.15)', color: '#ff7b72' },  // salmon
+        { bg: 'rgba(165,214,255,0.15)', color: '#a5d6ff' },  // sky
+      ];
+      const toolColorMap = {}; // toolName → color index
+      let colorIdx = 0;
+      for (const tc of toolCallsList) {
+        if (!(tc.name in toolColorMap)) {
+          toolColorMap[tc.name] = colorIdx % toolColorPalette.length;
+          colorIdx++;
+        }
+      }
+
+      const timelineHtml = toolCallsList.length > 0 ? `
+        <div class="insight-section" style="grid-column:1/-1">
+          <h3>Tool Call Sequence</h3>
+          <div class="tool-sequence">
+            ${toolCallsList.map((tc, idx) => {
+              const ci = toolColorMap[tc.name];
+              const pal = toolColorPalette[ci];
+              const hasErrorAfter = errors.some(e => e.toolName === tc.name && e.timestamp === tc.timestamp);
+              return `<span class="tool-seq-item${hasErrorAfter ? ' tool-seq-error' : ''}" style="background:${pal.bg};color:${pal.color}" title="${escapeHtml(tc.name)}">${escapeHtml(tc.name)}</span>`;
+            }).join('<span class="tool-seq-arrow">→</span>')}
+          </div>
+          <div class="tool-seq-legend">
+            ${Object.entries(toolColorMap).map(([name, ci]) => {
+              const pal = toolColorPalette[ci];
+              return `<span class="tool-seq-legend-item"><span class="tool-seq-legend-swatch" style="background:${pal.color}"></span>${escapeHtml(name)}</span>`;
+            }).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      const sid = session.id || state.selectedSessionId || '?';
+
+      insightsPanel.innerHTML = `
+        <h2>Session Insights</h2>
+        <div class="insight-session-meta">
+          <span class="badge">${escapeHtml(sid.slice(0, 20))}</span>
+          ${session.cwd ? `<span class="badge">${escapeHtml(session.cwd)}</span>` : ''}
+          <span class="badge">👤 ${userCount} &nbsp; 🤖 ${assistantCount}</span>
+        </div>
+        ${cardsHtml}
+        <div class="insight-sections">
+          <div class="insight-section">
+            <h3>Tool Statistics</h3>
+            ${toolTableHtml}
+          </div>
+          <div class="insight-section">
+            <h3>Errors (${errors.length})</h3>
+            <div class="error-cluster-list">${errorsHtml}</div>
+          </div>
+          ${tokenBreakdown}
+        </div>
+        ${timelineHtml}
+      `;
+
+      // Bind: click error → scroll to that message
+      insightsPanel.querySelectorAll('[data-msg-index]').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.getAttribute('data-msg-index'), 10);
+          // Switch to sessions view and scroll
+          currentView = 'sessions';
+          viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          viewToggleBar.querySelector('[data-view="sessions"]').classList.add('active');
+          mainContent.hidden = false;
+          insightsPanel.hidden = true;
+          // Scroll to the message
+          if (msgs[idx] && msgs[idx].id) scrollToMessage(msgs[idx].id);
+        });
+      });
+    }
+
+    function renderInsights(data) {
+      if (!data || data.totalSessions === 0) {
+        insightsPanel.innerHTML = '<div class="insights-empty">No session data available for the current selection.</div>';
+        return;
+      }
+
+      const errPct = (data.errorRate * 100).toFixed(1);
+      const tokenTotal = (data.tokenUsage.input + data.tokenUsage.output);
+      const tokenFmt = tokenTotal >= 1_000_000 ? (tokenTotal / 1_000_000).toFixed(1) + 'M' : tokenTotal >= 1_000 ? (tokenTotal / 1_000).toFixed(1) + 'K' : tokenTotal.toString();
+
+      // Overview cards
+      const cardsHtml = `
+        <div class="insight-cards">
+          <div class="insight-card">
+            <div class="value">${data.totalSessions}</div>
+            <div class="label">Sessions</div>
+          </div>
+          <div class="insight-card">
+            <div class="value">${data.totalToolCalls}</div>
+            <div class="label">Tool Calls</div>
+          </div>
+          <div class="insight-card error-card">
+            <div class="value">${errPct}%</div>
+            <div class="label">Error Rate</div>
+          </div>
+          <div class="insight-card token-card">
+            <div class="value">${tokenFmt}</div>
+            <div class="label">Tokens (in+out)</div>
+          </div>
+        </div>
+      `;
+
+      // Tool stats table
+      const maxCalls = data.toolStats.length > 0 ? data.toolStats[0].calls : 1;
+      const toolTableHtml = data.toolStats.length > 0 ? `
+        <table class="tool-stats-table">
+          <thead><tr><th>Tool</th><th>Calls</th><th>Errors</th><th>Err%</th><th class="bar-cell"></th></tr></thead>
+          <tbody>
+            ${data.toolStats.slice(0, 15).map(t => {
+              const barW = Math.max(2, Math.round((t.calls / maxCalls) * 100));
+              const errPctStr = t.errors > 0 ? (t.errorRate * 100).toFixed(1) + '%' : '—';
+              const errBarW = t.errors > 0 ? Math.max(2, Math.round((t.errors / t.calls) * 100)) : 0;
+              return `<tr>
+                <td>${escapeHtml(t.name)}</td>
+                <td>${t.calls}</td>
+                <td style="color:${t.errors > 0 ? '#f85149' : 'inherit'}">${t.errors || '—'}</td>
+                <td style="color:${t.errors > 0 ? '#f85149' : 'inherit'}">${errPctStr}</td>
+                <td class="bar-cell">
+                  <div class="tool-stats-bar"><div class="fill" style="width:${barW}%"></div></div>
+                  ${errBarW > 0 ? `<div class="tool-stats-bar" style="margin-top:2px"><div class="fill error" style="width:${errBarW}%"></div></div>` : ''}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      ` : '<div style="color:var(--muted);font-size:13px">No tool data</div>';
+
+      // Error clusters
+      const errClustersHtml = data.errorClusters.length > 0 ? data.errorClusters.map(c => {
+        const examplesHtml = c.examples.map(e => `
+          <div class="error-cluster-example">
+            <span class="session-link" data-session-id="${escapeHtml(e.sessionId)}">${escapeHtml(e.sessionId.slice(0, 12))}…</span>
+            <span>${escapeHtml(e.toolName)}</span>
+          </div>
+        `).join('');
+        return `
+          <div class="error-cluster-item" data-cluster>
+            <div class="error-cluster-header">
+              <span class="error-cluster-pattern" title="${escapeHtml(c.pattern)}">${escapeHtml(c.pattern)}</span>
+              <span class="error-cluster-count">x${c.count}</span>
+            </div>
+            <div class="error-cluster-examples" hidden>${examplesHtml}</div>
+          </div>
+        `;
+      }).join('') : '<div style="color:var(--muted);font-size:13px">No errors found</div>';
+
+      // Trend chart
+      let trendHtml = '';
+      if (data.trend.length > 0) {
+        const maxVal = Math.max(...data.trend.map(d => Math.max(d.sessions, d.errors, d.toolCalls)), 1);
+        const barsHtml = data.trend.map(d => {
+          const sH = Math.max(1, Math.round((d.sessions / maxVal) * 90));
+          const eH = Math.max(1, Math.round((d.errors / maxVal) * 90));
+          const tH = Math.max(1, Math.round((d.toolCalls / maxVal) * 90));
+          const label = d.date.slice(5); // MM-DD
+          return `
+            <div class="trend-bar-group" title="${escapeHtml(d.date)}: ${d.sessions} sessions, ${d.errors} errors, ${d.toolCalls} tool calls">
+              <div class="trend-bar sessions-bar" style="height:${sH}px"></div>
+              <div class="trend-bar errors-bar" style="height:${eH}px"></div>
+              <div class="trend-bar toolcalls-bar" style="height:${tH}px"></div>
+              <span class="trend-bar-label">${escapeHtml(label)}</span>
+            </div>
+          `;
+        }).join('');
+
+        trendHtml = `
+          <div class="trend-section">
+            <h3>Daily Trend</h3>
+            <div class="trend-chart">${barsHtml}</div>
+            <div class="trend-legend">
+              <span class="leg-sessions">Sessions</span>
+              <span class="leg-errors">Errors</span>
+              <span class="leg-toolcalls">Tool Calls</span>
+            </div>
+          </div>
+        `;
+      }
+
+      insightsPanel.innerHTML = `
+        <h2>Insights${state.platform === 'openclaw' && state.selectedAgent ? ' — ' + escapeHtml(state.selectedAgent) : ''}</h2>
+        ${cardsHtml}
+        <div class="insight-sections">
+          <div class="insight-section">
+            <h3>Tool Statistics</h3>
+            ${toolTableHtml}
+          </div>
+          <div class="insight-section">
+            <h3>Error Clusters</h3>
+            <div class="error-cluster-list">${errClustersHtml}</div>
+          </div>
+        </div>
+        ${trendHtml}
+      `;
+
+      // Bind error cluster expand/collapse
+      insightsPanel.querySelectorAll('[data-cluster]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.classList.contains('session-link')) return;
+          const examples = el.querySelector('.error-cluster-examples');
+          if (examples) examples.hidden = !examples.hidden;
+        });
+      });
+
+      // Bind session links in error examples
+      insightsPanel.querySelectorAll('.session-link').forEach(link => {
+        link.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const sid = link.getAttribute('data-session-id');
+          if (!sid) return;
+          // Switch back to sessions view, find and select this session
+          currentView = 'sessions';
+          viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          viewToggleBar.querySelector('[data-view="sessions"]').classList.add('active');
+          mainContent.hidden = false;
+          insightsPanel.hidden = true;
+          // Search for the session by ID
+          sessionSearch.value = sid;
+          filterSessions();
+          renderSessions();
+          // Try to select it
+          const match = state.filteredSessions.find(s => s.id === sid || s.id.startsWith(sid));
+          if (match) {
+            state.selectedSessionId = match.id;
+            renderSessions();
+            await loadSession();
+          }
+        });
+      });
     }
 
     function filterSessions() {
@@ -3398,6 +4202,7 @@
         closeSse();
         renderSummary();
         renderMessages();
+        if (currentView === 'insights') loadInsights();
         return;
       }
       loading.hidden = false;
@@ -3421,6 +4226,8 @@
       loading.hidden = true;
       // Start SSE real-time tail for this session
       startSse();
+      // Refresh insights if currently viewing
+      if (currentView === 'insights') loadInsights();
     }
 
     function restartRefreshLoop() {
@@ -3545,6 +4352,7 @@
           state.selectedSessionId = item.dataset.sessionId;
           renderSessions();
           await refreshAll(true);
+          if (currentView === 'insights') await loadInsights();
           // Scroll to spawn tree section
           const el = document.getElementById('spawnTreeInSummary');
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3556,6 +4364,7 @@
       state.selectedSessionId = item.dataset.sessionId;
       renderSessions();
       await refreshAll(true);
+      if (currentView === 'insights') await loadInsights();
     });
 
 
