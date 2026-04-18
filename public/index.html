@@ -2459,17 +2459,15 @@
       const toolCallsList = []; // { index, name, args, timestamp }
       let totalInputTokens = 0, totalOutputTokens = 0, totalCacheRead = 0;
 
-      // Retry detection
+      // Retry detection: track error→success chains per tool per turn
       let turnToolErrors = {};
-      const retriedTools = [];
+      const retries = []; // { toolName, errorIndex, successIndex, errorSnippet, attempts }
+      // Build a callId → toolName map (for Claude Code format where toolResult has no name)
+      const callIdToName = {};
 
       for (let i = 0; i < msgs.length; i++) {
         const msg = msgs[i];
         if (msg.role === 'user') {
-          // Check retries from previous turn
-          for (const [name, errCount] of Object.entries(turnToolErrors)) {
-            if (errCount > 0) retriedTools.push({ name, count: errCount });
-          }
           turnToolErrors = {};
           userCount++;
         }
@@ -2483,16 +2481,21 @@
         }
         if (msg.role === 'toolResult') {
           toolResultCount++;
-          const name = msg.toolName || '?';
+          const name = msg.toolName || callIdToName[msg.toolCallId] || '?';
           if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
           if (msg.isError) {
             errorCount++;
             toolStats[name].errors++;
-            turnToolErrors[name] = (turnToolErrors[name] || 0) + 1;
             const snippet = getTextContent(msg.content).trim().split('\n')[0].trim().slice(0, 200);
             errors.push({ toolName: name, snippet, timestamp: msg.timestamp, index: i });
-          } else if (turnToolErrors[name] > 0) {
-            turnToolErrors[name] = 0;
+            if (!turnToolErrors[name]) turnToolErrors[name] = { errorIndex: i, snippet, attempts: 0 };
+            turnToolErrors[name].attempts++;
+          } else if (turnToolErrors[name]) {
+            // Success after errors = retry resolved
+            if (turnToolErrors[name].attempts >= 2) {
+              retries.push({ toolName: name, errorIndex: turnToolErrors[name].errorIndex, successIndex: i, errorSnippet: turnToolErrors[name].snippet, attempts: turnToolErrors[name].attempts });
+            }
+            turnToolErrors[name] = null;
           }
           if (msg.details && typeof msg.details.durationMs === 'number') {
             toolStats[name].totalDurationMs += msg.details.durationMs;
@@ -2505,6 +2508,16 @@
             if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
             toolStats[name].calls++;
             toolCallsList.push({ index: i, name, args: c.arguments, timestamp: msg.timestamp, callId: c.id });
+            if (c.id) callIdToName[c.id] = name;
+          }
+          // Claude Code format: tool_use blocks inside assistant messages
+          if (c.type === 'tool_use') {
+            toolCallCount++;
+            const name = c.name || 'unknown';
+            if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+            toolStats[name].calls++;
+            toolCallsList.push({ index: i, name, args: c.input, timestamp: msg.timestamp, callId: c.id });
+            if (c.id) callIdToName[c.id] = name;
           }
         }
       }
@@ -2526,7 +2539,7 @@
             <div class="label">Error Rate</div>
           </div>
           <div class="insight-card">
-            <div class="value">${retriedTools.length}</div>
+            <div class="value">${retries.length}</div>
             <div class="label">Retries</div>
           </div>
           <div class="insight-card token-card">
@@ -2572,6 +2585,19 @@
           </div>
         </div>
       `).join('') : '<div style="color:var(--muted);font-size:13px">No errors</div>';
+
+      // Retries list
+      const retriesHtml = retries.length > 0 ? retries.map(r => `
+        <div class="error-cluster-item" data-retry-error="${r.errorIndex}" data-retry-success="${r.successIndex}">
+          <div class="error-cluster-header">
+            <span class="error-cluster-pattern">${escapeHtml(r.errorSnippet)}</span>
+            <span class="error-cluster-count" style="color:#d29922">🔄 x${r.attempts} → OK</span>
+          </div>
+          <div class="error-cluster-example" style="margin-top:4px">
+            <span style="color:var(--muted)">${escapeHtml(r.toolName)}</span>
+          </div>
+        </div>
+      `).join('') : '<div style="color:var(--muted);font-size:13px">No retries</div>';
 
       // Token breakdown
       const tokenBreakdown = totalInputTokens + totalOutputTokens + totalCacheRead > 0 ? `
@@ -2644,6 +2670,10 @@
             <h3>Errors (${errors.length})</h3>
             <div class="error-cluster-list">${errorsHtml}</div>
           </div>
+          <div class="insight-section">
+            <h3>Retries (${retries.length})</h3>
+            <div class="error-cluster-list">${retriesHtml}</div>
+          </div>
           ${tokenBreakdown}
         </div>
         ${timelineHtml}
@@ -2653,16 +2683,26 @@
       insightsPanel.querySelectorAll('[data-msg-index]').forEach(el => {
         el.addEventListener('click', () => {
           const idx = parseInt(el.getAttribute('data-msg-index'), 10);
-          // Switch to sessions view and scroll
-          currentView = 'sessions';
-          viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
-          viewToggleBar.querySelector('[data-view="sessions"]').classList.add('active');
-          mainContent.hidden = false;
-          insightsPanel.hidden = true;
-          // Scroll to the message
-          if (msgs[idx] && msgs[idx].id) scrollToMessage(msgs[idx].id);
+          switchToSessionsAndScroll(idx);
         });
       });
+
+      // Bind: click retry → scroll to the error message
+      insightsPanel.querySelectorAll('[data-retry-error]').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = parseInt(el.getAttribute('data-retry-error'), 10);
+          switchToSessionsAndScroll(idx);
+        });
+      });
+
+      function switchToSessionsAndScroll(msgIdx) {
+        currentView = 'sessions';
+        viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+        viewToggleBar.querySelector('[data-view="sessions"]').classList.add('active');
+        mainContent.hidden = false;
+        insightsPanel.hidden = true;
+        if (msgs[msgIdx] && msgs[msgIdx].id) scrollToMessage(msgs[msgIdx].id);
+      }
     }
 
     function renderInsights(data) {
