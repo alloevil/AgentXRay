@@ -1180,6 +1180,40 @@
       margin-bottom: 0;
     }
 
+    .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+      margin: 14px 0 8px;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .markdown h1:first-child, .markdown h2:first-child, .markdown h3:first-child,
+    .markdown h4:first-child, .markdown h5:first-child, .markdown h6:first-child {
+      margin-top: 0;
+    }
+
+    .markdown h1 { font-size: 1.25rem; }
+    .markdown h2 { font-size: 1.12rem; }
+    .markdown h3 { font-size: 1.02rem; }
+    .markdown h4, .markdown h5, .markdown h6 { font-size: 0.95rem; }
+
+    .markdown ul, .markdown ol {
+      margin: 0 0 12px;
+      padding-left: 22px;
+    }
+
+    .markdown li {
+      margin: 3px 0;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .markdown a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    .markdown a:hover { text-decoration: underline; }
+
     pre, code, .mono {
       font-family: var(--mono);
     }
@@ -1836,6 +1870,275 @@
       text-align: center;
     }
 
+    /* --- Prompts View --- */
+    .prompts-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .prompts-toolbar input[type="search"] {
+      flex: 1;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 12px;
+      font: inherit;
+    }
+
+    .prompts-summary {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+    }
+
+    .prompt-session {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: var(--panel-alt);
+      overflow: hidden;
+    }
+
+    .prompt-session-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.85rem;
+    }
+
+    .prompt-session-header:hover {
+      background: rgba(88, 166, 255, 0.06);
+    }
+
+    .prompt-session-header .caret {
+      color: var(--muted);
+      font-size: 0.7rem;
+      width: 12px;
+    }
+
+    .prompt-session-header .meta {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .prompt-session-header .session-open-link {
+      color: #58a6ff;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      text-decoration: none;
+    }
+
+    .prompt-session-header .session-open-link:hover {
+      text-decoration: underline;
+    }
+
+    .prompt-session-header .prompt-count-chip {
+      margin-left: auto;
+      background: rgba(88, 166, 255, 0.12);
+      color: #58a6ff;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .prompt-list {
+      border-top: 1px solid var(--border);
+      padding: 8px 14px 12px;
+    }
+
+    .prompt-item {
+      position: relative;
+      border-left: 2px solid #30363d;
+      padding: 8px 34px 8px 12px;
+      margin: 8px 0;
+    }
+
+    .prompt-item .prompt-time {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      margin-bottom: 4px;
+    }
+
+    .prompt-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .prompt-text.clamped {
+      max-height: 8em;
+      overflow: hidden;
+      -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent);
+      mask-image: linear-gradient(to bottom, black 70%, transparent);
+    }
+
+    .show-more {
+      color: #58a6ff;
+      cursor: pointer;
+      font-size: 0.78rem;
+      margin-top: 2px;
+      display: inline-block;
+    }
+
+    .prompt-copy-btn {
+      position: absolute;
+      top: 6px;
+      right: 4px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .prompt-item:hover .prompt-copy-btn {
+      opacity: 1;
+    }
+
+    .prompt-copy-btn:hover {
+      color: var(--text);
+      border-color: #58a6ff;
+    }
+
+    /* --- Prompt Analysis --- */
+    .analysis-section {
+      margin-bottom: 18px;
+    }
+
+    .analysis-overall {
+      margin: 0 0 14px;
+      padding-left: 20px;
+    }
+
+    .analysis-overall li {
+      margin: 4px 0;
+      font-size: 0.86rem;
+    }
+
+    .cluster-row {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: var(--panel-alt);
+      overflow: hidden;
+    }
+
+    .cluster-head {
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .cluster-head:hover { background: rgba(88, 166, 255, 0.06); }
+
+    .cluster-pattern {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cluster-metrics {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.72rem;
+    }
+
+    .cluster-metric {
+      background: rgba(139, 148, 158, 0.12);
+      border-radius: 999px;
+      padding: 2px 9px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .cluster-metric.warn { background: rgba(248, 81, 73, 0.15); color: #f85149; }
+
+    .cluster-body {
+      border-top: 1px solid var(--border);
+      padding: 12px 14px;
+      font-size: 0.85rem;
+    }
+
+    .cluster-body .assessment { margin-bottom: 8px; }
+
+    .cluster-body .issues { margin: 6px 0 10px; padding-left: 20px; color: var(--muted); }
+
+    .cluster-body .issues li { margin: 3px 0; }
+
+    .rewrite-block {
+      border-left: 3px solid #58a6ff;
+      background: rgba(88, 166, 255, 0.05);
+      border-radius: 0 8px 8px 0;
+      padding: 10px 12px;
+      margin-top: 8px;
+      position: relative;
+    }
+
+    .rewrite-block .label {
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.7rem;
+      color: #58a6ff;
+      margin-bottom: 6px;
+    }
+
+    .rewrite-block .prompt-text { font-size: 0.84rem; }
+
+    .rewrite-block .rationale {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .prompt-optimize-btn {
+      position: absolute;
+      top: 6px;
+      right: 52px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #58a6ff;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .prompt-item:hover .prompt-optimize-btn { opacity: 1; }
+    .prompt-optimize-btn:hover { border-color: #58a6ff; }
+    .prompt-optimize-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .analysis-loading {
+      color: var(--muted);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .analysis-error { color: #f85149; font-size: 0.82rem; margin-bottom: 10px; }
+
     .insight-session-meta {
       display: flex;
       flex-wrap: wrap;
@@ -1922,6 +2225,7 @@
         <div class="view-toggle-bar" id="viewToggleBar">
           <button class="view-toggle-btn active" data-view="sessions">Sessions</button>
           <button class="view-toggle-btn" data-view="insights">Insights</button>
+          <button class="view-toggle-btn" data-view="prompts">Prompts</button>
         </div>
         <div id="mainContent">
         <div id="breadcrumb" class="breadcrumb" hidden></div>
@@ -1942,6 +2246,7 @@
         </section>
         </div><!-- /mainContent -->
         <section id="insightsPanel" class="insights-panel" hidden></section>
+        <section id="promptsPanel" class="insights-panel" hidden></section>
       </main>
     </div>
   </div>
@@ -2365,6 +2670,7 @@
           renderAgents();
           await refreshAll(false);
           if (currentView === 'insights') await loadInsights();
+          else if (currentView === 'prompts') await loadPrompts();
         });
       });
 
@@ -2388,6 +2694,7 @@
           renderBreadcrumb();
           await refreshAll(false);
           if (currentView === 'insights') await loadInsights();
+          else if (currentView === 'prompts') await loadPrompts();
         });
       } else {
         archivedToggle.hidden = true;
@@ -2400,8 +2707,13 @@
     const viewToggleBar = document.getElementById('viewToggleBar');
     const mainContent = document.getElementById('mainContent');
     const insightsPanel = document.getElementById('insightsPanel');
+    const promptsPanel = document.getElementById('promptsPanel');
     let currentView = 'sessions';
     let insightsData = null;
+    let promptsData = null;
+    let promptsSearch = '';
+    let promptAnalysis = null;
+    let promptAnalysisLoading = false;
 
     viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2411,14 +2723,12 @@
         viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        if (view === 'insights') {
-          mainContent.hidden = true;
-          insightsPanel.hidden = false;
-          loadInsights();
-        } else {
-          mainContent.hidden = false;
-          insightsPanel.hidden = true;
-        }
+        mainContent.hidden = view !== 'sessions';
+        insightsPanel.hidden = view !== 'insights';
+        promptsPanel.hidden = view !== 'prompts';
+
+        if (view === 'insights') loadInsights();
+        else if (view === 'prompts') loadPrompts();
       });
     });
 
@@ -2701,6 +3011,7 @@
         viewToggleBar.querySelector('[data-view="sessions"]').classList.add('active');
         mainContent.hidden = false;
         insightsPanel.hidden = true;
+        promptsPanel.hidden = true;
         if (msgs[msgIdx] && msgs[msgIdx].id) scrollToMessage(msgs[msgIdx].id);
       }
     }
@@ -2865,6 +3176,331 @@
       });
     }
 
+    // --- Prompts View ---
+    function promptsQueryParams() {
+      const params = new URLSearchParams({ platform: state.platform });
+      if (state.platform === 'openclaw' && state.selectedAgent) {
+        params.set('agent', state.selectedAgent);
+      }
+      let rawDir = '';
+      if (state.platform === 'openclaw') rawDir = state.settings.openclawDir;
+      else if (state.platform === 'codex') rawDir = state.settings.codexDir;
+      else if (state.platform === 'claude-code') rawDir = state.settings.claudeCodeDir;
+      else if (state.platform === 'hermes') rawDir = state.settings.hermesDir;
+      if (rawDir) params.set('dir', rawDir);
+      return params;
+    }
+
+    async function loadPrompts() {
+      promptsPanel.innerHTML = '<div class="insights-loading">Loading prompts…</div>';
+      if (promptAnalysis && promptAnalysis.platform !== state.platform) promptAnalysis = null;
+
+      try {
+        const data = await fetchJson('/api/prompts?' + promptsQueryParams().toString());
+        promptsData = data;
+        renderPrompts();
+      } catch (error) {
+        promptsPanel.innerHTML = `<div class="insights-empty">Failed to load prompts: ${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function loadPromptAnalysis(refresh) {
+      if (promptAnalysisLoading) return;
+      promptAnalysisLoading = true;
+      renderPrompts();
+      try {
+        const params = promptsQueryParams();
+        if (refresh) params.set('refresh', '1');
+        promptAnalysis = await fetchJson('/api/prompts/analyze?' + params.toString());
+      } catch (error) {
+        promptAnalysis = { platform: state.platform, clusters: [], overall: [], llmError: error.message };
+      } finally {
+        promptAnalysisLoading = false;
+        renderPrompts();
+      }
+    }
+
+    function renderAnalysisHtml() {
+      if (promptAnalysisLoading) {
+        return '<div class="insight-section analysis-section"><h3>Prompt Analysis</h3><div class="analysis-loading">Claude 分析中… 约 1-2 分钟(聚类 → 归因 → LLM 建议)</div></div>';
+      }
+      if (!promptAnalysis || promptAnalysis.platform !== state.platform) return '';
+
+      const a = promptAnalysis;
+      const overallHtml = (a.overall || []).length
+        ? `<ul class="analysis-overall">${a.overall.map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul>` : '';
+      const errorHtml = a.llmError
+        ? `<div class="analysis-error">LLM 分析失败: ${escapeHtml(a.llmError)} — 以下为聚类与归因结果</div>` : '';
+      const rawHtml = a.rawText
+        ? `<div class="prompt-text" style="margin-bottom:12px">${renderMarkdown(a.rawText)}</div>` : '';
+
+      const clustersHtml = (a.clusters || []).filter(c => c.count > 1).slice(0, 20).map((c, ci) => {
+        const attr = c.attribution;
+        const metrics = [
+          `<span class="cluster-metric">×${c.count}</span>`,
+          attr ? `<span class="cluster-metric">avg ${attr.avgMessages} msgs</span>` : '',
+          attr ? `<span class="cluster-metric">avg ${attr.avgToolCalls} tools</span>` : '',
+          attr ? `<span class="cluster-metric${attr.errorRate > 10 ? ' warn' : ''}">err ${attr.errorRate}%</span>` : ''
+        ].filter(Boolean).join('');
+        const s = c.suggestion;
+        const body = s ? `
+          <div class="assessment">${escapeHtml(s.assessment || '')}</div>
+          ${(s.issues || []).length ? `<ul class="issues">${s.issues.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : ''}
+          ${s.rewrite ? `
+          <div class="rewrite-block">
+            <div class="label">建议改写</div>
+            <div class="prompt-text">${renderMarkdown(s.rewrite)}</div>
+            <button class="prompt-copy-btn cluster-rewrite-copy" data-ci="${ci}" style="opacity:1">Copy</button>
+            ${s.rationale ? `<div class="rationale">${escapeHtml(s.rationale)}</div>` : ''}
+          </div>` : ''}
+        ` : '<div style="color:var(--muted);font-size:0.8rem">此模板未参与 LLM 分析(仅 top 8 高频簇)</div>';
+        return `
+        <div class="cluster-row">
+          <div class="cluster-head">
+            <span class="caret">▶</span>
+            <span class="cluster-pattern" title="${escapeHtml(c.pattern)}">${escapeHtml(c.pattern)}</span>
+            <span class="cluster-metrics">${metrics}</span>
+          </div>
+          <div class="cluster-body" hidden>${body}</div>
+        </div>`;
+      }).join('');
+
+      return `
+        <div class="insight-section analysis-section">
+          <h3>Prompt Analysis <span style="text-transform:none;letter-spacing:0;color:var(--muted)">— ${a.totalClusters} 个模板簇 / ${escapeHtml(new Date(a.generatedAt).toLocaleString())}</span></h3>
+          ${errorHtml}${rawHtml}${overallHtml}
+          ${clustersHtml || '<div style="color:var(--muted)">没有出现 2 次以上的模板</div>'}
+        </div>
+      `;
+    }
+
+    function promptsMatchesSearch(session, q) {
+      if (!q) return true;
+      if (session.id.toLowerCase().includes(q)) return true;
+      if ((session.slug || '').toLowerCase().includes(q)) return true;
+      if ((session.title || '').toLowerCase().includes(q)) return true;
+      return session.prompts.some(p => p.text.toLowerCase().includes(q));
+    }
+
+    function renderPrompts() {
+      if (!promptsData || !promptsData.groups.length) {
+        promptsPanel.innerHTML = '<div class="insights-empty">No prompts found.</div>';
+        return;
+      }
+
+      const q = promptsSearch.trim().toLowerCase();
+      const groups = promptsData.groups
+        .map(g => ({ ...g, sessions: g.sessions.filter(s => promptsMatchesSearch(s, q) || g.directory.toLowerCase().includes(q)) }))
+        .filter(g => g.sessions.length > 0);
+
+      const shownSessions = groups.reduce((n, g) => n + g.sessions.length, 0);
+      const shownPrompts = groups.reduce((n, g) => n + g.sessions.reduce((m, s) => m + s.promptCount, 0), 0);
+
+      const groupsHtml = groups.map((g, gi) => `
+        <div class="insight-section">
+          <h3>${escapeHtml(g.directory)} <span style="text-transform:none;letter-spacing:0;">— ${g.sessions.length} sessions / ${g.sessions.reduce((m, s) => m + s.promptCount, 0)} prompts</span></h3>
+          ${g.sessions.map((s, si) => {
+            const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleString() : '—';
+            const expanded = !!q;
+            return `
+            <div class="prompt-session" data-gi="${gi}" data-si="${si}">
+              <div class="prompt-session-header">
+                <span class="caret">${expanded ? '▼' : '▶'}</span>
+                <span class="meta">${escapeHtml(dateStr)}</span>
+                <span class="session-open-link" data-session-id="${escapeHtml(s.id)}" title="Open session">${escapeHtml(s.id.slice(0, 12))}…</span>
+                ${s.slug ? `<span class="meta">${escapeHtml(s.slug)}</span>` : ''}
+                ${s.title ? `<span class="meta">${escapeHtml(s.title)}</span>` : ''}
+                <span class="prompt-count-chip">${s.promptCount} prompt${s.promptCount > 1 ? 's' : ''}</span>
+              </div>
+              <div class="prompt-list" ${expanded ? '' : 'hidden'}>
+                ${s.prompts.map((p, pi) => `
+                  <div class="prompt-item">
+                    ${p.timestamp ? `<div class="prompt-time">${escapeHtml(new Date(p.timestamp).toLocaleString())}</div>` : ''}
+                    <div class="prompt-text${p.text.length > 500 ? ' clamped' : ''}">${renderMarkdown(p.text)}</div>
+                    ${p.text.length > 500 ? '<span class="show-more">Show more</span>' : ''}
+                    <button class="prompt-optimize-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="用 Claude 改写这条 prompt">优化</button>
+                    <button class="prompt-copy-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="Copy prompt">Copy</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      `).join('');
+
+      promptsPanel.innerHTML = `
+        <div class="prompts-toolbar">
+          <input type="search" id="promptsSearchInput" placeholder="Filter prompts / directories / sessions" value="${escapeHtml(promptsSearch)}">
+          <button class="export-btn" id="promptsAnalyzeBtn" ${promptAnalysisLoading ? 'disabled' : ''}>${promptAnalysisLoading ? '分析中…' : (promptAnalysis && promptAnalysis.platform === state.platform ? '重新分析' : '分析优化')}</button>
+          <button class="export-btn" id="promptsExportBtn">Export JSON</button>
+        </div>
+        <div class="prompts-summary">${promptsData.totalPrompts} prompts across ${promptsData.totalSessions} sessions in ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}</div>
+        ${renderAnalysisHtml()}
+        ${groupsHtml || '<div class="insights-empty">No matches.</div>'}
+      `;
+
+      // Search input (debounced re-render, keep focus)
+      const searchInput = document.getElementById('promptsSearchInput');
+      let searchTimer = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          promptsSearch = searchInput.value;
+          renderPrompts();
+          const el = document.getElementById('promptsSearchInput');
+          el.focus();
+          el.setSelectionRange(el.value.length, el.value.length);
+        }, 250);
+      });
+
+      // Export full (unfiltered) data as JSON download
+      document.getElementById('promptsExportBtn').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(promptsData, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `prompts-${state.platform}-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      // Collapse/expand sessions
+      promptsPanel.querySelectorAll('.prompt-session-header').forEach(header => {
+        header.addEventListener('click', (e) => {
+          if (e.target.classList.contains('session-open-link')) return;
+          const list = header.parentElement.querySelector('.prompt-list');
+          list.hidden = !list.hidden;
+          header.querySelector('.caret').textContent = list.hidden ? '▶' : '▼';
+        });
+      });
+
+      // Show more toggles
+      promptsPanel.querySelectorAll('.show-more').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const textEl = btn.previousElementSibling;
+          const clamped = textEl.classList.toggle('clamped');
+          btn.textContent = clamped ? 'Show more' : 'Show less';
+        });
+      });
+
+      // Copy buttons
+      promptsPanel.querySelectorAll('.prompt-copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const g = groups[Number(btn.dataset.gi)];
+          const s = g && g.sessions[Number(btn.dataset.si)];
+          const p = s && s.prompts[Number(btn.dataset.pi)];
+          if (!p) return;
+          navigator.clipboard.writeText(p.text).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+          });
+        });
+      });
+
+      // Analyze button
+      document.getElementById('promptsAnalyzeBtn').addEventListener('click', () => {
+        const isRefresh = promptAnalysis && promptAnalysis.platform === state.platform;
+        loadPromptAnalysis(isRefresh);
+      });
+
+      // Cluster expand/collapse
+      promptsPanel.querySelectorAll('.cluster-head').forEach(head => {
+        head.addEventListener('click', () => {
+          const body = head.parentElement.querySelector('.cluster-body');
+          body.hidden = !body.hidden;
+          head.querySelector('.caret').textContent = body.hidden ? '▶' : '▼';
+        });
+      });
+
+      // Cluster rewrite copy
+      const analysisClusters = (promptAnalysis && promptAnalysis.clusters || []).filter(c => c.count > 1).slice(0, 20);
+      promptsPanel.querySelectorAll('.cluster-rewrite-copy').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const c = analysisClusters[Number(btn.dataset.ci)];
+          if (!c || !c.suggestion) return;
+          navigator.clipboard.writeText(c.suggestion.rewrite).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+          });
+        });
+      });
+
+      // Per-prompt optimize (rewrite via claude CLI)
+      promptsPanel.querySelectorAll('.prompt-optimize-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const g = groups[Number(btn.dataset.gi)];
+          const s = g && g.sessions[Number(btn.dataset.si)];
+          const p = s && s.prompts[Number(btn.dataset.pi)];
+          if (!p || btn.disabled) return;
+          const item = btn.closest('.prompt-item');
+          const existing = item.querySelector('.rewrite-block');
+          if (existing) { existing.remove(); return; }
+          btn.disabled = true;
+          btn.textContent = '优化中…';
+          try {
+            const resp = await fetch('/api/prompts/rewrite', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ text: p.text })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || resp.statusText);
+            const block = document.createElement('div');
+            block.className = 'rewrite-block';
+            block.innerHTML = `
+              <div class="label">建议改写</div>
+              <div class="prompt-text"></div>
+              <button class="prompt-copy-btn" style="opacity:1">Copy</button>
+              ${data.rationale ? '<div class="rationale"></div>' : ''}
+            `;
+            block.querySelector('.prompt-text').innerHTML = renderMarkdown(data.rewrite);
+            if (data.rationale) block.querySelector('.rationale').textContent = data.rationale;
+            block.querySelector('.prompt-copy-btn').addEventListener('click', (e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(data.rewrite).then(() => {
+                e.target.textContent = 'Copied!';
+                setTimeout(() => { e.target.textContent = 'Copy'; }, 1200);
+              });
+            });
+            item.appendChild(block);
+          } catch (error) {
+            const err = document.createElement('div');
+            err.className = 'analysis-error';
+            err.textContent = '改写失败: ' + error.message;
+            item.appendChild(err);
+            setTimeout(() => err.remove(), 5000);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = '优化';
+          }
+        });
+      });
+
+      // Open session links — jump back to Sessions view
+      promptsPanel.querySelectorAll('.session-open-link').forEach(link => {
+        link.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const sid = link.getAttribute('data-session-id');
+          if (!sid) return;
+          currentView = 'sessions';
+          viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          viewToggleBar.querySelector('[data-view="sessions"]').classList.add('active');
+          mainContent.hidden = false;
+          insightsPanel.hidden = true;
+          promptsPanel.hidden = true;
+          sessionSearch.value = sid;
+          filterSessions();
+          renderSessions();
+          const match = state.filteredSessions.find(s => s.id === sid || s.id.startsWith(sid));
+          if (match) {
+            state.selectedSessionId = match.id;
+            renderSessions();
+            await loadSession();
+          }
+        });
+      });
+    }
+
     function filterSessions() {
       const term = sessionSearch.value.trim().toLowerCase();
       state.filteredSessions = state.sessions.filter((session) => {
@@ -2925,6 +3561,59 @@
       }, {});
     }
 
+    function renderMarkdownInline(s) {
+      // s is already HTML-escaped. Apply inline markdown.
+      // Links [text](url) — url may contain &amp; from escaping, which is valid in href
+      s = s.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+      s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+      return s;
+    }
+
+    function renderMarkdownBlock(segment) {
+      const lines = segment.split('\n');
+      const out = [];
+      let para = [];
+      let list = null; // { type: 'ul'|'ol', items: [] }
+
+      const flushPara = () => {
+        const text = para.join('\n').replace(/^\n+|\n+$/g, '');
+        if (text.trim()) out.push(`<p>${renderMarkdownInline(text).replace(/\n/g, '<br>')}</p>`);
+        para = [];
+      };
+      const flushList = () => {
+        if (list) out.push(`<${list.type}>${list.items.join('')}</${list.type}>`);
+        list = null;
+      };
+
+      for (const line of lines) {
+        const h = line.match(/^(#{1,6})\s+(.*)$/);
+        const ul = line.match(/^\s*[-*]\s+(.*)$/);
+        const ol = line.match(/^\s*\d+[.、]\s+(.*)$/);
+        if (h) {
+          flushPara(); flushList();
+          out.push(`<h${h[1].length}>${renderMarkdownInline(h[2])}</h${h[1].length}>`);
+        } else if (ul) {
+          flushPara();
+          if (!list || list.type !== 'ul') { flushList(); list = { type: 'ul', items: [] }; }
+          list.items.push(`<li>${renderMarkdownInline(ul[1])}</li>`);
+        } else if (ol) {
+          flushPara();
+          if (!list || list.type !== 'ol') { flushList(); list = { type: 'ol', items: [] }; }
+          list.items.push(`<li>${renderMarkdownInline(ol[1])}</li>`);
+        } else if (!line.trim()) {
+          flushPara(); flushList();
+        } else {
+          flushList();
+          para.push(line);
+        }
+      }
+      flushPara(); flushList();
+      return out.join('');
+    }
+
     function renderMarkdown(text) {
       const escaped = escapeHtml(text);
       const segments = escaped.split(/```/);
@@ -2935,10 +3624,7 @@
           const code = lines.slice(1).join('\n') || lines.join('\n');
           return `<pre><code data-lang="${escapeHtml(maybeLang)}">${code}</code></pre>`;
         }
-        return segment
-          .split(/\n{2,}/)
-          .map((paragraph) => `<p>${paragraph.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}</p>`)
-          .join('');
+        return renderMarkdownBlock(segment);
       }).join('');
       return `<div class="markdown">${html}</div>`;
     }

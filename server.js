@@ -4,9 +4,11 @@ const fsp = require('fs/promises');
 const path = require('path');
 const readline = require('readline');
 const Database = require('better-sqlite3');
+const { execFile } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3800;
+const HOST = process.env.HOST || '0.0.0.0';
 const HOME = process.env.HOME || '/root';
 const DATA_DIR = process.env.OPENCLAW_DIR || path.join(HOME, '.openclaw', 'agents');
 
@@ -58,6 +60,25 @@ async function readAgents(baseDir) {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b));
+}
+
+function stripOpenClawNoise(text) {
+  let texts = text;
+  // Strip all System: lines
+  texts = texts.replace(/^System:.*\n?/gm, '');
+  // Strip metadata blocks: any block ending with ```json...```
+  texts = texts.replace(/^[A-Za-z ]+\([^)]*\):\n```[\s\S]*?```\n?/gm, '');
+  // Strip [message_id: ...] lines
+  texts = texts.replace(/^\[message_id:[^\]]*\].*\n?/gm, '');
+  // Strip ou_xxx: sender prefix from quoted message lines
+  texts = texts.replace(/^ou_[a-z0-9]+:\s*/gm, '');
+  // Strip subagent context injection
+  texts = texts.replace(/^\[.*?\] \[Subagent Context\][\s\S]*/m, '');
+  // Strip bare timestamp+channel prefix lines
+  texts = texts.replace(/^\[\w{3} \d{4}-\d{2}-\d{2}[^\]]*\][^\n]*\n?/gm, '');
+  // Strip heartbeat lines
+  texts = texts.replace(/^HEARTBEAT_OK.*\n?/gm, '');
+  return texts.trim();
 }
 
 async function parseSessionMetadata(filePath, fileName) {
@@ -127,22 +148,7 @@ async function _parseSessionMetadataRaw(filePath, fileName) {
         if (role === 'user') {
           userCount++;
           if (!firstUserMessage) {
-            let texts = content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim();
-            // Strip all System: lines
-            texts = texts.replace(/^System:.*\n?/gm, '');
-            // Strip metadata blocks: any block ending with ```json...```
-            texts = texts.replace(/^[A-Za-z ]+\([^)]*\):\n```[\s\S]*?```\n?/gm, '');
-            // Strip [message_id: ...] lines
-            texts = texts.replace(/^\[message_id:[^\]]*\].*\n?/gm, '');
-            // Strip ou_xxx: sender prefix from quoted message lines
-            texts = texts.replace(/^ou_[a-z0-9]+:\s*/gm, '');
-            // Strip subagent context injection
-            texts = texts.replace(/^\[.*?\] \[Subagent Context\][\s\S]*/m, '');
-            // Strip bare timestamp+channel prefix lines
-            texts = texts.replace(/^\[\w{3} \d{4}-\d{2}-\d{2}[^\]]*\][^\n]*\n?/gm, '');
-            // Strip heartbeat lines
-            texts = texts.replace(/^HEARTBEAT_OK.*\n?/gm, '');
-            texts = texts.trim();
+            const texts = stripOpenClawNoise(content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim());
             if (texts) firstUserMessage = texts.slice(0, 120);
           }
         }
@@ -780,6 +786,7 @@ function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, tot
 }
 
 app.use(express.static(PUBLIC_DIR, { maxAge: 0, etag: false, lastModified: false }));
+app.use(express.json({ limit: '256kb' }));
 
 // Disable all caching
 app.use((req, res, next) => {
@@ -799,6 +806,394 @@ app.get('/api/agents', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// --- Prompts view: extract real human prompts per session, grouped by directory ---
+
+const promptsCache = new Map();
+const PROMPTS_TTL_MS = 60_000;
+
+function getPromptsCacheKey(platform, agent, dir) {
+  return `${platform}|${agent || ''}|${dir || ''}`;
+}
+
+async function extractOpenClawPrompts(filePath) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let timestamp = null;
+  let lastActivity = null;
+  const prompts = [];
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let record;
+      try { record = JSON.parse(line); } catch { continue; }
+      if (!timestamp && record.type === 'session') timestamp = record.timestamp || null;
+      if (record.type !== 'message') continue;
+      if (record.timestamp) lastActivity = record.timestamp;
+      const msg = record.message || {};
+      if (msg.role !== 'user') continue;
+      const content = Array.isArray(msg.content) ? msg.content : [];
+      const text = stripOpenClawNoise(content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim());
+      if (text) prompts.push({ text, timestamp: record.timestamp || null });
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+  return { timestamp, lastActivity, prompts };
+}
+
+async function extractCodexPrompts(filePath) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let cwd = null;
+  let timestamp = null;
+  let lastActivity = null;
+  const prompts = [];
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+      if (rec.timestamp) lastActivity = rec.timestamp;
+      const payload = rec.payload || {};
+      if (rec.type === 'session_meta') {
+        if (!cwd && payload.cwd) cwd = payload.cwd;
+        if (!timestamp && rec.timestamp) timestamp = rec.timestamp;
+        continue;
+      }
+      if (rec.type !== 'response_item' || payload.type !== 'message' || payload.role !== 'user') continue;
+      if (!timestamp && rec.timestamp) timestamp = rec.timestamp;
+      const text = extractCodexUserPromptText(payload);
+      if (text) prompts.push({ text, timestamp: rec.timestamp || null });
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+  return { cwd, timestamp, lastActivity, prompts };
+}
+
+async function extractClaudeCodePrompts(filePath) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let cwd = null;
+  let slug = null;
+  let timestamp = null;
+  let lastActivity = null;
+  const prompts = [];
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+      if (rec.timestamp) lastActivity = rec.timestamp;
+      if (!timestamp && rec.timestamp && (rec.type === 'user' || rec.type === 'assistant')) timestamp = rec.timestamp;
+      if (rec.type !== 'user') continue;
+      if (!cwd && rec.cwd) cwd = rec.cwd;
+      if (!slug && rec.slug) slug = rec.slug;
+      const text = extractClaudeCodeUserPromptText(rec);
+      if (text) prompts.push({ text, timestamp: rec.timestamp || null });
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+  return { cwd, slug, timestamp, lastActivity, prompts };
+}
+
+function extractHermesPromptGroups(dir) {
+  const db = openHermesDb(dir);
+  if (!db) return [];
+  try {
+    const rows = db.prepare(`
+      SELECT m.session_id, m.content, m.timestamp, s.source, s.title, s.started_at, s.ended_at
+      FROM messages m JOIN sessions s ON s.id = m.session_id
+      WHERE m.role = 'user' AND m.content IS NOT NULL AND m.content != ''
+      ORDER BY m.session_id, m.rowid
+    `).all();
+
+    const sessionMap = new Map();
+    for (const row of rows) {
+      let sess = sessionMap.get(row.session_id);
+      if (!sess) {
+        sess = {
+          id: row.session_id,
+          file: 'state.db',
+          timestamp: unixToIso(row.started_at),
+          lastActivity: unixToIso(row.ended_at),
+          slug: null,
+          title: row.title || null,
+          directory: row.source || '(no directory)',
+          prompts: []
+        };
+        sessionMap.set(row.session_id, sess);
+      }
+      sess.prompts.push({ text: row.content, timestamp: unixToIso(row.timestamp) });
+    }
+
+    const groupMap = new Map();
+    for (const sess of sessionMap.values()) {
+      const key = sess.directory;
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      const { directory, ...rest } = sess;
+      groupMap.get(key).push({ ...rest, promptCount: sess.prompts.length });
+    }
+    return Array.from(groupMap.entries()).map(([directory, sessions]) => ({ directory, sessions }));
+  } finally {
+    db.close();
+  }
+}
+
+async function computePrompts(platform, agentName, dirOverride) {
+  let groups;
+
+  if (platform === 'hermes') {
+    const dir = resolveDir(dirOverride, HERMES_DIR);
+    groups = extractHermesPromptGroups(dir);
+  } else {
+    const files = await collectSessionFiles(platform, agentName, dirOverride);
+    const groupMap = new Map();
+    const results = await Promise.all(files.map(async (f) => {
+      const extractor = platform === 'codex' ? extractCodexPrompts
+        : platform === 'claude-code' ? extractClaudeCodePrompts
+        : extractOpenClawPrompts;
+      const result = await extractor(f.path).catch(() => null);
+      return result ? { file: f, result } : null;
+    }));
+    for (const item of results) {
+      if (!item || item.result.prompts.length === 0) continue;
+      const { file: f, result } = item;
+      let key;
+      if (platform === 'openclaw') {
+        // File lives at {dir}/{agent}/sessions/x.jsonl
+        key = `agent: ${path.basename(path.dirname(path.dirname(f.path)))}`;
+      } else {
+        key = result.cwd || '(no directory)';
+      }
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key).push({
+        id: f.sessionId,
+        file: path.basename(f.path),
+        timestamp: result.timestamp,
+        lastActivity: result.lastActivity,
+        slug: result.slug || null,
+        title: null,
+        promptCount: result.prompts.length,
+        prompts: result.prompts
+      });
+    }
+    groups = Array.from(groupMap.entries()).map(([directory, sessions]) => ({ directory, sessions }));
+  }
+
+  let totalSessions = 0;
+  let totalPrompts = 0;
+  for (const g of groups) {
+    g.sessions.sort((a, b) => (Date.parse(b.timestamp || 0) || 0) - (Date.parse(a.timestamp || 0) || 0));
+    g.sessionCount = g.sessions.length;
+    g.promptCount = g.sessions.reduce((sum, s) => sum + s.promptCount, 0);
+    totalSessions += g.sessionCount;
+    totalPrompts += g.promptCount;
+  }
+  groups.sort((a, b) => b.promptCount - a.promptCount);
+
+  return { platform, totalSessions, totalPrompts, groups };
+}
+
+// --- Prompt analysis: clustering, attribution, claude CLI suggestions ---
+
+const analyzeCache = new Map();
+const analyzeInFlight = new Map();
+const ANALYZE_TOP_K = 8;
+const ATTRIBUTION_FILE_CAP = 150;
+
+function promptFingerprint(text) {
+  const firstLine = text.split('\n').find(l => l.trim()) || '';
+  let p = firstLine.trim().toLowerCase();
+  p = p.replace(/\/[^\s]+/g, '/…');
+  p = p.replace(/[0-9a-f]{8,}/g, '…');
+  p = p.replace(/\d+/g, '#');
+  return p.slice(0, 120) || '(empty)';
+}
+
+function clusterPrompts(promptsData) {
+  const clusters = new Map();
+  for (const g of promptsData.groups) {
+    for (const s of g.sessions) {
+      for (const p of s.prompts) {
+        const pattern = promptFingerprint(p.text);
+        let c = clusters.get(pattern);
+        if (!c) {
+          c = { pattern, count: 0, sessionIds: new Set(), directories: new Set(), totalLength: 0, shortest: null, longest: null };
+          clusters.set(pattern, c);
+        }
+        c.count++;
+        c.sessionIds.add(s.id);
+        c.directories.add(g.directory);
+        c.totalLength += p.text.length;
+        if (!c.shortest || p.text.length < c.shortest.length) c.shortest = p.text;
+        if (!c.longest || p.text.length > c.longest.length) c.longest = p.text;
+      }
+    }
+  }
+  return Array.from(clusters.values())
+    .map(c => ({
+      pattern: c.pattern,
+      count: c.count,
+      sessionIds: Array.from(c.sessionIds),
+      directories: Array.from(c.directories),
+      avgLength: Math.round(c.totalLength / c.count),
+      samples: c.shortest === c.longest
+        ? [c.shortest.slice(0, 2000)]
+        : [c.shortest.slice(0, 2000), c.longest.slice(0, 2000)]
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+async function attributeClusters(clusters, platform, agentName, dirOverride) {
+  const top = clusters.slice(0, ANALYZE_TOP_K);
+  if (platform === 'hermes' || top.length === 0) return;
+
+  const files = await collectSessionFiles(platform, agentName, dirOverride);
+  const pathById = new Map(files.map(f => [f.sessionId, f.path]));
+
+  const neededIds = new Set();
+  const perClusterCap = Math.max(10, Math.floor(ATTRIBUTION_FILE_CAP / top.length));
+  for (const c of top) {
+    let added = 0;
+    for (const sid of c.sessionIds) {
+      if (added >= perClusterCap || neededIds.size >= ATTRIBUTION_FILE_CAP) break;
+      if (pathById.has(sid)) { neededIds.add(sid); added++; }
+    }
+  }
+
+  const scans = new Map();
+  await Promise.all(Array.from(neededIds).map(async (sid) => {
+    const result = await scanFileForInsights(pathById.get(sid), sid).catch(() => null);
+    if (result) scans.set(sid, result);
+  }));
+
+  for (const c of top) {
+    let sessions = 0, messages = 0, toolCalls = 0, toolResults = 0, errors = 0, outputTokens = 0;
+    for (const sid of c.sessionIds) {
+      const scan = scans.get(sid);
+      if (!scan) continue;
+      sessions++;
+      messages += scan.messageCount || 0;
+      toolCalls += scan.toolCallCount || 0;
+      toolResults += scan.toolResultCount || 0;
+      errors += scan.errorCount || 0;
+      outputTokens += scan.totalOutputTokens || 0;
+    }
+    if (sessions > 0) {
+      c.attribution = {
+        sampledSessions: sessions,
+        avgMessages: Math.round(messages / sessions),
+        avgToolCalls: Math.round(toolCalls / sessions * 10) / 10,
+        errorRate: toolResults > 0 ? Math.round(errors / toolResults * 1000) / 10 : 0,
+        avgOutputTokens: Math.round(outputTokens / sessions)
+      };
+    }
+  }
+}
+
+function runClaudeCli(input, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = execFile('claude', ['-p'], { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err) return reject(err);
+      resolve(stdout);
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
+function parseLlmJson(raw) {
+  let text = raw.trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) text = fence[1].trim();
+  const start = text.search(/[[{]/);
+  if (start > 0) text = text.slice(start);
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+async function runClaudeAnalysis(clusters) {
+  const top = clusters.filter(c => c.count > 1).slice(0, ANALYZE_TOP_K);
+  if (top.length === 0) return { suggestions: [], overall: [] };
+
+  const clusterDescriptions = top.map((c, i) => {
+    const attr = c.attribution
+      ? `归因(采样${c.attribution.sampledSessions}个session): 平均${c.attribution.avgMessages}条消息/${c.attribution.avgToolCalls}次工具调用, 工具错误率${c.attribution.errorRate}%, 平均输出${c.attribution.avgOutputTokens} tokens`
+      : '无归因数据';
+    return `## 模板 ${i + 1}
+指纹: ${c.pattern}
+出现次数: ${c.count}
+${attr}
+样例:
+"""
+${c.samples[0].slice(0, 1500)}
+"""`;
+  }).join('\n\n');
+
+  const input = `你是 prompt 工程专家。以下是从 AI agent 会话日志中聚类出的高频 prompt 模板(按出现次数降序),附带每个模板对应 session 的效果归因数据。
+
+请针对每个模板给出优化建议。评估维度: 意图明确性、上下文充分性、约束与输出格式定义、避免模型误解的措辞。归因数据中,高消息数/高工具调用/高错误率可能暗示 prompt 引导不足。
+
+${clusterDescriptions}
+
+只输出一个 JSON 对象,不要任何其它文字或 markdown 围栏,结构:
+{
+  "suggestions": [
+    { "index": 1, "assessment": "一句话诊断", "issues": ["问题1", "问题2"], "rewrite": "改写后的完整模板(变量部分用 {占位符} 表示)", "rationale": "改写理由" }
+  ],
+  "overall": ["跨模板的整体建议1", "建议2"]
+}
+suggestions 数组按模板顺序,每个模板一项。用中文回答。`;
+
+  const raw = await runClaudeCli(input, 240_000);
+  const parsed = parseLlmJson(raw);
+  if (!parsed || !Array.isArray(parsed.suggestions)) {
+    return { suggestions: [], overall: [], rawText: raw.trim().slice(0, 8000) };
+  }
+  return { suggestions: parsed.suggestions, overall: Array.isArray(parsed.overall) ? parsed.overall : [] };
+}
+
+async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) {
+  const promptsData = await computePrompts(platform, agentName, dirOverride);
+  const clusters = clusterPrompts(promptsData);
+  await attributeClusters(clusters, platform, agentName, dirOverride);
+
+  const result = {
+    platform,
+    generatedAt: new Date().toISOString(),
+    totalPrompts: promptsData.totalPrompts,
+    totalClusters: clusters.length,
+    clusters: clusters.slice(0, 50),
+    overall: [],
+    llmError: null
+  };
+
+  if (!skipLlm) {
+    try {
+      const llm = await runClaudeAnalysis(clusters);
+      if (llm.rawText) {
+        result.rawText = llm.rawText;
+      } else {
+        const top = clusters.filter(c => c.count > 1).slice(0, ANALYZE_TOP_K);
+        for (const s of llm.suggestions) {
+          const target = top[(s.index || 0) - 1];
+          if (target) target.suggestion = { assessment: s.assessment, issues: s.issues || [], rewrite: s.rewrite, rationale: s.rationale };
+        }
+        result.overall = llm.overall;
+      }
+    } catch (error) {
+      result.llmError = error.message;
+    }
+  }
+
+  return result;
+}
 
 // Insights: aggregate analytics across sessions
 app.get('/api/insights', async (req, res) => {
@@ -820,6 +1215,91 @@ app.get('/api/insights', async (req, res) => {
 
     insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_TTL_MS });
     res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Prompts: real human prompts per session, grouped by directory
+app.get('/api/prompts', async (req, res) => {
+  try {
+    const platform = req.query.platform || 'openclaw';
+    const agent = req.query.agent || '';
+    const dir = req.query.dir || '';
+
+    const cacheKey = getPromptsCacheKey(platform, agent, dir);
+    const cached = promptsCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+      return res.json(cached.data);
+    }
+
+    const data = await computePrompts(platform, agent, dir);
+    if (!data) {
+      return res.json({ platform, totalSessions: 0, totalPrompts: 0, groups: [] });
+    }
+
+    promptsCache.set(cacheKey, { data, expires: Date.now() + PROMPTS_TTL_MS });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Prompt analysis: cluster + attribute + claude CLI suggestions
+app.get('/api/prompts/analyze', async (req, res) => {
+  try {
+    const platform = req.query.platform || 'openclaw';
+    const agent = req.query.agent || '';
+    const dir = req.query.dir || '';
+    const refresh = req.query.refresh === '1';
+    const skipLlm = req.query.skipLlm === '1';
+    const cacheKey = getPromptsCacheKey(platform, agent, dir);
+
+    if (!refresh && analyzeCache.has(cacheKey)) {
+      return res.json(analyzeCache.get(cacheKey));
+    }
+    // Coalesce concurrent identical requests into one computation
+    if (analyzeInFlight.has(cacheKey)) {
+      const data = await analyzeInFlight.get(cacheKey);
+      return res.json(data);
+    }
+
+    const promise = computePromptAnalysis(platform, agent, dir, skipLlm);
+    analyzeInFlight.set(cacheKey, promise);
+    try {
+      const data = await promise;
+      if (!skipLlm) analyzeCache.set(cacheKey, data);
+      res.json(data);
+    } finally {
+      analyzeInFlight.delete(cacheKey);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Rewrite a single prompt via claude CLI
+app.post('/api/prompts/rewrite', async (req, res) => {
+  try {
+    const text = (req.body && req.body.text ? String(req.body.text) : '').slice(0, 8000);
+    if (!text.trim()) return res.status(400).json({ error: 'text is required' });
+
+    const input = `你是 prompt 工程专家。请改写下面这条给 AI agent 的 prompt,使其意图更明确、上下文更充分、约束与期望输出更清晰,同时保留原始意图。
+
+原始 prompt:
+"""
+${text}
+"""
+
+只输出一个 JSON 对象,不要任何其它文字或 markdown 围栏:
+{ "rewrite": "改写后的完整 prompt", "rationale": "改动说明(中文,简短)" }`;
+
+    const raw = await runClaudeCli(input, 120_000);
+    const parsed = parseLlmJson(raw);
+    if (!parsed || !parsed.rewrite) {
+      return res.json({ rewrite: raw.trim().slice(0, 8000), rationale: null, raw: true });
+    }
+    res.json({ rewrite: parsed.rewrite, rationale: parsed.rationale || null });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1400,6 +1880,18 @@ async function findCodexSessionFile(baseDir, sessionId) {
     }
   }
   return null;
+}
+
+// Returns the real human prompt text from a Codex user message payload, or null
+// for synthetic session-start injections (<environment_context>, <user_instructions>)
+function extractCodexUserPromptText(payload) {
+  const content = Array.isArray(payload.content)
+    ? payload.content
+    : (typeof payload.content === 'string' ? [{ type: 'input_text', text: payload.content }] : []);
+  const text = content.filter(c => c.type === 'input_text' || c.type === 'text').map(c => c.text || '').join(' ').trim();
+  if (!text) return null;
+  if (text.startsWith('<environment_context>') || text.startsWith('<user_instructions>')) return null;
+  return text;
 }
 
 async function parseCodexSessionMetadata(filePath, fileName) {
@@ -2126,6 +2618,31 @@ function parseClaudeCodeSessionIdFromFilename(fileName) {
   return fileName.replace(/\.jsonl$/, '');
 }
 
+// Returns the real human prompt text from a Claude Code user record, or null if
+// the record is noise (tool results, slash commands, injected reminders, etc.)
+function extractClaudeCodeUserPromptText(rec) {
+  if (rec.isMeta === true) return null;
+  const content = rec.message?.content;
+  let text = null;
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    const textBlocks = content.filter(b => b.type === 'text' && (b.text || '').trim());
+    const hasToolResult = content.some(b => b.type === 'tool_result');
+    if (hasToolResult && textBlocks.length === 0) return null;
+    text = textBlocks.map(b => b.text).join('\n');
+  }
+  if (!text) return null;
+  if (text.includes('<command-name>') || text.includes('<command-message>') || text.includes('<local-command-stdout>')) return null;
+  if (text.includes('<task-notification>')) return null;
+  const trimmed = text.trim();
+  if (trimmed.startsWith('Caveat:')) return null;
+  if (trimmed === '[Request interrupted by user]' || trimmed === '[Request interrupted by user for tool use]') return null;
+  // System reminders are appended to real prompts — strip them rather than drop the message
+  text = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim();
+  return text || null;
+}
+
 async function parseClaudeCodeSessionMetadata(filePath, fileName) {
   // Check mtime cache first
   try {
@@ -2180,14 +2697,10 @@ async function _parseClaudeCodeSessionMetadataRaw(filePath, fileName) {
         messageCount++;
         userCount++;
         const content = rec.message?.content;
-        // Extract first user message text
+        // Extract first real user prompt text (filters tool results / injected noise)
         if (!firstUserMessage) {
-          if (typeof content === 'string' && content.trim()) {
-            firstUserMessage = content.trim().slice(0, 120);
-          } else if (Array.isArray(content)) {
-            const texts = content.filter(b => b.type === 'text').map(b => b.text || '').join(' ').trim();
-            if (texts) firstUserMessage = texts.slice(0, 120);
-          }
+          const t = extractClaudeCodeUserPromptText(rec);
+          if (t) firstUserMessage = t.slice(0, 120);
         }
         // Check if this user message contains tool_result blocks
         if (Array.isArray(content)) {
@@ -2732,8 +3245,8 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`AgentXRay listening on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`AgentXRay listening on http://${HOST}:${PORT}`);
   console.log(`  OpenClaw:    ${DATA_DIR}`);
   console.log(`  Codex:       ${CODEX_DIR}`);
   console.log(`  Claude Code: ${CLAUDE_CODE_DIR}`);
