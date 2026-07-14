@@ -11,6 +11,9 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex** 和 **Claude
 - **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code 的会话日志
 - **会话浏览** — 浏览 Agent 列表，搜索/过滤会话，查看消息历史
 - **工具调用检查** — 可展开的工具调用详情，包含参数和返回结果
+- **Prompt 提取** — 按 session 提取全部真人 prompt（自动过滤工具结果、斜杠命令、系统注入等噪音），按工作目录分组，支持搜索 / JSON 导出 / 复制
+- **Prompt 优化** — 相似 prompt 自动聚类成模板，结合 session 效果归因（轮次、工具调用、错误率），通过本机 `claude` CLI 生成改写建议
+- **会话洞察** — 聚合分析面板：工具统计、错误聚类、每日趋势
 - **Spawn 追踪** — 检测并导航父子 Agent 之间的调用关系
 - **消息时间线** — 可视化对话流程图，不同角色用不同颜色标识
 - **自动刷新** — 会话列表和消息实时更新
@@ -74,6 +77,16 @@ npm start
 5. **检查工具调用** — 点击 `🔧 tool_name` 按钮展开参数/结果
 6. **导航 Spawn** — 点击 🔗 链接跳转到子 Agent 会话
 
+### Prompt 视图
+
+点击顶部 **Prompts** 标签（Sessions / Insights 旁），即可看到所有 session 的真人 prompt，按 session 所属工作目录分组。工具结果、斜杠命令回显、系统提醒、任务通知等噪音会被自动过滤。
+
+- **预览与展开** — 每个 session 行内直接预览首条 prompt，点击展开完整列表（markdown 渲染）
+- **搜索** — 实时过滤 prompt / 目录 / session
+- **Export JSON** — 导出全部提取的 prompt 用于离线处理
+- **分析优化** — 相似 prompt 聚类成模板，结合每个模板的 session 效果归因（平均轮次、工具调用、错误率），由 Claude 生成模板改写建议。需要服务器 PATH 中有 [`claude` CLI](https://claude.com/claude-code)；没有时聚类和归因表格仍可用
+- **优化单条** — 悬停任意 prompt 点击「优化」，内联生成 Claude 改写版本
+
 ### 键盘快捷键
 
 | 按键 | 操作 |
@@ -125,6 +138,10 @@ npm start
 | `GET /api/claude-code/sessions` | 获取 Claude Code 会话列表 |
 | `GET /api/claude-code/sessions/:id` | 获取 Claude Code 会话消息详情 |
 | `GET /api/spawn-map` | 获取 Agent spawn 关系图 |
+| `GET /api/insights` | 聚合分析（工具统计、错误聚类、趋势） |
+| `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
+| `GET /api/prompts/analyze` | 模板聚类 + 效果归因 + Claude 建议（`?refresh=1` 重算，`?skipLlm=1` 仅聚类） |
+| `POST /api/prompts/rewrite` | 通过 claude CLI 改写单条 prompt（`{ "text": "..." }`） |
 
 所有列表和详情接口均支持 `?dir=` 参数来覆盖默认目录。
 

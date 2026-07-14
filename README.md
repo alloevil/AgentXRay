@@ -11,6 +11,9 @@ English | [中文](README.zh-CN.md)
 - **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, and Hermes sessions
 - **Session browser** — Browse agents, filter/search sessions, view message history
 - **Tool call inspection** — Expandable tool calls with arguments and results
+- **Prompt extraction** — See every real human prompt per session (tool results, slash commands and injected noise filtered out), grouped by working directory, with search / JSON export / copy
+- **Prompt optimization** — Cluster prompts into templates, attribute session outcomes (turns, tool calls, error rate) per template, and get Claude-powered rewrite suggestions via the local `claude` CLI
+- **Session insights** — Aggregate analytics dashboard with tool stats, error clustering and daily trends
 - **Spawn tracking** — Detect and navigate parent/child agent relationships
 - **Message timeline** — Visual graph showing conversation flow with role indicators
 - **Auto-refresh** — Live-updating session list and messages
@@ -74,6 +77,16 @@ Open http://localhost:3800
 5. **Inspect tool calls** — Click any `🔧 tool_name` button to expand arguments/results
 6. **Navigate spawns** — Click the 🔗 link to jump to the spawned child session
 
+### Prompt View
+
+Click the **Prompts** tab (next to Sessions / Insights) to see every real human prompt across all sessions, grouped by the session's working directory. Noise like tool results, slash-command echoes, system reminders and task notifications is filtered out.
+
+- **Preview & expand** — Each session row shows a one-line preview of its first prompt; click to expand the full markdown-rendered prompt list
+- **Search** — Filter prompts / directories / sessions live
+- **Export JSON** — Download all extracted prompts for offline processing
+- **分析优化 (Analyze)** — Cluster prompts into templates, attribute session outcomes (avg turns, tool calls, error rate) per template, and get rewrite suggestions from Claude. Requires the [`claude` CLI](https://claude.com/claude-code) on the server's PATH; without it the clustering and attribution table still works
+- **优化 (Optimize)** — Hover any single prompt and click 优化 for an inline Claude-powered rewrite
+
 ### Keyboard Shortcuts
 
 | Key | Action |
@@ -129,6 +142,10 @@ npm start
 | `GET /api/hermes/sessions` | List Hermes sessions |
 | `GET /api/hermes/sessions/:id` | Get Hermes session messages |
 | `GET /api/spawn-map` | Build agent spawn relationship map |
+| `GET /api/insights` | Aggregate analytics (tool stats, error clusters, trends) |
+| `GET /api/prompts` | Real human prompts per session, grouped by directory |
+| `GET /api/prompts/analyze` | Template clustering + attribution + Claude suggestions (`?refresh=1` to recompute, `?skipLlm=1` for clustering only) |
+| `POST /api/prompts/rewrite` | Rewrite a single prompt via the claude CLI (`{ "text": "..." }`) |
 
 All list/detail endpoints accept an optional `?dir=` parameter to override the default directory.
 
