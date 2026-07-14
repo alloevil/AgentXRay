@@ -1,6 +1,6 @@
 # AgentXRay
 
-AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex** 和 **Claude Code**。
+AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code** 和 **Hermes** —— 一个界面全搞定。
 
 [English](README.md) | 中文
 
@@ -8,7 +8,7 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex** 和 **Claude
 
 ## 功能特性
 
-- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code 的会话日志
+- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes 的会话日志
 - **会话浏览** — 浏览 Agent 列表，搜索/过滤会话，查看消息历史
 - **工具调用检查** — 可展开的工具调用详情，包含参数和返回结果
 - **Prompt 提取** — 按 session 提取全部真人 prompt（自动过滤工具结果、斜杠命令、系统注入等噪音），按工作目录分组，支持搜索 / JSON 导出 / 复制
@@ -42,7 +42,7 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex** 和 **Claude
 
 ### 多平台支持
 
-一键切换 OpenClaw、Codex、Claude Code。每个平台的会话均从其原生日志格式解析。
+一键切换 OpenClaw、Codex、Claude Code、Hermes。每个平台的会话均从其原生日志格式解析。
 
 ![Codex View](screenshots/codex-view.png)
 
@@ -67,7 +67,7 @@ npm start
 
 ### 基本流程
 
-1. **选择平台** — 点击顶部 `OpenClaw`、`Codex` 或 `Claude Code`
+1. **选择平台** — 点击顶部 `OpenClaw`、`Codex`、`Claude Code` 或 `Hermes`
 2. **选择 Agent** — OpenClaw 平台下，从下拉菜单选择 Agent（如 `xiaot`、`mimo`）
 3. **浏览会话** — 会话按时间倒序排列，每张卡片显示：
    - 时间戳和状态（`active` / `archived`）
@@ -110,6 +110,7 @@ npm start
 | OpenClaw    | `~/.openclaw/agents`          |
 | Codex       | `~/.codex/sessions`           |
 | Claude Code | `~/.claude/projects`          |
+| Hermes      | `~/.hermes`                   |
 
 ### 自定义目录
 
@@ -121,6 +122,7 @@ npm start
 OPENCLAW_DIR=/custom/path/openclaw \
 CODEX_DIR=/custom/path/codex \
 CLAUDE_CODE_DIR=/custom/path/claude \
+HERMES_DIR=/custom/path/hermes \
 npm start
 ```
 
@@ -137,6 +139,8 @@ npm start
 | `GET /api/codex/sessions/:id` | 获取 Codex 会话消息详情 |
 | `GET /api/claude-code/sessions` | 获取 Claude Code 会话列表 |
 | `GET /api/claude-code/sessions/:id` | 获取 Claude Code 会话消息详情 |
+| `GET /api/hermes/sessions` | 获取 Hermes 会话列表 |
+| `GET /api/hermes/sessions/:id` | 获取 Hermes 会话消息详情 |
 | `GET /api/spawn-map` | 获取 Agent spawn 关系图 |
 | `GET /api/insights` | 聚合分析（工具统计、错误聚类、趋势） |
 | `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
@@ -148,8 +152,8 @@ npm start
 ## 技术栈
 
 - **后端：** Node.js + Express
-- **前端：** 单文件 HTML/CSS/JS（~70KB，无构建步骤，无框架依赖）
-- **数据：** 直接从磁盘读取 JSONL 会话文件
+- **前端：** 单文件 HTML/CSS/JS（无构建步骤，无框架依赖）
+- **数据：** 直接从磁盘读取 JSONL 会话文件 / SQLite 数据库
 - **零外部 CDN** — 完全自包含，离线可用
 
 ## 支持的日志格式
@@ -159,8 +163,9 @@ npm start
 | OpenClaw | JSONL | `~/.openclaw/agents/{agent}/sessions/{id}.jsonl` |
 | Codex | JSONL | `~/.codex/sessions/{id}.jsonl` |
 | Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
+| Hermes | SQLite | `~/.hermes/state.db` |
 
-启用“包含已归档”后，还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话。
+启用「包含已归档」后，还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话。
 
 ## 开源协议
 
