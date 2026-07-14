@@ -631,6 +631,14 @@
       overflow: hidden;
     }
 
+    #mainContent {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
     .summary {
       padding: 18px 22px 12px;
       border-bottom: 1px solid var(--border);
@@ -1937,6 +1945,17 @@
 
     .prompt-session-header .session-open-link:hover {
       text-decoration: underline;
+    }
+
+    .prompt-session-header .prompt-preview {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-size: 0.82rem;
+      opacity: 0.85;
     }
 
     .prompt-session-header .prompt-count-chip {
@@ -3308,6 +3327,7 @@
                 <span class="caret">${expanded ? '▼' : '▶'}</span>
                 <span class="meta">${escapeHtml(dateStr)}</span>
                 <span class="session-open-link" data-session-id="${escapeHtml(s.id)}" title="Open session">${escapeHtml(s.id.slice(0, 12))}…</span>
+                <span class="prompt-preview" title="${escapeHtml(s.prompts[0].text.slice(0, 500))}">${escapeHtml(s.prompts[0].text.replace(/\s+/g, ' ').slice(0, 160))}</span>
                 ${s.slug ? `<span class="meta">${escapeHtml(s.slug)}</span>` : ''}
                 ${s.title ? `<span class="meta">${escapeHtml(s.title)}</span>` : ''}
                 <span class="prompt-count-chip">${s.promptCount} prompt${s.promptCount > 1 ? 's' : ''}</span>
