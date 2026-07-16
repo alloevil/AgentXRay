@@ -1,10 +1,28 @@
-# AgentXRay
+<p align="center">
+  <img src="./assets/hero.svg" width="100%" alt="AgentXRay — X-ray vision into your AI agent sessions. Supports OpenClaw, Codex, Claude Code, and Hermes.">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js" />
+  <img src="https://img.shields.io/badge/license-MIT-00ccff?style=flat" alt="License" />
+  <img src="https://img.shields.io/github/stars/alloevil/AgentXRay?style=flat&logo=github&color=yellow" alt="Stars" />
+  <img src="https://img.shields.io/badge/framework-None-6e7681?style=flat" alt="No framework" />
+  <img src="https://img.shields.io/badge/build-size~70KB-3FB950?style=flat" alt="Lightweight" />
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#api">API</a> ·
+  <a href="README.zh-CN.md">中文</a>
+</p>
+
+---
 
 X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, and **Hermes** — all in one interface.
 
-English | [中文](README.zh-CN.md)
-
-![Main View](screenshots/main-view.png)
+---
 
 ## Features
 
@@ -19,6 +37,8 @@ English | [中文](README.zh-CN.md)
 - **Auto-refresh** — Live-updating session list and messages
 - **Settings panel** — Configure platform directories from the UI, persisted in localStorage
 - **Keyboard navigation** — Arrow keys to move between sessions
+
+---
 
 ## Screenshots
 
@@ -52,16 +72,20 @@ Configure platform directories from the UI. Changes are saved to localStorage �
 
 ![Settings](screenshots/settings-panel.png)
 
+---
+
 ## Quick Start
 
 ```bash
-git clone https://github.com/alloevil/agent-xray.git
-cd agent-xray
+git clone https://github.com/alloevil/AgentXRay.git
+cd AgentXRay
 npm install
 npm start
 ```
 
 Open http://localhost:3800
+
+---
 
 ## Usage
 
@@ -101,6 +125,8 @@ Click the **Prompts** tab (next to Sessions / Insights) to see every real human 
 - **Auto-refresh** — Automatically poll for new sessions and messages
 - **Auto-scroll** — Scroll to the latest message when new content arrives
 
+---
+
 ## Configuration
 
 ### Default directories
@@ -128,6 +154,8 @@ npm start
 
 **Via API:** Pass `?dir=/absolute/path` query parameter to any API endpoint.
 
+---
+
 ## API
 
 | Endpoint | Description |
@@ -149,12 +177,16 @@ npm start
 
 All list/detail endpoints accept an optional `?dir=` parameter to override the default directory.
 
+---
+
 ## Tech Stack
 
 - **Backend:** Node.js + Express
 - **Frontend:** Single-file HTML/CSS/JS (~70KB, no build step, no framework)
 - **Data:** Reads JSONL session files directly from disk
 - **Zero external CDN** — Everything is self-contained, works offline
+
+---
 
 ## Supported Log Formats
 
@@ -167,6 +199,14 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 
 Archived sessions (`.jsonl.reset.*`, `.jsonl.deleted.*`) are also supported when "Include archived" is enabled.
 
+---
+
 ## License
 
-MIT
+[MIT](LICENSE)
+
+---
+
+<p align="center">
+  <sub>⭐ Star this repo if you find it useful!</sub>
+</p>
