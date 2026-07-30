@@ -2288,6 +2288,10 @@
         <label>Hermes Directory</label>
         <input id="settingHermes" type="text" placeholder="~/.hermes">
       </div>
+      <div class="settings-field">
+        <label>OMP Directory</label>
+        <input id="settingOmp" type="text" placeholder="~/.omp/agent/sessions">
+      </div>
       <div class="settings-actions">
         <button class="btn-reset" id="settingsReset">Reset to Defaults</button>
         <button class="btn-save" id="settingsSave">Save</button>
@@ -2297,7 +2301,7 @@
   <div id="graphTooltip" class="graph-tooltip"></div>
   <script>
     const state = {
-      platform: 'openclaw', // 'openclaw' | 'codex' | 'claude-code' | 'hermes'
+      platform: 'openclaw', // 'openclaw' | 'codex' | 'claude-code' | 'hermes' | 'omp'
       agents: [],
       sessions: [],
       filteredSessions: [],
@@ -2313,7 +2317,7 @@
       navStack: [],
       msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
       visibleUnitCount: 60, // incremental rendering: show newest N units initially
-      settings: { openclawDir: '', codexDir: '', claudeCodeDir: '', hermesDir: '' }
+      settings: { openclawDir: '', codexDir: '', claudeCodeDir: '', hermesDir: '', ompDir: '' }
     };
 
     const MSG_BATCH_SIZE = 60; // how many units to add per "load more" click
@@ -2338,6 +2342,7 @@
     const settingCodex = document.getElementById('settingCodex');
     const settingClaudeCode = document.getElementById('settingClaudeCode');
     const settingHermes = document.getElementById('settingHermes');
+    const settingOmp = document.getElementById('settingOmp');
     const settingsSave = document.getElementById('settingsSave');
     const settingsReset = document.getElementById('settingsReset');
 
@@ -2350,6 +2355,7 @@
           state.settings.codexDir = parsed.codexDir || '';
           state.settings.claudeCodeDir = parsed.claudeCodeDir || '';
           state.settings.hermesDir = parsed.hermesDir || '';
+          state.settings.ompDir = parsed.ompDir || '';
         }
       } catch {}
     }
@@ -2364,6 +2370,7 @@
       else if (state.platform === 'codex') dir = state.settings.codexDir;
       else if (state.platform === 'claude-code') dir = state.settings.claudeCodeDir;
       else if (state.platform === 'hermes') dir = state.settings.hermesDir;
+      else if (state.platform === 'omp') dir = state.settings.ompDir;
       return dir ? '?dir=' + encodeURIComponent(dir) : '';
     }
 
@@ -2372,6 +2379,7 @@
       settingCodex.value = state.settings.codexDir;
       settingClaudeCode.value = state.settings.claudeCodeDir;
       settingHermes.value = state.settings.hermesDir;
+      settingOmp.value = state.settings.ompDir;
       settingsOverlay.hidden = false;
     }
 
@@ -2389,6 +2397,7 @@
       state.settings.codexDir = settingCodex.value.trim();
       state.settings.claudeCodeDir = settingClaudeCode.value.trim();
       state.settings.hermesDir = settingHermes.value.trim();
+      state.settings.ompDir = settingOmp.value.trim();
       saveSettings();
       closeSettings();
       await refreshAll(false);
@@ -2399,11 +2408,13 @@
       state.settings.codexDir = '';
       state.settings.claudeCodeDir = '';
       state.settings.hermesDir = '';
+      state.settings.ompDir = '';
       saveSettings();
       settingOpenclaw.value = '';
       settingCodex.value = '';
       settingClaudeCode.value = '';
       settingHermes.value = '';
+      settingOmp.value = '';
     });
 
     loadSettings();
@@ -2657,7 +2668,7 @@
     function renderAgents() {
       // Update subtitle
       const subtitle = document.getElementById('sidebarSubtitle');
-      const platformLabels = { openclaw: 'OpenClaw sessions', codex: 'Codex sessions', 'claude-code': 'Claude Code sessions', hermes: 'Hermes sessions' };
+      const platformLabels = { openclaw: 'OpenClaw sessions', codex: 'Codex sessions', 'claude-code': 'Claude Code sessions', hermes: 'Hermes sessions', omp: 'OMP sessions' };
       subtitle.textContent = platformLabels[state.platform] || '';
 
       // Platform tabs
@@ -2665,7 +2676,8 @@
         { id: 'openclaw', label: 'OpenClaw' },
         { id: 'codex', label: 'Codex' },
         { id: 'claude-code', label: 'Claude Code' },
-        { id: 'hermes', label: 'Hermes' }
+        { id: 'hermes', label: 'Hermes' },
+        { id: 'omp', label: 'OMP' }
       ];
       platformBar.innerHTML = platforms
         .map((p) => {
@@ -3206,6 +3218,7 @@
       else if (state.platform === 'codex') rawDir = state.settings.codexDir;
       else if (state.platform === 'claude-code') rawDir = state.settings.claudeCodeDir;
       else if (state.platform === 'hermes') rawDir = state.settings.hermesDir;
+      else if (state.platform === 'omp') rawDir = state.settings.ompDir;
       if (rawDir) params.set('dir', rawDir);
       return params;
     }
@@ -4440,7 +4453,7 @@
         messages.innerHTML = '<div class="empty">Session messages will appear here.</div>';
         return;
       }
-      const isCodex = state.platform === 'codex';
+      const isCodex = state.platform === 'codex' || state.platform === 'omp';
       const timing = buildTimingAnalysis(state.sessionData.messages);
       const filtered = timing.visibleMessages
         .filter((msg) => {
@@ -4935,6 +4948,8 @@
         state.sessions = await fetchJson('/api/claude-code/sessions' + dp);
       } else if (state.platform === 'hermes') {
         state.sessions = await fetchJson('/api/hermes/sessions' + dp);
+      } else if (state.platform === 'omp') {
+        state.sessions = await fetchJson('/api/omp/sessions' + dp);
       }
       if (!preserveSelection || !state.sessions.some((session) => session.id === state.selectedSessionId)) {
         state.selectedSessionId = state.sessions[0]?.id || '';
@@ -4962,6 +4977,8 @@
         payload = await fetchJson(`/api/claude-code/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
       } else if (state.platform === 'hermes') {
         payload = await fetchJson(`/api/hermes/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
+      } else if (state.platform === 'omp') {
+        payload = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
       }
       state.sessionData = payload;
       // Show all messages if <= 200, otherwise first 60 with load-more
@@ -5149,6 +5166,7 @@
         else if (state.platform === 'codex') dir = state.settings.codexDir;
         else if (state.platform === 'claude-code') dir = state.settings.claudeCodeDir;
         else if (state.platform === 'hermes') dir = state.settings.hermesDir;
+        else if (state.platform === 'omp') dir = state.settings.ompDir;
         if (dir) params.set('dir', dir);
         const res = await fetch(`/api/search?${params}`);
         const results = await res.json();

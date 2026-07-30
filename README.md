@@ -137,6 +137,7 @@ Click the **Prompts** tab (next to Sessions / Insights) to see every real human 
 | Codex       | `~/.codex/sessions`           |
 | Claude Code | `~/.claude/projects`          |
 | Hermes      | `~/.hermes`                   |
+| OMP         | `~/.omp/agent/sessions`       |
 
 ### Custom directories
 
@@ -149,6 +150,7 @@ OPENCLAW_DIR=/custom/path/openclaw \
 CODEX_DIR=/custom/path/codex \
 CLAUDE_CODE_DIR=/custom/path/claude \
 HERMES_DIR=/custom/path/hermes \
+OMP_DIR=/custom/path/omp \
 npm start
 ```
 
@@ -169,6 +171,8 @@ npm start
 | `GET /api/claude-code/sessions/:id` | Get Claude Code session messages |
 | `GET /api/hermes/sessions` | List Hermes sessions |
 | `GET /api/hermes/sessions/:id` | Get Hermes session messages |
+| `GET /api/omp/sessions` | List OMP (oh-my-pi) sessions |
+| `GET /api/omp/sessions/:id` | Get OMP session messages |
 | `GET /api/spawn-map` | Build agent spawn relationship map |
 | `GET /api/insights` | Aggregate analytics (tool stats, error clusters, trends) |
 | `GET /api/prompts` | Real human prompts per session, grouped by directory |
@@ -196,6 +200,7 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 | Codex | JSONL | `~/.codex/sessions/{id}.jsonl` |
 | Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
 | Hermes | SQLite | `~/.hermes/state.db` |
+| OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
 
 Archived sessions (`.jsonl.reset.*`, `.jsonl.deleted.*`) are also supported when "Include archived" is enabled.
 

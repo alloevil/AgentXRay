@@ -111,6 +111,7 @@ npm start
 | Codex       | `~/.codex/sessions`           |
 | Claude Code | `~/.claude/projects`          |
 | Hermes      | `~/.hermes`                   |
+| OMP         | `~/.omp/agent/sessions`       |
 
 ### 自定义目录
 
@@ -123,6 +124,7 @@ OPENCLAW_DIR=/custom/path/openclaw \
 CODEX_DIR=/custom/path/codex \
 CLAUDE_CODE_DIR=/custom/path/claude \
 HERMES_DIR=/custom/path/hermes \
+OMP_DIR=/custom/path/omp \
 npm start
 ```
 
@@ -141,6 +143,8 @@ npm start
 | `GET /api/claude-code/sessions/:id` | 获取 Claude Code 会话消息详情 |
 | `GET /api/hermes/sessions` | 获取 Hermes 会话列表 |
 | `GET /api/hermes/sessions/:id` | 获取 Hermes 会话消息详情 |
+| `GET /api/omp/sessions` | 获取 OMP（oh-my-pi）会话列表 |
+| `GET /api/omp/sessions/:id` | 获取 OMP 会话消息详情 |
 | `GET /api/spawn-map` | 获取 Agent spawn 关系图 |
 | `GET /api/insights` | 聚合分析（工具统计、错误聚类、趋势） |
 | `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
@@ -164,6 +168,7 @@ npm start
 | Codex | JSONL | `~/.codex/sessions/{id}.jsonl` |
 | Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
 | Hermes | SQLite | `~/.hermes/state.db` |
+| OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
 
 启用「包含已归档」后，还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话。
 

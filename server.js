@@ -18,6 +18,7 @@ const sessionMetaCache = new Map();
 const CODEX_DIR = process.env.CODEX_DIR || path.join(HOME, '.codex', 'sessions');
 const CLAUDE_CODE_DIR = process.env.CLAUDE_CODE_DIR || path.join(HOME, '.claude', 'projects');
 const HERMES_DIR = process.env.HERMES_DIR || path.join(HOME, '.hermes');
+const OMP_DIR = process.env.OMP_DIR || path.join(HOME, '.omp', 'agent', 'sessions');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const SESSION_ID_RE = /^[0-9a-zA-Z._:-]+$/;
 const AGENT_NAME_RE = /^[A-Za-z0-9._-]+$/;
@@ -384,6 +385,19 @@ async function collectSessionFiles(platform, agentName, dirOverride) {
         }
       }
     }
+  } else if (platform === 'omp') {
+    const dir = resolveDir(dirOverride, OMP_DIR);
+    const slugs = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const s of slugs) {
+      if (!s.isDirectory()) continue;
+      const slugDir = path.join(dir, s.name);
+      const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+      for (const f of entries) {
+        if (f.isFile() && f.name.endsWith('.jsonl')) {
+          files.push({ path: path.join(slugDir, f.name), sessionId: ompSessionIdFromFile(f.name) });
+        }
+      }
+    }
   }
 
   return files;
@@ -484,6 +498,8 @@ async function scanFileForInsights(filePath, sessionId) {
 
           if (msg.details && typeof msg.details.durationMs === 'number') {
             toolStats[name].totalDurationMs += msg.details.durationMs;
+          } else if (msg.details && typeof msg.details.wallTimeMs === 'number') {
+            toolStats[name].totalDurationMs += Math.round(msg.details.wallTimeMs);
           }
         }
       }
@@ -700,7 +716,7 @@ async function computeInsights(platform, agentName, dirOverride) {
     }
   }
 
-  // JSONL-based platforms: openclaw, codex, claude-code
+  // JSONL-based platforms: openclaw, codex, claude-code, omp
   const files = await collectSessionFiles(platform, agentName, dirOverride);
   if (files.length === 0) return null;
 
@@ -874,6 +890,42 @@ async function extractCodexPrompts(filePath) {
   return { cwd, timestamp, lastActivity, prompts };
 }
 
+async function extractOmpPrompts(filePath) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let cwd = null;
+  let timestamp = null;
+  let lastActivity = null;
+  let title = null;
+  const prompts = [];
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+      if (rec.timestamp) lastActivity = rec.timestamp;
+      if (rec.type === 'session') {
+        if (!cwd && rec.cwd) cwd = rec.cwd;
+        if (!timestamp && rec.timestamp) timestamp = rec.timestamp;
+        continue;
+      }
+      if ((rec.type === 'title' || rec.type === 'title_change') && rec.title) {
+        title = rec.title;
+        continue;
+      }
+      if (rec.type !== 'message') continue;
+      const msg = rec.message || {};
+      if (msg.role !== 'user') continue;
+      const text = extractOmpUserPromptText(msg);
+      if (text) prompts.push({ text, timestamp: rec.timestamp || null });
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+  return { cwd, timestamp, lastActivity, title, prompts };
+}
+
 async function extractClaudeCodePrompts(filePath) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
@@ -957,6 +1009,7 @@ async function computePrompts(platform, agentName, dirOverride) {
     const results = await Promise.all(files.map(async (f) => {
       const extractor = platform === 'codex' ? extractCodexPrompts
         : platform === 'claude-code' ? extractClaudeCodePrompts
+        : platform === 'omp' ? extractOmpPrompts
         : extractOpenClawPrompts;
       const result = await extractor(f.path).catch(() => null);
       return result ? { file: f, result } : null;
@@ -978,7 +1031,7 @@ async function computePrompts(platform, agentName, dirOverride) {
         timestamp: result.timestamp,
         lastActivity: result.lastActivity,
         slug: result.slug || null,
-        title: null,
+        title: result.title || null,
         promptCount: result.prompts.length,
         prompts: result.prompts
       });
@@ -1347,6 +1400,21 @@ app.get('/api/search', async (req, res) => {
           .filter(f => f.endsWith('.jsonl'))
           .map(f => ({ path: path.join(dir, f), file: f, platform: 'claude-code' }));
       } catch {}
+    } else if (platform === 'omp') {
+      const dir = resolveDir(req.query.dir, OMP_DIR);
+      try {
+        const slugs = await fsp.readdir(dir, { withFileTypes: true });
+        for (const s of slugs) {
+          if (!s.isDirectory()) continue;
+          const slugDir = path.join(dir, s.name);
+          const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+          for (const f of entries) {
+            if (f.isFile() && f.name.endsWith('.jsonl')) {
+              sessionFiles.push({ path: path.join(slugDir, f.name), file: f.name, sessionId: ompSessionIdFromFile(f.name), platform: 'omp' });
+            }
+          }
+        }
+      } catch {}
     }
 
     const results = [];
@@ -1356,7 +1424,7 @@ app.get('/api/search', async (req, res) => {
       const matches = [];
       const stream = fs.createReadStream(sf.path, { encoding: 'utf8' });
       const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-      let sessionId = sf.file.split('.jsonl')[0];
+      let sessionId = sf.sessionId || sf.file.split('.jsonl')[0];
 
       try {
         for await (const line of rl) {
@@ -2226,6 +2294,346 @@ app.get('/api/codex/sessions/:sessionId', async (req, res) => {
   }
 });
 
+// --- OMP platform ---
+
+function ompSessionIdFromFile(fileName) {
+  // 2026-07-27T09-38-24-417Z_019fa2f0-9821-7000-b125-0afafe16410a.jsonl
+  const base = fileName.replace(/\.jsonl$/, '');
+  const idx = base.indexOf('_');
+  return idx >= 0 ? base.slice(idx + 1) : base;
+}
+
+async function findOmpSessionFile(baseDir, sessionId) {
+  const dir = baseDir || OMP_DIR;
+  // Files live one level deep: {dir}/{cwd-slug}/{timestamp}_{uuid}.jsonl
+  const slugs = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const s of slugs) {
+    if (!s.isDirectory()) continue;
+    const slugDir = path.join(dir, s.name);
+    const files = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+    for (const f of files) {
+      if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
+      const base = f.name.replace(/\.jsonl$/, '');
+      if (base.endsWith('_' + sessionId) || base === sessionId) {
+        return path.join(slugDir, f.name);
+      }
+    }
+  }
+  return null;
+}
+
+// Returns the real human prompt text from an OMP user message, or null for
+// injected noise (<system-notice>, command echoes) and empty content
+function extractOmpUserPromptText(msg) {
+  if (msg.attribution && msg.attribution !== 'user') return null;
+  const content = Array.isArray(msg.content) ? msg.content : [];
+  const text = content.filter(c => c.type === 'text').map(c => c.text || '').join(' ').trim();
+  if (!text) return null;
+  if (text.startsWith('<')) return null;
+  return text;
+}
+
+async function parseOmpSessionMetadata(filePath, fileName) {
+  // Check mtime cache first
+  try {
+    const stat = await fsp.stat(filePath);
+    const mtime = stat.mtimeMs;
+    const cached = sessionMetaCache.get(filePath);
+    if (cached && cached.mtime === mtime) {
+      return cached.data;
+    }
+  } catch {
+    // If stat fails, fall through to parse
+  }
+
+  const data = await _parseOmpSessionMetadataRaw(filePath, fileName);
+
+  // Update cache
+  try {
+    const stat = await fsp.stat(filePath);
+    sessionMetaCache.set(filePath, { mtime: stat.mtimeMs, data });
+  } catch {
+    // Non-critical — just skip caching
+  }
+
+  return data;
+}
+
+async function _parseOmpSessionMetadataRaw(filePath, fileName) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let sessionMeta = null;
+  let title = null;
+  let messageCount = 0;
+  let userCount = 0;
+  let assistantCount = 0;
+  let toolCallCount = 0;
+  let toolResultCount = 0;
+  let lastTimestamp = null;
+  let firstUserMessage = null;
+  const toolNames = {};
+
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+
+      if (rec.timestamp) lastTimestamp = rec.timestamp;
+
+      if (rec.type === 'session' && !sessionMeta) {
+        sessionMeta = {
+          id: rec.id || ompSessionIdFromFile(fileName),
+          timestamp: rec.timestamp || null,
+          cwd: rec.cwd || null
+        };
+        continue;
+      }
+
+      if ((rec.type === 'title' || rec.type === 'title_change') && rec.title) {
+        title = rec.title;
+        continue;
+      }
+
+      if (rec.type !== 'message') continue;
+      messageCount++;
+      const msg = rec.message || {};
+      if (msg.role === 'user') {
+        userCount++;
+        if (!firstUserMessage) {
+          const text = extractOmpUserPromptText(msg);
+          if (text) firstUserMessage = text.slice(0, 120);
+        }
+      } else if (msg.role === 'assistant') {
+        assistantCount++;
+        const content = Array.isArray(msg.content) ? msg.content : [];
+        for (const c of content) {
+          if (c.type === 'toolCall') {
+            toolCallCount++;
+            const name = c.name || 'unknown';
+            toolNames[name] = (toolNames[name] || 0) + 1;
+          }
+        }
+      } else if (msg.role === 'toolResult') {
+        toolResultCount++;
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+
+  const topTools = Object.entries(toolNames)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => ({ name, count }));
+
+  return {
+    id: sessionMeta?.id || ompSessionIdFromFile(fileName),
+    timestamp: sessionMeta?.timestamp || null,
+    lastActivity: lastTimestamp,
+    messageCount,
+    userCount,
+    assistantCount,
+    toolCallCount,
+    toolResultCount,
+    topTools,
+    firstUserMessage: firstUserMessage || null,
+    title: title || firstUserMessage || null,
+    cwd: sessionMeta?.cwd || null,
+    file: fileName
+  };
+}
+
+async function listOmpSessions(baseDir) {
+  const dir = baseDir || OMP_DIR;
+  const sessions = [];
+  let entries;
+  try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return []; }
+
+  for (const s of entries) {
+    if (!s.isDirectory()) continue;
+    const slugDir = path.join(dir, s.name);
+    const files = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+    for (const f of files) {
+      if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
+      sessions.push(parseOmpSessionMetadata(path.join(slugDir, f.name), f.name));
+    }
+  }
+
+  const resolved = await Promise.all(sessions);
+  resolved.sort((a, b) => {
+    const aTime = a.timestamp ? Date.parse(a.timestamp) : 0;
+    const bTime = b.timestamp ? Date.parse(b.timestamp) : 0;
+    return bTime - aTime;
+  });
+  return resolved;
+}
+
+// Maps one OMP record to an array of normalized messages (an assistant record
+// fans out into reasoning / text / toolCall entries, codex-style), or null for
+// metadata records (title, session, model_change, custom, custom_message,
+// ttsr_injection, thinking_level_change)
+function normalizeOmpRecord(rec) {
+  if (rec.type !== 'message') return null;
+  const msg = rec.message || {};
+  const content = Array.isArray(msg.content) ? msg.content : [];
+
+  if (msg.role === 'user') {
+    return [{
+      id: rec.id || null,
+      timestamp: rec.timestamp || null,
+      role: 'user',
+      content: content.filter(c => c.type === 'text').map(c => ({ type: 'text', text: c.text || '' })),
+      usage: null,
+      model: null,
+      provider: null,
+      toolCallId: null,
+      toolName: null,
+      details: null,
+      isError: false
+    }];
+  }
+
+  if (msg.role === 'assistant') {
+    const messages = [];
+    const thinkingText = content.filter(c => c.type === 'thinking').map(c => c.thinking || '').join('\n\n').trim();
+    if (thinkingText) {
+      messages.push({
+        id: null,
+        timestamp: rec.timestamp || null,
+        role: 'reasoning',
+        content: [{ type: 'text', text: thinkingText }],
+        usage: null,
+        model: null,
+        provider: null,
+        toolCallId: null,
+        toolName: null,
+        details: null,
+        isError: false
+      });
+    }
+    messages.push({
+      id: rec.id || null,
+      timestamp: rec.timestamp || null,
+      role: 'assistant',
+      content: content.filter(c => c.type === 'text').map(c => ({ type: 'text', text: c.text || '' })),
+      usage: msg.usage || null,
+      model: msg.model || null,
+      provider: msg.provider || null,
+      toolCallId: null,
+      toolName: null,
+      details: null,
+      isError: false
+    });
+    for (const c of content) {
+      if (c.type !== 'toolCall') continue;
+      messages.push({
+        id: c.id || null,
+        timestamp: rec.timestamp || null,
+        role: 'toolCall',
+        content: [],
+        usage: null,
+        model: null,
+        provider: null,
+        toolCallId: c.id || null,
+        toolName: c.name || null,
+        details: c.arguments || null,
+        isError: false
+      });
+    }
+    return messages;
+  }
+
+  if (msg.role === 'toolResult') {
+    return [{
+      id: rec.id || null,
+      timestamp: rec.timestamp || null,
+      role: 'toolResult',
+      content: content.filter(c => c.type === 'text').map(c => ({ type: 'text', text: c.text || '' })),
+      usage: null,
+      model: null,
+      provider: null,
+      toolCallId: msg.toolCallId || null,
+      toolName: msg.toolName || null,
+      details: msg.details || null,
+      isError: Boolean(msg.isError)
+    }];
+  }
+
+  return null;
+}
+
+async function parseOmpSessionFile(filePath) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let session = null;
+  let model = null;
+  const messages = [];
+
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+
+      if (rec.type === 'session') {
+        session = {
+          id: rec.id || null,
+          cwd: rec.cwd || null,
+          timestamp: rec.timestamp || null,
+          version: rec.version || null,
+          model: null
+        };
+      } else if (rec.type === 'model_change') {
+        if (rec.model) model = rec.model;
+      } else if (rec.type === 'message') {
+        if (rec.message && rec.message.model) model = rec.message.model;
+        const msgs = normalizeOmpRecord(rec);
+        if (msgs) messages.push(...msgs);
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+
+  if (session) session.model = model;
+  return { session, messages };
+}
+
+app.get('/api/omp/sessions', async (req, res) => {
+  try {
+    const dir = resolveDir(req.query.dir, OMP_DIR);
+    const sessions = await listOmpSessions(dir);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/omp/sessions/:sessionId', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
+  try {
+    const dir = resolveDir(req.query.dir, OMP_DIR);
+    const filePath = await findOmpSessionFile(dir, sessionId);
+    if (!filePath) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const payload = await parseOmpSessionFile(filePath);
+    res.json(payload);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Hermes platform (SQLite) ---
 
 function getHermesDbPath(dir) {
@@ -2995,6 +3403,7 @@ app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
 // GET /api/watch?platform=codex&sessionId=ID[&dir=PATH]
 // GET /api/watch?platform=claude-code&sessionId=ID[&dir=PATH]
 // GET /api/watch?platform=hermes&sessionId=ID[&dir=PATH]
+// GET /api/watch?platform=omp&sessionId=ID[&dir=PATH]
 // Streams Server-Sent Events:
 //   event: connected     data: {"messageCount": N}
 //   event: newMessages   data: {"messages": [...normalized], "session": {...}}
@@ -3019,6 +3428,9 @@ app.get('/api/watch', async (req, res) => {
     } else if (platform === 'claude-code') {
       const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
       filePath = await findClaudeCodeSessionFile(dir, sessionId);
+    } else if (platform === 'omp') {
+      const dir = resolveDir(req.query.dir, OMP_DIR);
+      filePath = await findOmpSessionFile(dir, sessionId);
     } else if (platform === 'hermes') {
       // Hermes uses SQLite, not file-based SSE — handle separately below
     } else {
@@ -3153,6 +3565,13 @@ app.get('/api/watch', async (req, res) => {
       } else if (platform === 'claude-code') {
         const normalized = normalizeClaudeCodeRecord(rec);
         if (normalized) messages.push(normalized);
+      } else if (platform === 'omp') {
+        if (rec.type === 'session') {
+          sessionMeta = { id: rec.id, cwd: rec.cwd, timestamp: rec.timestamp };
+        } else {
+          const normalized = normalizeOmpRecord(rec);
+          if (normalized && normalized.length) messages.push(...normalized);
+        }
       }
     }
     return { messages, sessionMeta };
