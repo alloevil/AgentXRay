@@ -2842,6 +2842,15 @@
             toolStats[name].totalDurationMs += msg.details.durationMs;
           }
         }
+        // Standalone toolCall records (Codex/OMP style: separate role instead of content part)
+        if (msg.role === 'toolCall') {
+          toolCallCount++;
+          const name = msg.toolName || 'unknown';
+          if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
+          toolStats[name].calls++;
+          toolCallsList.push({ index: i, name, args: msg.details, timestamp: msg.timestamp, callId: msg.toolCallId });
+          if (msg.toolCallId) callIdToName[msg.toolCallId] = name;
+        }
         for (const c of (msg.content || [])) {
           if (c.type === 'toolCall') {
             toolCallCount++;
@@ -3572,7 +3581,7 @@
           <div class="session-item ${activeClass}" data-session-id="${escapeHtml(session.id)}" tabindex="0">
             <div class="top">
               <span>${escapeHtml(formatDate(session.timestamp))}</span>
-              <span class="badge ${session.status}">${escapeHtml(session.status)}</span>
+              ${session.status ? `<span class="badge ${escapeHtml(session.status)}">${escapeHtml(session.status)}</span>` : ''}
             </div>
             <div class="stats">${chips.join('')}</div>
             <div class="id">${session.title ? escapeHtml(session.title) : escapeHtml(session.id)}</div>
@@ -4924,16 +4933,21 @@
 
     async function loadAgents() {
       const dp = dirParam();
-      if (state.platform === 'openclaw') {
-        state.agents = await fetchJson('/api/agents' + dp);
-        if (!state.selectedAgent && state.agents.length) {
-          state.selectedAgent = state.agents[0];
+      try {
+        if (state.platform === 'openclaw') {
+          state.agents = await fetchJson('/api/agents' + dp);
+          if (!state.selectedAgent && state.agents.length) {
+            state.selectedAgent = state.agents[0];
+          }
+        } else {
+          state.agents = [];
+          state.selectedAgent = '';
         }
-      } else {
-        state.agents = [];
-        state.selectedAgent = '';
+      } finally {
+        // Always render the platform bar, even if the agents fetch fails
+        // (e.g. default OpenClaw dir missing) — otherwise no platform can be selected.
+        renderAgents();
       }
-      renderAgents();
     }
 
     async function loadSessions(preserveSelection) {
