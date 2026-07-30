@@ -2150,6 +2150,127 @@
     .prompt-optimize-btn:hover { border-color: #58a6ff; }
     .prompt-optimize-btn:disabled { opacity: 0.5; cursor: default; }
 
+    .prompt-star-btn {
+      position: absolute;
+      top: 6px;
+      right: 100px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #d29922;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .prompt-item:hover .prompt-star-btn { opacity: 1; }
+    .prompt-star-btn:hover { border-color: #d29922; }
+
+    /* --- Prompt Library --- */
+    .library-card-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+
+    .library-card-head .library-name {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #58a6ff;
+    }
+
+    .library-card-head .library-source {
+      color: #f78c6c;
+      background: rgba(247, 140, 108, 0.12);
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .library-card-head .library-date {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+
+    .library-card-head .library-installs {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+    }
+
+    .library-install-btn {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.72rem;
+      padding: 2px 10px;
+    }
+
+    .library-install-btn:hover { border-color: #58a6ff; color: var(--text); }
+
+    .library-install-btn.installed {
+      color: #3fb950;
+      background: rgba(63, 185, 80, 0.12);
+      border-color: rgba(63, 185, 80, 0.4);
+    }
+
+    .library-install-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .library-desc {
+      font-size: 0.82rem;
+      margin-bottom: 6px;
+    }
+
+    .library-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .library-tag {
+      color: #58a6ff;
+      background: rgba(31, 111, 235, 0.1);
+      border-radius: 10px;
+      padding: 1px 8px;
+      font-size: 0.7rem;
+    }
+
+    .library-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .settings-field textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 13px;
+      font-family: var(--mono);
+      box-sizing: border-box;
+      resize: vertical;
+      min-height: 140px;
+    }
+
+    .settings-field textarea:focus {
+      outline: none;
+      border-color: var(--user);
+    }
+
     .analysis-loading {
       color: var(--muted);
       padding: 20px;
@@ -2245,6 +2366,7 @@
           <button class="view-toggle-btn active" data-view="sessions">Sessions</button>
           <button class="view-toggle-btn" data-view="insights">Insights</button>
           <button class="view-toggle-btn" data-view="prompts">Prompts</button>
+          <button class="view-toggle-btn" data-view="library">Library</button>
         </div>
         <div id="mainContent">
         <div id="breadcrumb" class="breadcrumb" hidden></div>
@@ -2266,6 +2388,7 @@
         </div><!-- /mainContent -->
         <section id="insightsPanel" class="insights-panel" hidden></section>
         <section id="promptsPanel" class="insights-panel" hidden></section>
+        <section id="libraryPanel" class="insights-panel" hidden></section>
       </main>
     </div>
   </div>
@@ -2295,6 +2418,32 @@
       <div class="settings-actions">
         <button class="btn-reset" id="settingsReset">Reset to Defaults</button>
         <button class="btn-save" id="settingsSave">Save</button>
+      </div>
+    </div>
+  </div>
+  <div class="settings-overlay" id="libraryFormOverlay" hidden>
+    <div class="settings-panel">
+      <h2 id="libraryFormTitle">新建 Prompt</h2>
+      <div class="settings-field">
+        <label>Name（slash command 名，小写字母/数字/连字符）</label>
+        <input id="libraryFormName" type="text" placeholder="my-prompt">
+      </div>
+      <div class="settings-field">
+        <label>Description</label>
+        <input id="libraryFormDescription" type="text" placeholder="What this prompt does">
+      </div>
+      <div class="settings-field">
+        <label>Tags（逗号分隔）</label>
+        <input id="libraryFormTags" type="text" placeholder="refactor, review">
+      </div>
+      <div class="settings-field">
+        <label>Content</label>
+        <textarea id="libraryFormContent" rows="10" placeholder="Prompt content…"></textarea>
+      </div>
+      <div class="analysis-error" id="libraryFormError" hidden></div>
+      <div class="settings-actions">
+        <button class="btn-reset" id="libraryFormCancel">取消</button>
+        <button class="btn-save" id="libraryFormSave">保存</button>
       </div>
     </div>
   </div>
@@ -2739,12 +2888,15 @@
     const mainContent = document.getElementById('mainContent');
     const insightsPanel = document.getElementById('insightsPanel');
     const promptsPanel = document.getElementById('promptsPanel');
+    const libraryPanel = document.getElementById('libraryPanel');
     let currentView = 'sessions';
     let insightsData = null;
     let promptsData = null;
     let promptsSearch = '';
     let promptAnalysis = null;
     let promptAnalysisLoading = false;
+    let libraryData = null;
+    let librarySearch = '';
 
     viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2757,9 +2909,11 @@
         mainContent.hidden = view !== 'sessions';
         insightsPanel.hidden = view !== 'insights';
         promptsPanel.hidden = view !== 'prompts';
+        libraryPanel.hidden = view !== 'library';
 
         if (view === 'insights') loadInsights();
         else if (view === 'prompts') loadPrompts();
+        else if (view === 'library') loadLibrary();
       });
     });
 
@@ -3052,6 +3206,7 @@
         mainContent.hidden = false;
         insightsPanel.hidden = true;
         promptsPanel.hidden = true;
+        libraryPanel.hidden = true;
         if (msgs[msgIdx] && msgs[msgIdx].id) scrollToMessage(msgs[msgIdx].id);
       }
     }
@@ -3362,6 +3517,7 @@
                     ${p.text.length > 500 ? '<span class="show-more">Show more</span>' : ''}
                     <button class="prompt-optimize-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="用 Claude 改写这条 prompt">优化</button>
                     <button class="prompt-copy-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="Copy prompt">Copy</button>
+                    <button class="prompt-star-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="收藏到 Prompt Library">⭐ 收藏</button>
                   </div>
                 `).join('')}
               </div>
@@ -3518,6 +3674,17 @@
         });
       });
 
+      // Star to library — open create form prefilled with this prompt
+      promptsPanel.querySelectorAll('.prompt-star-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const g = groups[Number(btn.dataset.gi)];
+          const s = g && g.sessions[Number(btn.dataset.si)];
+          const p = s && s.prompts[Number(btn.dataset.pi)];
+          if (!p) return;
+          openLibraryForm({ name: suggestLibraryName(p.text), content: p.text, source: state.platform }, false);
+        });
+      });
+
       // Open session links — jump back to Sessions view
       promptsPanel.querySelectorAll('.session-open-link').forEach(link => {
         link.addEventListener('click', async (e) => {
@@ -3530,6 +3697,7 @@
           mainContent.hidden = false;
           insightsPanel.hidden = true;
           promptsPanel.hidden = true;
+          libraryPanel.hidden = true;
           sessionSearch.value = sid;
           filterSessions();
           renderSessions();
@@ -3542,6 +3710,240 @@
         });
       });
     }
+
+    // --- Prompt Library View ---
+    async function libraryRequest(url, method, body) {
+      const response = await fetch(url, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.error) || response.statusText);
+      return data;
+    }
+
+    async function loadLibrary() {
+      libraryPanel.innerHTML = '<div class="insights-loading">Loading library…</div>';
+      try {
+        libraryData = await fetchJson('/api/library');
+        renderLibrary();
+      } catch (error) {
+        libraryPanel.innerHTML = `<div class="insights-empty">Failed to load library: ${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    function libraryMatchesSearch(p, q) {
+      if (!q) return true;
+      if (p.name.toLowerCase().includes(q)) return true;
+      if ((p.description || '').toLowerCase().includes(q)) return true;
+      if ((p.tags || []).some(t => t.toLowerCase().includes(q))) return true;
+      return (p.content || '').toLowerCase().includes(q);
+    }
+
+    function libraryActionError(message) {
+      const err = document.createElement('div');
+      err.className = 'analysis-error';
+      err.textContent = message;
+      libraryPanel.prepend(err);
+      setTimeout(() => err.remove(), 5000);
+    }
+
+    function renderLibrary() {
+      const all = (libraryData && libraryData.prompts) || [];
+      const q = librarySearch.trim().toLowerCase();
+      const prompts = all.filter(p => libraryMatchesSearch(p, q));
+
+      const targetLabels = { claude: 'Claude', codex: 'Codex', omp: 'OMP' };
+      const cardsHtml = prompts.map((p, pi) => {
+        const installBtns = ['claude', 'codex', 'omp'].map(t => {
+          const installed = !!(p.installed && p.installed[t]);
+          return `<button class="library-install-btn${installed ? ' installed' : ''}" data-pi="${pi}" data-target="${t}" title="${installed ? '点击卸载' : '安装为 /' + escapeHtml(p.name)}">${targetLabels[t]}</button>`;
+        }).join('');
+        const tagsHtml = (p.tags || []).map(t => `<span class="library-tag">${escapeHtml(t)}</span>`).join('');
+        const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleString() : '—';
+        const content = p.content || '';
+        return `
+        <div class="insight-section library-card">
+          <div class="library-card-head">
+            <span class="library-name">/${escapeHtml(p.name)}</span>
+            <span class="library-source">${escapeHtml(p.source || 'manual')}</span>
+            <span class="library-date">${escapeHtml(dateStr)}</span>
+            <span class="library-installs">${installBtns}</span>
+          </div>
+          ${p.description ? `<div class="library-desc">${escapeHtml(p.description)}</div>` : ''}
+          ${tagsHtml ? `<div class="library-tags">${tagsHtml}</div>` : ''}
+          <div class="prompt-text${content.length > 500 ? ' clamped' : ''}">${renderMarkdown(content)}</div>
+          ${content.length > 500 ? '<span class="show-more">Show more</span>' : ''}
+          <div class="library-card-actions">
+            <button class="export-btn library-copy-btn" data-pi="${pi}">Copy</button>
+            <button class="export-btn library-edit-btn" data-pi="${pi}">编辑</button>
+            <button class="export-btn library-delete-btn" data-pi="${pi}">删除</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      libraryPanel.innerHTML = `
+        <div class="prompts-toolbar">
+          <input type="search" id="librarySearchInput" placeholder="Filter by name / tags / description / content" value="${escapeHtml(librarySearch)}">
+          <button class="export-btn" id="libraryNewBtn">新建 Prompt</button>
+        </div>
+        <div class="prompts-summary">${all.length} prompt${all.length === 1 ? '' : 's'} in library${q ? ` — showing ${prompts.length}` : ''}</div>
+        ${cardsHtml || `<div class="insights-empty">${all.length ? 'No matches.' : 'Library 为空。在 Prompts 视图点 ⭐ 收藏，或点击「新建 Prompt」。'}</div>`}
+      `;
+
+      // Search input (debounced re-render, keep focus)
+      const searchInput = document.getElementById('librarySearchInput');
+      let searchTimer = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          librarySearch = searchInput.value;
+          renderLibrary();
+          const el = document.getElementById('librarySearchInput');
+          el.focus();
+          el.setSelectionRange(el.value.length, el.value.length);
+        }, 250);
+      });
+
+      document.getElementById('libraryNewBtn').addEventListener('click', () => openLibraryForm(null, false));
+
+      // Show more toggles
+      libraryPanel.querySelectorAll('.show-more').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const textEl = btn.previousElementSibling;
+          const clamped = textEl.classList.toggle('clamped');
+          btn.textContent = clamped ? 'Show more' : 'Show less';
+        });
+      });
+
+      // Copy buttons
+      libraryPanel.querySelectorAll('.library-copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = prompts[Number(btn.dataset.pi)];
+          if (!p) return;
+          navigator.clipboard.writeText(p.content).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+          });
+        });
+      });
+
+      // Edit buttons
+      libraryPanel.querySelectorAll('.library-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = prompts[Number(btn.dataset.pi)];
+          if (p) openLibraryForm(p, true);
+        });
+      });
+
+      // Delete buttons
+      libraryPanel.querySelectorAll('.library-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const p = prompts[Number(btn.dataset.pi)];
+          if (!p || !confirm(`删除 "${p.name}"？已安装的 slash command 副本也会一并移除。`)) return;
+          try {
+            await libraryRequest('/api/library/' + encodeURIComponent(p.name), 'DELETE');
+            await loadLibrary();
+          } catch (error) {
+            libraryActionError('删除失败: ' + error.message);
+          }
+        });
+      });
+
+      // Install / uninstall toggles
+      libraryPanel.querySelectorAll('.library-install-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const p = prompts[Number(btn.dataset.pi)];
+          const target = btn.dataset.target;
+          if (!p || btn.disabled) return;
+          const action = p.installed && p.installed[target] ? 'uninstall' : 'install';
+          btn.disabled = true;
+          try {
+            await libraryRequest(`/api/library/${encodeURIComponent(p.name)}/${action}`, 'POST', { targets: [target] });
+            await loadLibrary();
+          } catch (error) {
+            btn.disabled = false;
+            libraryActionError((action === 'install' ? '安装失败: ' : '卸载失败: ') + error.message);
+          }
+        });
+      });
+    }
+
+    // --- Library create/edit form ---
+    const libraryFormOverlay = document.getElementById('libraryFormOverlay');
+    const libraryFormTitle = document.getElementById('libraryFormTitle');
+    const libraryFormName = document.getElementById('libraryFormName');
+    const libraryFormDescription = document.getElementById('libraryFormDescription');
+    const libraryFormTags = document.getElementById('libraryFormTags');
+    const libraryFormContent = document.getElementById('libraryFormContent');
+    const libraryFormError = document.getElementById('libraryFormError');
+    let libraryFormEditingName = null;
+    let libraryFormSource = 'manual';
+
+    function suggestLibraryName(text) {
+      let name = String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      name = name.split('-').slice(0, 6).join('-').slice(0, 64).replace(/-+$/, '');
+      return /^[a-z0-9][a-z0-9-]{0,63}$/.test(name) ? name : 'prompt-' + Date.now();
+    }
+
+    function openLibraryForm(prefill, isEdit) {
+      libraryFormEditingName = isEdit && prefill ? prefill.name : null;
+      libraryFormSource = (prefill && prefill.source) || 'manual';
+      libraryFormTitle.textContent = isEdit ? '编辑 Prompt' : '新建 Prompt';
+      libraryFormName.value = (prefill && prefill.name) || '';
+      libraryFormDescription.value = (prefill && prefill.description) || '';
+      libraryFormTags.value = ((prefill && prefill.tags) || []).join(', ');
+      libraryFormContent.value = (prefill && prefill.content) || '';
+      libraryFormError.hidden = true;
+      libraryFormError.textContent = '';
+      libraryFormOverlay.hidden = false;
+      libraryFormName.focus();
+    }
+
+    function closeLibraryForm() {
+      libraryFormOverlay.hidden = true;
+    }
+
+    function showLibraryFormError(message) {
+      libraryFormError.textContent = message;
+      libraryFormError.hidden = false;
+    }
+
+    libraryFormOverlay.addEventListener('click', (e) => {
+      if (e.target === libraryFormOverlay) closeLibraryForm();
+    });
+
+    document.getElementById('libraryFormCancel').addEventListener('click', closeLibraryForm);
+
+    document.getElementById('libraryFormSave').addEventListener('click', async () => {
+      const name = libraryFormName.value.trim();
+      const description = libraryFormDescription.value.trim();
+      const tags = libraryFormTags.value.split(',').map(t => t.trim()).filter(Boolean);
+      const content = libraryFormContent.value;
+      if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) {
+        showLibraryFormError('名称无效：需以小写字母或数字开头，只含小写字母、数字、连字符，最长 64 字符');
+        return;
+      }
+      if (!content.trim()) {
+        showLibraryFormError('内容不能为空');
+        return;
+      }
+      try {
+        if (libraryFormEditingName) {
+          const body = { description, tags, content };
+          if (name !== libraryFormEditingName) body.newName = name;
+          await libraryRequest('/api/library/' + encodeURIComponent(libraryFormEditingName), 'PUT', body);
+        } else {
+          await libraryRequest('/api/library', 'POST', { name, description, tags, content, source: libraryFormSource });
+        }
+        closeLibraryForm();
+        libraryData = null;
+        if (currentView === 'library') await loadLibrary();
+      } catch (error) {
+        showLibraryFormError(error.message);
+      }
+    });
 
     function filterSessions() {
       const term = sessionSearch.value.trim().toLowerCase();

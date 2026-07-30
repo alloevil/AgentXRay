@@ -3398,6 +3398,293 @@ app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
   }
 });
 
+// --- Prompt Library: curated prompts stored as markdown files with frontmatter ---
+// Storage: LIBRARY_DIR/<name>.md — frontmatter between `---` lines with keys
+// description, tags (comma-separated), source, createdAt; body = prompt content.
+// Install targets copy the prompt as a native slash command file.
+
+const LIBRARY_DIR = process.env.AGENTXRAY_LIBRARY_DIR || path.join(HOME, '.agentxray', 'library');
+const LIBRARY_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const INSTALL_TARGETS = {
+  claude: path.join(HOME, '.claude', 'commands'),
+  codex: path.join(HOME, '.codex', 'prompts'),
+  omp: path.join(HOME, '.omp', 'agent', 'commands'),
+};
+
+function sanitizeLibraryName(name) {
+  return typeof name === 'string' && LIBRARY_NAME_RE.test(name) ? name : null;
+}
+
+function libraryFilePath(name) {
+  return path.join(LIBRARY_DIR, `${name}.md`);
+}
+
+function installedFilePath(target, name) {
+  return path.join(INSTALL_TARGETS[target], `${name}.md`);
+}
+
+function normalizeLibraryTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .map((tag) => String(tag).trim())
+    .filter(Boolean);
+}
+
+// Parse the `---` frontmatter block. Files without frontmatter are tolerated:
+// the whole file becomes the content.
+function parseLibraryFile(raw) {
+  const meta = { description: '', tags: [], source: 'manual', createdAt: null };
+  if (!raw.startsWith('---\n')) return { meta, content: raw };
+  const close = raw.indexOf('\n---', 4);
+  if (close === -1) return { meta, content: raw };
+  const header = raw.slice(4, close);
+  const afterClose = raw.indexOf('\n', close + 1);
+  const content = (afterClose === -1 ? '' : raw.slice(afterClose + 1)).replace(/^\n+/, '');
+  for (const line of header.split('\n')) {
+    const sep = line.indexOf(':');
+    if (sep === -1) continue;
+    const key = line.slice(0, sep).trim();
+    const value = line.slice(sep + 1).trim();
+    if (key === 'description') meta.description = value;
+    else if (key === 'source') meta.source = value || 'manual';
+    else if (key === 'createdAt') meta.createdAt = value || null;
+    else if (key === 'tags') meta.tags = value.split(',').map((tag) => tag.trim()).filter(Boolean);
+  }
+  return { meta, content };
+}
+
+function serializeLibraryFile(meta, content) {
+  const lines = [
+    '---',
+    `description: ${meta.description || ''}`,
+    `tags: ${(meta.tags || []).join(', ')}`,
+    `source: ${meta.source || 'manual'}`,
+    `createdAt: ${meta.createdAt || ''}`,
+    '---',
+    '',
+  ];
+  return `${lines.join('\n')}${content.replace(/\n*$/, '\n')}`;
+}
+
+// Installed slash-command file: frontmatter with description only + prompt body
+function serializeInstalledFile(description, content) {
+  return `---\ndescription: ${description || ''}\n---\n\n${content.replace(/\n*$/, '\n')}`;
+}
+
+// Installed detection: file exists at the target path
+async function detectInstalled(name) {
+  const installed = {};
+  await Promise.all(Object.keys(INSTALL_TARGETS).map(async (target) => {
+    installed[target] = await fsp.access(installedFilePath(target, name)).then(() => true, () => false);
+  }));
+  return installed;
+}
+
+async function readLibraryPrompt(name) {
+  const raw = await fsp.readFile(libraryFilePath(name), 'utf8');
+  const { meta, content } = parseLibraryFile(raw);
+  return {
+    name,
+    description: meta.description,
+    tags: meta.tags,
+    source: meta.source,
+    createdAt: meta.createdAt,
+    content,
+    installed: await detectInstalled(name),
+  };
+}
+
+// Write the prompt copy into the given install targets (mkdir -p on demand)
+async function installLibraryPrompt(prompt, targets) {
+  for (const target of targets) {
+    await fsp.mkdir(INSTALL_TARGETS[target], { recursive: true });
+    await fsp.writeFile(installedFilePath(target, prompt.name), serializeInstalledFile(prompt.description, prompt.content), 'utf8');
+  }
+}
+
+// Remove installed copies from the given targets, ignoring missing files
+async function uninstallLibraryPrompt(name, targets) {
+  for (const target of targets) {
+    await fsp.unlink(installedFilePath(target, name)).catch((error) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+}
+
+function parseInstallTargets(body) {
+  const targets = body && Array.isArray(body.targets) ? body.targets : null;
+  if (!targets || targets.length === 0) return null;
+  if (!targets.every((target) => Object.prototype.hasOwnProperty.call(INSTALL_TARGETS, target))) return null;
+  return [...new Set(targets)];
+}
+
+app.get('/api/library', async (req, res) => {
+  try {
+    let entries;
+    try {
+      entries = await fsp.readdir(LIBRARY_DIR);
+    } catch (error) {
+      if (error.code === 'ENOENT') return res.json({ prompts: [] });
+      throw error;
+    }
+    const names = entries
+      .filter((entry) => entry.endsWith('.md'))
+      .map((entry) => entry.slice(0, -3))
+      .filter((name) => LIBRARY_NAME_RE.test(name));
+    const prompts = await Promise.all(names.map((name) => readLibraryPrompt(name)));
+    prompts.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    res.json({ prompts });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/library', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const name = sanitizeLibraryName(body.name);
+    if (!name) {
+      return res.status(400).json({ error: 'Invalid name: must match /^[a-z0-9][a-z0-9-]{0,63}$/' });
+    }
+    const content = typeof body.content === 'string' ? body.content : '';
+    if (!content.trim()) {
+      return res.status(400).json({ error: 'content is required' });
+    }
+    const meta = {
+      description: typeof body.description === 'string' ? body.description : '',
+      tags: normalizeLibraryTags(body.tags),
+      source: typeof body.source === 'string' && body.source ? body.source : 'manual',
+      createdAt: new Date().toISOString(),
+    };
+    await fsp.mkdir(LIBRARY_DIR, { recursive: true });
+    try {
+      await fsp.writeFile(libraryFilePath(name), serializeLibraryFile(meta, content), { encoding: 'utf8', flag: 'wx' });
+    } catch (error) {
+      if (error.code === 'EEXIST') return res.status(409).json({ error: `Prompt "${name}" already exists` });
+      throw error;
+    }
+    res.status(201).json({ prompt: await readLibraryPrompt(name) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/library/:name', async (req, res) => {
+  const name = sanitizeLibraryName(req.params.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+
+  try {
+    const body = req.body || {};
+    let raw;
+    try {
+      raw = await fsp.readFile(libraryFilePath(name), 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return res.status(404).json({ error: 'Prompt not found' });
+      throw error;
+    }
+    const { meta, content } = parseLibraryFile(raw);
+
+    let newName = name;
+    if (body.newName !== undefined && body.newName !== name) {
+      newName = sanitizeLibraryName(body.newName);
+      if (!newName) {
+        return res.status(400).json({ error: 'Invalid newName: must match /^[a-z0-9][a-z0-9-]{0,63}$/' });
+      }
+      const exists = await fsp.access(libraryFilePath(newName)).then(() => true, () => false);
+      if (exists) return res.status(409).json({ error: `Prompt "${newName}" already exists` });
+    }
+
+    if (body.description !== undefined) meta.description = typeof body.description === 'string' ? body.description : '';
+    if (body.tags !== undefined) meta.tags = normalizeLibraryTags(body.tags);
+    const nextContent = body.content !== undefined ? String(body.content) : content;
+    if (!nextContent.trim()) {
+      return res.status(400).json({ error: 'content must not be empty' });
+    }
+
+    await fsp.writeFile(libraryFilePath(newName), serializeLibraryFile(meta, nextContent), 'utf8');
+    if (newName !== name) {
+      await fsp.unlink(libraryFilePath(name)).catch(() => {});
+    }
+
+    // Refresh installed copies; a rename also renames them
+    for (const target of Object.keys(INSTALL_TARGETS)) {
+      const wasInstalled = await fsp.access(installedFilePath(target, name)).then(() => true, () => false);
+      if (!wasInstalled) continue;
+      if (newName !== name) await uninstallLibraryPrompt(name, [target]);
+      await installLibraryPrompt({ name: newName, description: meta.description, content: nextContent }, [target]);
+    }
+
+    res.json({ prompt: await readLibraryPrompt(newName) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/library/:name', async (req, res) => {
+  const name = sanitizeLibraryName(req.params.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+
+  try {
+    try {
+      await fsp.unlink(libraryFilePath(name));
+    } catch (error) {
+      if (error.code === 'ENOENT') return res.status(404).json({ error: 'Prompt not found' });
+      throw error;
+    }
+    await uninstallLibraryPrompt(name, Object.keys(INSTALL_TARGETS));
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/library/:name/install', async (req, res) => {
+  const name = sanitizeLibraryName(req.params.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+
+  try {
+    const targets = parseInstallTargets(req.body);
+    if (!targets) {
+      return res.status(400).json({ error: 'targets must be a non-empty array of "claude" | "codex" | "omp"' });
+    }
+    let prompt;
+    try {
+      prompt = await readLibraryPrompt(name);
+    } catch (error) {
+      if (error.code === 'ENOENT') return res.status(404).json({ error: 'Prompt not found' });
+      throw error;
+    }
+    await installLibraryPrompt(prompt, targets);
+    res.json({ installed: await detectInstalled(name) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/library/:name/uninstall', async (req, res) => {
+  const name = sanitizeLibraryName(req.params.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+
+  try {
+    const targets = parseInstallTargets(req.body);
+    if (!targets) {
+      return res.status(400).json({ error: 'targets must be a non-empty array of "claude" | "codex" | "omp"' });
+    }
+    await uninstallLibraryPrompt(name, targets);
+    res.json({ installed: await detectInstalled(name) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========= Real-time SSE tail endpoint =========
 // GET /api/watch?platform=openclaw&agent=NAME&sessionId=ID[&dir=PATH]
 // GET /api/watch?platform=codex&sessionId=ID[&dir=PATH]
