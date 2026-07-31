@@ -2393,7 +2393,7 @@
           <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
         </div>
         <div id="agentNav" class="agent-nav" hidden></div>
-        <input id="sessionSearch" class="control" type="search" placeholder="输入过滤列表 · 回车全文搜索会话内容" title="直接输入：按 ID/文件名/首条消息过滤左侧列表；按回车：全文搜索当前平台所有会话内容">
+        <input id="sessionSearch" class="control" type="search" placeholder="输入过滤列表 · 回车全文搜索（空格分隔多关键词，全部命中才返回）" title="直接输入：按 ID/文件名/首条消息过滤左侧列表；按回车：全文搜索当前平台所有会话内容 — 空格分隔多关键词，全部命中才返回">
         <div class="toggle-row">
           <label class="toggle" id="archivedToggle" title="显示已归档（.reset/.deleted）的会话"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
           <label class="toggle" title="自动轮询新会话与新消息"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
@@ -2463,6 +2463,15 @@
       <div class="settings-field">
         <label>OMP Directory</label>
         <input id="settingOmp" type="text" placeholder="~/.omp/agent/sessions">
+      </div>
+      <div class="settings-field">
+        <label>会话备份（codex / claude-code / omp 增量归档）</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="export-btn" id="backupNowBtn">立即备份</button>
+          <span id="backupResultLine" style="font-size:0.82rem;color:var(--muted)"></span>
+        </div>
+        <div id="backupStatusLine" style="font-size:0.82rem;color:var(--muted);margin-top:6px"></div>
+        <div class="analysis-error" id="backupError" hidden></div>
       </div>
       <div class="settings-actions">
         <button class="btn-reset" id="settingsReset">Reset to Defaults</button>
@@ -2534,6 +2543,7 @@
 
     // --- Settings ---
     const SETTINGS_KEY = 'agent-xray-settings';
+    let hasStoredPlatform = false;
     const settingsBtn = document.getElementById('settingsBtn');
     const settingsOverlay = document.getElementById('settingsOverlay');
     const settingOpenclaw = document.getElementById('settingOpenclaw');
@@ -2554,12 +2564,16 @@
           state.settings.claudeCodeDir = parsed.claudeCodeDir || '';
           state.settings.hermesDir = parsed.hermesDir || '';
           state.settings.ompDir = parsed.ompDir || '';
+          if (['openclaw', 'codex', 'claude-code', 'hermes', 'omp'].includes(parsed.platform)) {
+            state.platform = parsed.platform;
+            hasStoredPlatform = true;
+          }
         }
       } catch {}
     }
 
     function saveSettings() {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...state.settings, platform: state.platform }));
     }
 
     function dirParam() {
@@ -2579,6 +2593,7 @@
       settingHermes.value = state.settings.hermesDir;
       settingOmp.value = state.settings.ompDir;
       settingsOverlay.hidden = false;
+      loadBackupStatus();
     }
 
     function closeSettings() {
@@ -2613,6 +2628,51 @@
       settingClaudeCode.value = '';
       settingHermes.value = '';
       settingOmp.value = '';
+    });
+
+    // --- Backup ---
+    const backupNowBtn = document.getElementById('backupNowBtn');
+    const backupResultLine = document.getElementById('backupResultLine');
+    const backupStatusLine = document.getElementById('backupStatusLine');
+    const backupError = document.getElementById('backupError');
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let n = bytes;
+      let i = 0;
+      while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+      return `${n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)} ${units[i]}`;
+    }
+
+    async function loadBackupStatus() {
+      try {
+        const status = await fetchJson('/api/backup/status');
+        backupStatusLine.textContent = `归档目录 ${status.archiveDir} · 文件数 ${status.files} · 占用 ${formatBytes(status.bytes)} · 上次备份 ${status.lastBackup ? formatDate(status.lastBackup) : '从未'}`;
+        backupError.hidden = true;
+      } catch (error) {
+        backupStatusLine.textContent = '';
+        backupError.textContent = '备份状态获取失败: ' + error.message;
+        backupError.hidden = false;
+      }
+    }
+
+    backupNowBtn.addEventListener('click', async () => {
+      backupNowBtn.disabled = true;
+      backupNowBtn.textContent = '备份中…';
+      backupResultLine.textContent = '';
+      try {
+        const result = await libraryRequest('/api/backup', 'POST');
+        backupResultLine.textContent = `完成：新增 ${result.copied}，跳过 ${result.skipped}`;
+        backupError.hidden = true;
+        await loadBackupStatus();
+      } catch (error) {
+        backupError.textContent = '备份失败: ' + error.message;
+        backupError.hidden = false;
+      } finally {
+        backupNowBtn.disabled = false;
+        backupNowBtn.textContent = '立即备份';
+      }
     });
 
     loadSettings();
@@ -2890,6 +2950,7 @@
           const platform = tab.getAttribute('data-platform');
           if (platform === state.platform) return;
           state.platform = platform;
+          saveSettings();
           state.selectedAgent = '';
           state.selectedSessionId = '';
           state.sessions = [];
@@ -4443,12 +4504,15 @@
               ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump — total agent work time for this turn (user msg → last agent response)" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest turn: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
             </div>
           </div>
-          <div class="export-dropdown" id="exportDropdown">
-            <button class="export-btn" id="exportBtn">📥 Export</button>
-            <div class="export-menu" id="exportMenu">
-              <button data-export="markdown">📝 Markdown (.md)</button>
-              <button data-export="json">📦 JSON (.json)</button>
-              <button data-export="clipboard">📋 Copy to clipboard</button>
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            ${['codex', 'claude-code', 'omp'].includes(state.platform) ? '<button class="export-btn" id="resumeCmdBtn" title="复制在终端恢复此会话的命令">📋 复制恢复命令</button>' : ''}
+            <div class="export-dropdown" id="exportDropdown">
+              <button class="export-btn" id="exportBtn">📥 Export</button>
+              <div class="export-menu" id="exportMenu">
+                <button data-export="markdown">📝 Markdown (.md)</button>
+                <button data-export="json">📦 JSON (.json)</button>
+                <button data-export="clipboard">📋 Copy to clipboard</button>
+              </div>
             </div>
           </div>
         </div>
@@ -4559,6 +4623,27 @@
             else if (fmt === 'json') exportAsJson();
             else if (fmt === 'clipboard') exportToClipboard();
           });
+        });
+      }
+
+      // Resume command copy
+      const resumeCmdBtn = document.getElementById('resumeCmdBtn');
+      if (resumeCmdBtn) {
+        resumeCmdBtn.addEventListener('click', async () => {
+          const id = state.selectedSessionId;
+          let cmd = '';
+          if (state.platform === 'codex') cmd = `codex resume ${id}`;
+          else if (state.platform === 'claude-code') cmd = `claude --resume ${id}`;
+          else if (state.platform === 'omp') cmd = `omp --resume=${id}`;
+          const cwd = state.sessionData.session?.cwd;
+          if (cwd) cmd = `cd ${cwd} && ${cmd}`;
+          try {
+            await navigator.clipboard.writeText(cmd);
+            resumeCmdBtn.textContent = '已复制';
+            setTimeout(() => { resumeCmdBtn.textContent = '📋 复制恢复命令'; }, 1500);
+          } catch (error) {
+            showError('复制失败: ' + error.message);
+          }
         });
       }
 
@@ -5757,7 +5842,37 @@
       await loadSession();
     });
 
-    refreshAll(false).then(restartRefreshLoop);
+    async function initialLoad() {
+      await refreshAll(false);
+      // First run without a stored platform: switch to the first platform that has sessions
+      if (!hasStoredPlatform && state.platform === 'openclaw' && state.agents.length === 0) {
+        const candidates = [
+          ['omp', '/api/omp/sessions', state.settings.ompDir],
+          ['claude-code', '/api/claude-code/sessions', state.settings.claudeCodeDir],
+          ['codex', '/api/codex/sessions', state.settings.codexDir],
+          ['hermes', '/api/hermes/sessions', state.settings.hermesDir]
+        ];
+        for (const [platform, endpoint, dir] of candidates) {
+          let sessions = [];
+          try {
+            sessions = await fetchJson(endpoint + (dir ? '?dir=' + encodeURIComponent(dir) : ''));
+          } catch { continue; }
+          if (Array.isArray(sessions) && sessions.length) {
+            state.platform = platform;
+            state.selectedAgent = '';
+            state.selectedSessionId = '';
+            state.sessions = [];
+            state.filteredSessions = [];
+            state.sessionData = null;
+            renderAgents();
+            await refreshAll(false);
+            break;
+          }
+        }
+      }
+      restartRefreshLoop();
+    }
+    initialLoad();
 
     // ========== Spawn Tree (per-session) ==========
     async function loadSpawnTree(sessionId) {

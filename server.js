@@ -1366,95 +1366,114 @@ app.get('/api/search', async (req, res) => {
     const agent = req.query.agent || '';
     const maxResults = Math.min(parseInt(req.query.limit) || 50, 100);
     if (!q) return res.json([]);
+    // Multi-keyword AND search: whitespace-separated keywords must all appear
+    // somewhere in a session's text records; snippets come from the first keyword.
+    const keywords = q.split(/\s+/).filter(Boolean);
 
     // Per-platform dir overrides: `dir` applies to the selected platform;
     // in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirHermes/dirOmp.
     const all = platform === 'all';
     const dirFor = (key, fallback) => resolveDir(all ? req.query[key] : req.query.dir, fallback);
 
-    const sessionFiles = [];
-
-    if (platform === 'openclaw' || all) {
-      const dir = dirFor('dirOpenclaw', DATA_DIR);
-      const agents = agent && !all ? [agent] : await readAgents(dir).catch(() => []);
-      for (const a of agents) {
-        const agentDir = path.join(dir, a, 'sessions');
-        try {
-          const entries = await fsp.readdir(agentDir);
-          for (const f of entries) {
-            if (f.endsWith('.jsonl') && !isArchivedFile(f)) {
-              sessionFiles.push({ path: path.join(agentDir, f), file: f, agent: a, platform: 'openclaw' });
-            }
-          }
-        } catch { /* no sessions */ }
-      }
-    }
-    if (platform === 'codex' || all) {
-      const dir = dirFor('dirCodex', CODEX_DIR);
-      try {
-        // Codex sessions live at <dir>/YYYY/MM/DD/rollout-*.jsonl
-        const entries = await fsp.readdir(dir, { recursive: true });
-        for (const rel of entries) {
-          if (typeof rel === 'string' && rel.endsWith('.jsonl')) {
-            const file = path.basename(rel);
-            // Session list ids are the trailing UUID, not the full rollout-* stem
-            const uuid = file.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
-            sessionFiles.push({ path: path.join(dir, rel), file, sessionId: uuid ? uuid[1] : codexSessionIdFromFile(file), platform: 'codex' });
-          }
-        }
-      } catch {}
-    }
-    if (platform === 'claude-code' || all) {
-      const dir = dirFor('dirClaude', CLAUDE_CODE_DIR);
-      try {
-        // Claude Code sessions live at <dir>/<project-slug>/*.jsonl
-        const slugs = await fsp.readdir(dir, { withFileTypes: true });
-        for (const s of slugs) {
-          if (!s.isDirectory()) continue;
-          const slugDir = path.join(dir, s.name);
-          const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
-          for (const f of entries) {
-            if (f.isFile() && f.name.endsWith('.jsonl')) {
-              sessionFiles.push({ path: path.join(slugDir, f.name), file: f.name, platform: 'claude-code' });
-            }
-          }
-        }
-      } catch {}
-    }
-    if (platform === 'omp' || all) {
-      const dir = dirFor('dirOmp', OMP_DIR);
-      try {
-        const slugs = await fsp.readdir(dir, { withFileTypes: true });
-        for (const s of slugs) {
-          if (!s.isDirectory()) continue;
-          const slugDir = path.join(dir, s.name);
-          const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
-          for (const f of entries) {
-            if (f.isFile() && f.name.endsWith('.jsonl')) {
-              sessionFiles.push({ path: path.join(slugDir, f.name), file: f.name, sessionId: ompSessionIdFromFile(f.name), platform: 'omp' });
-            }
-          }
-        }
-      } catch {}
-    }
     if (platform === 'hermes' && !all) {
       const dir = resolveDir(req.query.dir, HERMES_DIR);
       return res.json(searchHermesSessions(dir, q, maxResults));
     }
+
+    // Collect candidate files per platform in parallel, then merge in a
+    // stable order: openclaw, codex, claude-code, omp.
+    const openclawFiles = [];
+    const codexFiles = [];
+    const claudeFiles = [];
+    const ompFiles = [];
+
+    await Promise.all([
+      (async () => {
+        if (platform !== 'openclaw' && !all) return;
+        const dir = dirFor('dirOpenclaw', DATA_DIR);
+        const agents = agent && !all ? [agent] : await readAgents(dir).catch(() => []);
+        for (const a of agents) {
+          const agentDir = path.join(dir, a, 'sessions');
+          try {
+            const entries = await fsp.readdir(agentDir);
+            for (const f of entries) {
+              if (f.endsWith('.jsonl') && !isArchivedFile(f)) {
+                openclawFiles.push({ path: path.join(agentDir, f), file: f, agent: a, platform: 'openclaw' });
+              }
+            }
+          } catch { /* no sessions */ }
+        }
+      })(),
+      (async () => {
+        if (platform !== 'codex' && !all) return;
+        const dir = dirFor('dirCodex', CODEX_DIR);
+        try {
+          // Codex sessions live at <dir>/YYYY/MM/DD/rollout-*.jsonl
+          const entries = await fsp.readdir(dir, { recursive: true });
+          for (const rel of entries) {
+            if (typeof rel === 'string' && rel.endsWith('.jsonl')) {
+              const file = path.basename(rel);
+              // Session list ids are the trailing UUID, not the full rollout-* stem
+              const uuid = file.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
+              codexFiles.push({ path: path.join(dir, rel), file, sessionId: uuid ? uuid[1] : codexSessionIdFromFile(file), platform: 'codex' });
+            }
+          }
+        } catch {}
+      })(),
+      (async () => {
+        if (platform !== 'claude-code' && !all) return;
+        const dir = dirFor('dirClaude', CLAUDE_CODE_DIR);
+        try {
+          // Claude Code sessions live at <dir>/<project-slug>/*.jsonl
+          const slugs = await fsp.readdir(dir, { withFileTypes: true });
+          for (const s of slugs) {
+            if (!s.isDirectory()) continue;
+            const slugDir = path.join(dir, s.name);
+            const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+            for (const f of entries) {
+              if (f.isFile() && f.name.endsWith('.jsonl')) {
+                claudeFiles.push({ path: path.join(slugDir, f.name), file: f.name, platform: 'claude-code' });
+              }
+            }
+          }
+        } catch {}
+      })(),
+      (async () => {
+        if (platform !== 'omp' && !all) return;
+        const dir = dirFor('dirOmp', OMP_DIR);
+        try {
+          const slugs = await fsp.readdir(dir, { withFileTypes: true });
+          for (const s of slugs) {
+            if (!s.isDirectory()) continue;
+            const slugDir = path.join(dir, s.name);
+            const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+            for (const f of entries) {
+              if (f.isFile() && f.name.endsWith('.jsonl')) {
+                ompFiles.push({ path: path.join(slugDir, f.name), file: f.name, sessionId: ompSessionIdFromFile(f.name), platform: 'omp' });
+              }
+            }
+          }
+        } catch {}
+      })(),
+    ]);
+
+    const sessionFiles = [...openclawFiles, ...codexFiles, ...claudeFiles, ...ompFiles];
 
     const results = [];
 
     for (const sf of sessionFiles) {
       if (results.length >= maxResults) break;
       const matches = [];
+      const seen = new Set(); // keywords found so far in this session
       const stream = fs.createReadStream(sf.path, { encoding: 'utf8' });
       const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
       let sessionId = sf.sessionId || sf.file.split('.jsonl')[0];
 
       try {
         for await (const line of rl) {
-          if (matches.length >= 3) break; // max 3 matches per session
-          if (!line.includes(q) && !line.toLowerCase().includes(q)) continue;
+          if (matches.length >= 3 && seen.size === keywords.length) break; // max 3 matches per session
+          const lower = line.toLowerCase();
+          if (!keywords.some(kw => lower.includes(kw))) continue;
           let rec;
           try { rec = JSON.parse(line); } catch { continue; }
 
@@ -1474,11 +1493,15 @@ app.get('/api/search', async (req, res) => {
             .map(c => c.text || '')
             .join(' ');
 
-          if (text.toLowerCase().includes(q)) {
-            // Extract snippet around match
-            const idx = text.toLowerCase().indexOf(q);
+          const textLower = text.toLowerCase();
+          for (const kw of keywords) {
+            if (textLower.includes(kw)) seen.add(kw);
+          }
+          if (matches.length < 3 && textLower.includes(keywords[0])) {
+            // Extract snippet around the first keyword's match
+            const idx = textLower.indexOf(keywords[0]);
             const start = Math.max(0, idx - 40);
-            const end = Math.min(text.length, idx + q.length + 60);
+            const end = Math.min(text.length, idx + keywords[0].length + 60);
             const snippet = (start > 0 ? '\u2026' : '') + text.slice(start, end) + (end < text.length ? '\u2026' : '');
             matches.push({ role, snippet, timestamp: rec.timestamp || null });
           }
@@ -1488,7 +1511,7 @@ app.get('/api/search', async (req, res) => {
         stream.destroy();
       }
 
-      if (matches.length > 0) {
+      if (matches.length > 0 && seen.size === keywords.length) {
         results.push({ sessionId, file: sf.file, platform: sf.platform, ...(sf.agent ? { agent: sf.agent } : {}), matches });
       }
     }
@@ -1505,14 +1528,16 @@ app.get('/api/search', async (req, res) => {
         const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
         try {
           for await (const line of rl) {
-            if (!line.toLowerCase().includes(q)) continue;
+            const lower = line.toLowerCase();
+            if (!keywords.every(kw => lower.includes(kw))) continue;
             let rec;
             try { rec = JSON.parse(line); } catch { continue; }
             const text = typeof rec.display === 'string' ? rec.display : '';
-            const idx = text.toLowerCase().indexOf(q);
-            if (idx === -1) continue;
+            const textLower = text.toLowerCase();
+            if (!keywords.every(kw => textLower.includes(kw))) continue;
+            const idx = textLower.indexOf(keywords[0]);
             const start = Math.max(0, idx - 40);
-            const end = Math.min(text.length, idx + q.length + 60);
+            const end = Math.min(text.length, idx + keywords[0].length + 60);
             const snippet = (start > 0 ? '\u2026' : '') + text.slice(start, end) + (end < text.length ? '\u2026' : '');
             const project = rec.project || '?';
             if (liveSnippets.has(snippet)) continue; // prompt belongs to a still-live session
@@ -3753,6 +3778,130 @@ app.post('/api/library/:name/uninstall', async (req, res) => {
     }
     await uninstallLibraryPrompt(name, targets);
     res.json({ installed: await detectInstalled(name) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Backup ---
+// Incremental session backup: copies platform session logs into
+// ARCHIVE_DIR/<platform>/<relative-path-from-platform-root>. A file is skipped
+// when its archived copy already exists with the same size and an mtime no
+// older than the source. Hermes is excluded (live SQLite db); openclaw too.
+
+const ARCHIVE_DIR = process.env.AGENTXRAY_ARCHIVE_DIR || path.join(HOME, '.agentxray', 'archive');
+
+// Copy src → dest unless the archived copy is already current; count the outcome
+async function backupCopy(srcPath, destPath, counter) {
+  let srcStat;
+  try { srcStat = await fsp.stat(srcPath); } catch { return; }
+  try {
+    const destStat = await fsp.stat(destPath);
+    if (destStat.size === srcStat.size && destStat.mtimeMs >= srcStat.mtimeMs) {
+      counter.skipped++;
+      return;
+    }
+  } catch { /* not archived yet */ }
+  await fsp.mkdir(path.dirname(destPath), { recursive: true });
+  await fsp.copyFile(srcPath, destPath);
+  counter.copied++;
+}
+
+// Codex sessions live at <root>/YYYY/MM/DD/rollout-*.jsonl
+async function backupCodex(counter) {
+  const root = CODEX_DIR;
+  const destRoot = path.join(ARCHIVE_DIR, 'codex');
+  try {
+    const entries = await fsp.readdir(root, { recursive: true });
+    for (const rel of entries) {
+      if (typeof rel === 'string' && rel.endsWith('.jsonl')) {
+        await backupCopy(path.join(root, rel), path.join(destRoot, rel), counter);
+      }
+    }
+  } catch { /* no codex dir */ }
+}
+
+// Claude Code sessions live at <root>/<project-slug>/*.jsonl; the prompt
+// history sits beside the projects dir (~/.claude/history.jsonl)
+async function backupClaudeCode(counter) {
+  const root = CLAUDE_CODE_DIR;
+  const destRoot = path.join(ARCHIVE_DIR, 'claude-code');
+  try {
+    const slugs = await fsp.readdir(root, { withFileTypes: true });
+    for (const s of slugs) {
+      if (!s.isDirectory()) continue;
+      const slugDir = path.join(root, s.name);
+      const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+      for (const f of entries) {
+        if (f.isFile() && f.name.endsWith('.jsonl')) {
+          await backupCopy(path.join(slugDir, f.name), path.join(destRoot, s.name, f.name), counter);
+        }
+      }
+    }
+  } catch { /* no claude dir */ }
+  await backupCopy(path.join(path.dirname(root), 'history.jsonl'), path.join(destRoot, 'history.jsonl'), counter);
+}
+
+// OMP sessions live at <root>/<slug>/*.jsonl
+async function backupOmp(counter) {
+  const root = OMP_DIR;
+  const destRoot = path.join(ARCHIVE_DIR, 'omp');
+  try {
+    const slugs = await fsp.readdir(root, { withFileTypes: true });
+    for (const s of slugs) {
+      if (!s.isDirectory()) continue;
+      const slugDir = path.join(root, s.name);
+      const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+      for (const f of entries) {
+        if (f.isFile() && f.name.endsWith('.jsonl')) {
+          await backupCopy(path.join(slugDir, f.name), path.join(destRoot, s.name, f.name), counter);
+        }
+      }
+    }
+  } catch { /* no omp dir */ }
+}
+
+app.post('/api/backup', async (req, res) => {
+  try {
+    const byPlatform = {
+      codex: { copied: 0, skipped: 0 },
+      'claude-code': { copied: 0, skipped: 0 },
+      omp: { copied: 0, skipped: 0 },
+    };
+    await Promise.all([
+      backupCodex(byPlatform.codex),
+      backupClaudeCode(byPlatform['claude-code']),
+      backupOmp(byPlatform.omp),
+    ]);
+    let copied = 0;
+    let skipped = 0;
+    for (const c of Object.values(byPlatform)) {
+      copied += c.copied;
+      skipped += c.skipped;
+    }
+    res.json({ copied, skipped, total: copied + skipped, byPlatform, archiveDir: ARCHIVE_DIR });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/backup/status', async (req, res) => {
+  try {
+    let files = 0;
+    let bytes = 0;
+    let newest = 0;
+    try {
+      const entries = await fsp.readdir(ARCHIVE_DIR, { recursive: true });
+      for (const rel of entries) {
+        if (typeof rel !== 'string') continue;
+        const st = await fsp.stat(path.join(ARCHIVE_DIR, rel)).catch(() => null);
+        if (!st || !st.isFile()) continue;
+        files++;
+        bytes += st.size;
+        if (st.mtimeMs > newest) newest = st.mtimeMs;
+      }
+    } catch { /* no archive yet */ }
+    res.json({ archiveDir: ARCHIVE_DIR, files, bytes, lastBackup: newest ? new Date(newest).toISOString() : null });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
