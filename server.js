@@ -1381,11 +1381,15 @@ app.get('/api/search', async (req, res) => {
     } else if (platform === 'codex') {
       const dir = resolveDir(req.query.dir, CODEX_DIR);
       try {
-        const entries = await fsp.readdir(dir, { withFileTypes: true });
-        for (const e of entries) {
-          if (!e.isDirectory()) continue;
-          const jsonlPath = path.join(dir, e.name, 'conversation.jsonl');
-          try { await fsp.access(jsonlPath); sessionFiles.push({ path: jsonlPath, file: e.name, platform: 'codex' }); } catch {}
+        // Codex sessions live at <dir>/YYYY/MM/DD/rollout-*.jsonl
+        const entries = await fsp.readdir(dir, { recursive: true });
+        for (const rel of entries) {
+          if (typeof rel === 'string' && rel.endsWith('.jsonl')) {
+            const file = path.basename(rel);
+            // Session list ids are the trailing UUID, not the full rollout-* stem
+            const uuid = file.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
+            sessionFiles.push({ path: path.join(dir, rel), file, sessionId: uuid ? uuid[1] : codexSessionIdFromFile(file), platform: 'codex' });
+          }
         }
       } catch {}
     } else if (platform === 'hermes') {
@@ -1395,10 +1399,18 @@ app.get('/api/search', async (req, res) => {
     } else if (platform === 'claude-code') {
       const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
       try {
-        const entries = await fsp.readdir(dir);
-        sessionFiles = entries
-          .filter(f => f.endsWith('.jsonl'))
-          .map(f => ({ path: path.join(dir, f), file: f, platform: 'claude-code' }));
+        // Claude Code sessions live at <dir>/<project-slug>/*.jsonl
+        const slugs = await fsp.readdir(dir, { withFileTypes: true });
+        for (const s of slugs) {
+          if (!s.isDirectory()) continue;
+          const slugDir = path.join(dir, s.name);
+          const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+          for (const f of entries) {
+            if (f.isFile() && f.name.endsWith('.jsonl')) {
+              sessionFiles.push({ path: path.join(slugDir, f.name), file: f.name, platform: 'claude-code' });
+            }
+          }
+        }
       } catch {}
     } else if (platform === 'omp') {
       const dir = resolveDir(req.query.dir, OMP_DIR);
@@ -1466,6 +1478,44 @@ app.get('/api/search', async (req, res) => {
       if (matches.length > 0) {
         results.push({ sessionId, file: sf.file, platform: sf.platform, matches });
       }
+    }
+
+    // Claude Code: also surface prompt history (~/.claude/history.jsonl) so sessions
+    // removed by Claude's cleanupPeriodDays retention still leave a searchable trace.
+    if (platform === 'claude-code') {
+      const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
+      const historyPath = path.join(path.dirname(dir), 'history.jsonl');
+      const liveSnippets = new Set(results.flatMap(r => r.matches.map(m => m.snippet)));
+      const byProject = new Map(); // project → matches[]
+      try {
+        const stream = fs.createReadStream(historyPath, { encoding: 'utf8' });
+        const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+        try {
+          for await (const line of rl) {
+            if (!line.toLowerCase().includes(q)) continue;
+            let rec;
+            try { rec = JSON.parse(line); } catch { continue; }
+            const text = typeof rec.display === 'string' ? rec.display : '';
+            const idx = text.toLowerCase().indexOf(q);
+            if (idx === -1) continue;
+            const start = Math.max(0, idx - 40);
+            const end = Math.min(text.length, idx + q.length + 60);
+            const snippet = (start > 0 ? '\u2026' : '') + text.slice(start, end) + (end < text.length ? '\u2026' : '');
+            const project = rec.project || '?';
+            if (liveSnippets.has(snippet)) continue; // prompt belongs to a still-live session
+            if (!byProject.has(project)) byProject.set(project, []);
+            const matches = byProject.get(project);
+            if (matches.length < 5) matches.push({ role: 'user', snippet, timestamp: rec.timestamp || null });
+          }
+        } finally {
+          rl.close();
+          stream.destroy();
+        }
+        for (const [project, matches] of byProject) {
+          if (results.length >= maxResults) break;
+          results.push({ sessionId: null, file: 'history.jsonl', platform: 'claude-code', project, history: true, matches });
+        }
+      } catch { /* no history file */ }
     }
 
     res.json(results);

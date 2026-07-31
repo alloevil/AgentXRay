@@ -5603,15 +5603,19 @@
           </div>`;
 
         for (const r of results) {
-          const shortId = r.sessionId.length > 20 ? r.sessionId.slice(0, 8) + '\u2026' : r.sessionId;
+          const isHistory = !!r.history;
+          const shortId = isHistory
+            ? (r.project || '').replace(/^\/Users\/[^/]+/, '~')
+            : (r.sessionId.length > 20 ? r.sessionId.slice(0, 8) + '\u2026' : r.sessionId);
           for (const m of r.matches) {
             // Highlight the query in snippet
             const escaped = escapeHtml(m.snippet);
             const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
             const highlighted = escaped.replace(re, '<mark>$1</mark>');
+            const badge = isHistory ? '<span class="sr-role" style="color:#d29922">已清理 · 仅输入记录</span>' : `<span class="sr-role">${escapeHtml(m.role)}</span>`;
             html += `
-              <div class="search-result-item" data-session-id="${escapeHtml(r.sessionId)}" data-file="${escapeHtml(r.file)}">
-                <div class="sr-session">${escapeHtml(shortId)} <span class="sr-role">${escapeHtml(m.role)}</span></div>
+              <div class="search-result-item${isHistory ? ' sr-history' : ''}" data-session-id="${escapeHtml(r.sessionId || '')}" data-file="${escapeHtml(r.file)}"${isHistory ? ' style="cursor:default;opacity:0.75"' : ''}>
+                <div class="sr-session">${escapeHtml(shortId)} ${badge}${m.timestamp ? ` <span class="sr-role">${escapeHtml(new Date(m.timestamp).toLocaleDateString())}</span>` : ''}</div>
                 <div class="sr-match">${highlighted}</div>
               </div>`;
           }
@@ -5622,6 +5626,7 @@
         searchResults.querySelectorAll('.search-result-item').forEach(el => {
           el.addEventListener('click', () => {
             const sid = el.dataset.sessionId;
+            if (!sid) return; // history-only hit: original session was cleaned up
             closeSearchResults();
             sessionSearch.value = '';
             // Find and click the session in the list
