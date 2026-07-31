@@ -20,22 +20,29 @@
 
 ---
 
-X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, and **Hermes** — all in one interface.
+X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, **Hermes** and **OMP** — all in one interface.
 
 ---
 
 ## Features
 
-- **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, and Hermes sessions
+- **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, Hermes and OMP sessions
 - **Session browser** — Browse agents, filter/search sessions, view message history
 - **Tool call inspection** — Expandable tool calls with arguments and results
+- **Trace view** — Per-turn waterfall of where the time went: model inference (blue) vs tool execution (green, red on error); click any bar to jump to that message
 - **Prompt extraction** — See every real human prompt per session (tool results, slash commands and injected noise filtered out), grouped by working directory, with search / JSON export / copy
 - **Prompt optimization** — Cluster prompts into templates, attribute session outcomes (turns, tool calls, error rate) per template, and get Claude-powered rewrite suggestions via the local `claude` CLI
+- **Prompt library** — Curate the prompts worth keeping into `~/.agentxray/library`, tag / edit / search them, then install any of them as a native slash command for Claude Code, Codex or OMP with one click — `$ARGUMENTS` is passed through, so `/name some args` works in the target CLI
+- **Global search** — One search box across all five platforms at once, multi-keyword AND matching, colored platform badges per hit — including prompts recovered from sessions that Claude Code's cleanup already deleted
 - **Session insights** — Aggregate analytics dashboard with tool stats, error clustering and daily trends
 - **Spawn tracking** — Detect and navigate parent/child agent relationships
+- **OMP sub-agents** — Sub-agents spawned by an OMP session show up as chips in the summary; click one to read the child agent's full transcript
 - **Message timeline** — Visual graph showing conversation flow with role indicators
+- **Resume command** — One click copies the exact command to resume a session in its own CLI (`codex resume`, `claude --resume`, `omp --resume=`)
+- **Collapsible summary** — Fold the session summary away when you want the full height for messages
 - **Auto-refresh** — Live-updating session list and messages
 - **Settings panel** — Configure platform directories from the UI, persisted in localStorage
+- **Session backup** — Incremental archive of your session logs into `~/.agentxray/archive`, one click in settings (also runs automatically, daily); unchanged files are skipped
 - **Keyboard navigation** — Arrow keys to move between sessions
 
 ---
@@ -178,6 +185,18 @@ npm start
 | `GET /api/prompts` | Real human prompts per session, grouped by directory |
 | `GET /api/prompts/analyze` | Template clustering + attribution + Claude suggestions (`?refresh=1` to recompute, `?skipLlm=1` for clustering only) |
 | `POST /api/prompts/rewrite` | Rewrite a single prompt via the claude CLI (`{ "text": "..." }`) |
+| `GET /api/search` | Full-text search across sessions (`?platform=all` searches every platform at once, multi-keyword AND) |
+| `GET /api/omp/sessions/:id/children` | List sub-agents spawned by an OMP session |
+| `GET /api/omp/sessions/:id/children/:name` | Get a spawned sub-agent's messages |
+| `GET /api/library` | List library prompts with their per-target install state |
+| `POST /api/library` | Create a prompt (`{ "name": "...", "content": "...", "description": "...", "tags": [...] }`) |
+| `PUT /api/library/:name` | Update / rename a prompt (`newName`, `content`, `description`, `tags`); installed copies are refreshed |
+| `DELETE /api/library/:name` | Delete a prompt and any installed slash commands |
+| `POST /api/library/:name/install` | Install as a slash command (`{ "targets": ["claude", "codex", "omp"] }`) |
+| `POST /api/library/:name/uninstall` | Remove the installed slash commands (same body) |
+| `POST /api/library/suggest-name` | Suggest a library name for a prompt via the claude CLI (`{ "text": "..." }`; `null` when the CLI is unavailable) |
+| `POST /api/backup` | Run an incremental backup into `~/.agentxray/archive` |
+| `GET /api/backup/status` | Archive stats: file count, total bytes, last backup time |
 
 All list/detail endpoints accept an optional `?dir=` parameter to override the default directory.
 

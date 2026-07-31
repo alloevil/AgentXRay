@@ -1,6 +1,6 @@
 # AgentXRay
 
-AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code** 和 **Hermes** —— 一个界面全搞定。
+AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code**、**Hermes** 和 **OMP** —— 一个界面全搞定。
 
 [English](README.md) | 中文
 
@@ -8,16 +8,23 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude C
 
 ## 功能特性
 
-- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes 的会话日志
+- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes、OMP 的会话日志
 - **会话浏览** — 浏览 Agent 列表，搜索/过滤会话，查看消息历史
 - **工具调用检查** — 可展开的工具调用详情，包含参数和返回结果
+- **Trace 视图** — 每轮对话的耗时瀑布图：模型推理（蓝）与工具执行（绿，出错为红）一目了然，点击色条跳转到对应消息
 - **Prompt 提取** — 按 session 提取全部真人 prompt（自动过滤工具结果、斜杠命令、系统注入等噪音），按工作目录分组，支持搜索 / JSON 导出 / 复制
 - **Prompt 优化** — 相似 prompt 自动聚类成模板，结合 session 效果归因（轮次、工具调用、错误率），通过本机 `claude` CLI 生成改写建议
+- **Prompt 资产库** — 把值得复用的 prompt 收进 `~/.agentxray/library`，支持标签 / 编辑 / 搜索，一键安装为 Claude Code、Codex、OMP 的原生 slash command（`$ARGUMENTS` 原样保留，在目标 CLI 里 `/名字 参数` 直接可用）
+- **全局搜索** — 一个搜索框同时搜五个平台，多关键词 AND 匹配，每条结果带平台色标 —— 包含从被 Claude Code 清理掉的会话里恢复出来的 prompt
 - **会话洞察** — 聚合分析面板：工具统计、错误聚类、每日趋势
 - **Spawn 追踪** — 检测并导航父子 Agent 之间的调用关系
+- **OMP 子 Agent** — OMP 会话派生的子 Agent 会在摘要区以标签列出，点击即可查看子 Agent 的完整对话
 - **消息时间线** — 可视化对话流程图，不同角色用不同颜色标识
+- **Resume 命令** — 一键复制该会话在原 CLI 中的续跑命令（`codex resume`、`claude --resume`、`omp --resume=`）
+- **摘要可折叠** — 需要更多阅读空间时可折叠会话摘要
 - **自动刷新** — 会话列表和消息实时更新
 - **设置面板** — 在页面上直接配置各平台目录，保存到 localStorage，无需重启
+- **会话备份** — 增量归档会话日志到 `~/.agentxray/archive`，在设置面板一键触发（也会每天自动执行），未变化的文件自动跳过
 - **键盘导航** — 使用方向键在会话之间切换
 
 ## 截图预览
@@ -150,6 +157,18 @@ npm start
 | `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
 | `GET /api/prompts/analyze` | 模板聚类 + 效果归因 + Claude 建议（`?refresh=1` 重算，`?skipLlm=1` 仅聚类） |
 | `POST /api/prompts/rewrite` | 通过 claude CLI 改写单条 prompt（`{ "text": "..." }`） |
+| `GET /api/search` | 会话全文搜索（`?platform=all` 一次搜索全部平台，多关键词 AND） |
+| `GET /api/omp/sessions/:id/children` | 获取该 OMP 会话派生的子 Agent 列表 |
+| `GET /api/omp/sessions/:id/children/:name` | 获取指定子 Agent 的消息详情 |
+| `GET /api/library` | 获取资产库 prompt 列表（含各目标的安装状态） |
+| `POST /api/library` | 新建 prompt（`{ "name": "...", "content": "...", "description": "...", "tags": [...] }`） |
+| `PUT /api/library/:name` | 更新 / 重命名 prompt（`newName`、`content`、`description`、`tags`），已安装的副本同步刷新 |
+| `DELETE /api/library/:name` | 删除 prompt 及其已安装的 slash command |
+| `POST /api/library/:name/install` | 安装为 slash command（`{ "targets": ["claude", "codex", "omp"] }`） |
+| `POST /api/library/:name/uninstall` | 卸载已安装的 slash command（请求体同上） |
+| `POST /api/library/suggest-name` | 通过 claude CLI 为 prompt 生成库内命名（`{ "text": "..." }`，CLI 不可用时返回 `null`） |
+| `POST /api/backup` | 执行一次增量备份到 `~/.agentxray/archive` |
+| `GET /api/backup/status` | 归档统计：文件数、总字节数、最近备份时间 |
 
 所有列表和详情接口均支持 `?dir=` 参数来覆盖默认目录。
 

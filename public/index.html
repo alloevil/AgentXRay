@@ -482,6 +482,46 @@
       color: var(--muted);
       text-transform: uppercase;
     }
+    /* --- ⌘K global search dialog --- */
+    .search-box-wrap { position: relative; }
+    .search-box-wrap .control { padding-right: 44px; }
+    .cmdk-hint {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      cursor: pointer;
+      background: var(--panel);
+    }
+    .cmdk-hint:hover { color: var(--text); border-color: var(--muted); }
+    .cmdk-panel {
+      width: min(640px, 92vw);
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .cmdk-results {
+      overflow-y: auto;
+      margin-top: 10px;
+      min-height: 0;
+    }
+    .search-result-item.cmdk-selected {
+      background: rgba(255,255,255,0.07);
+      border-color: var(--accent);
+    }
+    .prompts-toolbar .toggle {
+      width: auto;
+      gap: 6px;
+      font-size: 12px;
+      padding: 8px 10px;
+      white-space: nowrap;
+    }
     .search-spinner {
       text-align: center;
       padding: 20px;
@@ -2489,7 +2529,10 @@
           <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
         </div>
         <div id="agentNav" class="agent-nav" hidden></div>
-        <input id="sessionSearch" class="control" type="search" placeholder="输入过滤列表 · 回车全文搜索（空格分隔多关键词，全部命中才返回）" title="直接输入：按 ID/文件名/首条消息过滤左侧列表；按回车：全文搜索当前平台所有会话内容 — 空格分隔多关键词，全部命中才返回">
+        <div class="search-box-wrap">
+          <input id="sessionSearch" class="control" type="search" placeholder="输入过滤列表 · 回车全文搜索（空格分隔多关键词，全部命中才返回）" title="直接输入：按 ID/文件名/首条消息过滤左侧列表；按回车：全文搜索当前平台所有会话内容 — 空格分隔多关键词，全部命中才返回">
+          <span class="cmdk-hint" id="cmdkHint" title="全平台全局搜索（⌘K / Ctrl+K）">⌘K</span>
+        </div>
         <div class="toggle-row">
           <label class="toggle" id="archivedToggle" title="显示已归档（.reset/.deleted）的会话"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
           <label class="toggle" title="自动轮询新会话与新消息"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
@@ -2604,6 +2647,12 @@
         <button class="btn-reset" id="libraryFormCancel">取消</button>
         <button class="btn-save" id="libraryFormSave">保存</button>
       </div>
+    </div>
+  </div>
+  <div class="settings-overlay" id="cmdkOverlay" hidden>
+    <div class="settings-panel cmdk-panel">
+      <input id="cmdkInput" class="control" type="search" placeholder="全平台全文搜索（空格分隔多关键词，全部命中才返回）…">
+      <div id="cmdkResults" class="search-results cmdk-results"></div>
     </div>
   </div>
   <div id="graphTooltip" class="graph-tooltip"></div>
@@ -3108,6 +3157,7 @@
     let insightsData = null;
     let promptsData = null;
     let promptsSearch = '';
+    let promptsHideTrivial = (() => { try { return localStorage.getItem('axr-hide-trivial') !== '0'; } catch { return true; } })();
     let promptAnalysis = null;
     let promptAnalysisLoading = false;
     let libraryData = null;
@@ -3700,9 +3750,23 @@
       }
 
       const q = promptsSearch.trim().toLowerCase();
-      const groups = promptsData.groups
+      let groups = promptsData.groups
         .map(g => ({ ...g, sessions: g.sessions.filter(s => promptsMatchesSearch(s, q) || g.directory.toLowerCase().includes(q)) }))
         .filter(g => g.sessions.length > 0);
+
+      // Trivial-prompt filter (< 12 chars whitespace-collapsed); auto-disabled while searching
+      const trivialActive = !q && promptsHideTrivial;
+      let hiddenTrivial = 0;
+      if (trivialActive) {
+        groups = groups.map(g => ({
+          ...g,
+          sessions: g.sessions.map(s => {
+            const kept = s.prompts.filter(p => p.text.replace(/\s+/g, ' ').trim().length >= 12);
+            hiddenTrivial += s.prompts.length - kept.length;
+            return kept.length === s.prompts.length ? s : { ...s, prompts: kept, promptCount: kept.length };
+          }).filter(s => s.prompts.length > 0)
+        })).filter(g => g.sessions.length > 0);
+      }
 
       const shownSessions = groups.reduce((n, g) => n + g.sessions.length, 0);
       const shownPrompts = groups.reduce((n, g) => n + g.sessions.reduce((m, s) => m + s.promptCount, 0), 0);
@@ -3745,9 +3809,10 @@
         <div class="prompts-toolbar">
           <input type="search" id="promptsSearchInput" placeholder="Filter prompts / directories / sessions" value="${escapeHtml(promptsSearch)}">
           <button class="export-btn" id="promptsAnalyzeBtn" ${promptAnalysisLoading ? 'disabled' : ''}>${promptAnalysisLoading ? '分析中…' : (promptAnalysis && promptAnalysis.platform === state.platform ? '重新分析' : '分析优化')}</button>
+          <label class="toggle" title="隐藏折叠后不足 12 字符的琐碎 prompt（搜索时自动停用）"><span>隐藏琐碎 prompt</span><input id="promptsHideTrivial" type="checkbox" ${promptsHideTrivial ? 'checked' : ''}></label>
           <button class="export-btn" id="promptsExportBtn">Export JSON</button>
         </div>
-        <div class="prompts-summary">从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}</div>
+        <div class="prompts-summary">从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}${trivialActive && hiddenTrivial ? ` · 已隐藏 ${hiddenTrivial} 条琐碎 prompt` : ''}</div>
         ${renderAnalysisHtml()}
         ${groupsHtml || '<div class="insights-empty">No matches.</div>'}
       `;
@@ -3774,6 +3839,13 @@
         a.download = `prompts-${state.platform}-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(a.href);
+      });
+
+      // Trivial-prompt filter toggle
+      document.getElementById('promptsHideTrivial').addEventListener('change', (e) => {
+        promptsHideTrivial = e.target.checked;
+        try { localStorage.setItem('axr-hide-trivial', promptsHideTrivial ? '1' : '0'); } catch {}
+        renderPrompts();
       });
 
       // Collapse/expand sessions
@@ -4095,6 +4167,7 @@
     const libraryFormError = document.getElementById('libraryFormError');
     let libraryFormEditingName = null;
     let libraryFormSource = 'manual';
+    let libraryNameSuggestSeq = 0;
 
     function suggestLibraryName(text) {
       let name = String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -4102,11 +4175,36 @@
       return /^[a-z0-9][a-z0-9-]{0,63}$/.test(name) ? name : 'prompt-' + Date.now();
     }
 
+    // Ask the local claude CLI (via backend) for a slash-command name; fills the
+    // input only if the user hasn't typed anything by the time it resolves.
+    function requestSuggestedName(text, fallback) {
+      const seq = ++libraryNameSuggestSeq;
+      libraryFormName.value = '';
+      libraryFormName.placeholder = '生成中…';
+      fetch('/api/library/suggest-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      })
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null)
+        .then(data => {
+          if (seq !== libraryNameSuggestSeq || libraryFormOverlay.hidden) return;
+          libraryFormName.placeholder = 'my-prompt';
+          if (libraryFormName.value.trim()) return; // user already typed a name
+          const name = data && data.name;
+          libraryFormName.value = (name && /^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) ? name : fallback;
+        });
+    }
+
     function openLibraryForm(prefill, isEdit) {
+      libraryNameSuggestSeq++; // invalidate any in-flight suggestion
       libraryFormEditingName = isEdit && prefill ? prefill.name : null;
       libraryFormSource = (prefill && prefill.source) || 'manual';
       libraryFormTitle.textContent = isEdit ? '编辑 Prompt' : '新建 Prompt';
-      libraryFormName.value = (prefill && prefill.name) || '';
+      libraryFormName.placeholder = 'my-prompt';
+      const prefillName = (prefill && prefill.name) || '';
+      libraryFormName.value = prefillName;
       libraryFormDescription.value = (prefill && prefill.description) || '';
       libraryFormTags.value = ((prefill && prefill.tags) || []).join(', ');
       libraryFormContent.value = (prefill && prefill.content) || '';
@@ -4114,6 +4212,10 @@
       libraryFormError.textContent = '';
       libraryFormOverlay.hidden = false;
       libraryFormName.focus();
+      // ⭐ prefill whose heuristic name is the timestamp fallback (or empty): try smart naming
+      if (!isEdit && prefill && prefill.content && (!prefillName || /^prompt-\d+$/.test(prefillName))) {
+        requestSuggestedName(prefill.content, prefillName);
+      }
     }
 
     function closeLibraryForm() {
@@ -5963,20 +6065,79 @@
       sessionList.style.display = '';
     }
 
+    // Shared by the sidebar full-text search and the ⌘K dialog
+    const SEARCH_PLAT_BADGE = {
+      openclaw: ['OpenClaw', '#3fb950'], codex: ['Codex', '#58a6ff'],
+      'claude-code': ['Claude', '#d2a8ff'], hermes: ['Hermes', '#f78166'], omp: ['OMP', '#ffd33d']
+    };
+
+    // Global search across every platform; per-platform dir overrides
+    function globalSearchParams(q) {
+      const params = new URLSearchParams({ q, platform: 'all' });
+      if (state.settings.openclawDir) params.set('dirOpenclaw', state.settings.openclawDir);
+      if (state.settings.codexDir) params.set('dirCodex', state.settings.codexDir);
+      if (state.settings.claudeCodeDir) params.set('dirClaude', state.settings.claudeCodeDir);
+      if (state.settings.hermesDir) params.set('dirHermes', state.settings.hermesDir);
+      if (state.settings.ompDir) params.set('dirOmp', state.settings.ompDir);
+      return params;
+    }
+
+    function searchHitItemsHtml(results, q) {
+      let html = '';
+      for (const r of results) {
+        const isHistory = !!r.history;
+        const shortId = isHistory
+          ? (r.project || '').replace(/^\/Users\/[^/]+/, '~')
+          : (r.sessionId.length > 20 ? r.sessionId.slice(0, 8) + '\u2026' : r.sessionId);
+        const [platLabel, platColor] = SEARCH_PLAT_BADGE[r.platform] || [r.platform, 'var(--muted)'];
+        for (const m of r.matches) {
+          // Highlight the query in snippet
+          const escaped = escapeHtml(m.snippet);
+          const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+          const highlighted = escaped.replace(re, '<mark>$1</mark>');
+          const badge = isHistory ? '<span class="sr-role" style="color:#d29922">已清理 · 仅输入记录</span>' : `<span class="sr-role">${escapeHtml(m.role)}</span>`;
+          html += `
+            <div class="search-result-item${isHistory ? ' sr-history' : ''}" data-session-id="${escapeHtml(r.sessionId || '')}" data-platform="${escapeHtml(r.platform || '')}" data-agent="${escapeHtml(r.agent || '')}" data-file="${escapeHtml(r.file)}"${isHistory ? ' style="cursor:default;opacity:0.75"' : ''}>
+              <div class="sr-session"><span class="sr-role" style="color:${platColor};border:1px solid ${platColor}33;border-radius:4px;padding:0 4px">${escapeHtml(platLabel)}</span> ${escapeHtml(shortId)} ${badge}${m.timestamp ? ` <span class="sr-role">${escapeHtml(new Date(m.timestamp).toLocaleDateString())}</span>` : ''}</div>
+              <div class="sr-match">${highlighted}</div>
+            </div>`;
+        }
+      }
+      return html;
+    }
+
+    // Open a search hit: switch platform (and OpenClaw agent) when the hit lives elsewhere
+    async function openSearchHit(sid, plat, agent) {
+      if (plat && plat !== state.platform) {
+        state.platform = plat;
+        state.selectedAgent = agent || '';
+        state.selectedSessionId = '';
+        state.sessions = [];
+        state.filteredSessions = [];
+        state.sessionData = null;
+        state.navStack = [];
+        renderBreadcrumb();
+        renderAgents();
+        await refreshAll(false);
+      } else if (agent && agent !== state.selectedAgent) {
+        state.selectedAgent = agent;
+        await refreshAll(false);
+      }
+      const found = state.sessions.find(s => s.id === sid);
+      if (found) {
+        state.selectedSessionId = found.id;
+        renderSessions();
+        await loadSession();
+      }
+    }
+
     async function performFullTextSearch(q) {
       searchResults.hidden = false;
       searchResults.innerHTML = '<div class="search-spinner">🔍 Searching…</div>';
       sessionList.style.display = 'none';
 
       try {
-        // Global search across every platform; per-platform dir overrides
-        const params = new URLSearchParams({ q, platform: 'all' });
-        if (state.settings.openclawDir) params.set('dirOpenclaw', state.settings.openclawDir);
-        if (state.settings.codexDir) params.set('dirCodex', state.settings.codexDir);
-        if (state.settings.claudeCodeDir) params.set('dirClaude', state.settings.claudeCodeDir);
-        if (state.settings.hermesDir) params.set('dirHermes', state.settings.hermesDir);
-        if (state.settings.ompDir) params.set('dirOmp', state.settings.ompDir);
-        const res = await fetch(`/api/search?${params}`);
+        const res = await fetch(`/api/search?${globalSearchParams(q)}`);
         const results = await res.json();
 
         if (!results.length) {
@@ -5988,38 +6149,11 @@
           return;
         }
 
-        let html = `
+        searchResults.innerHTML = `
           <div class="search-header">
             <span>🔍 全平台搜索 "${escapeHtml(q)}" — ${results.length} 个会话命中</span>
             <button class="search-close" onclick="closeSearchResults(); sessionSearch.value=''">✕ Close</button>
-          </div>`;
-
-        const platBadge = {
-          openclaw: ['OpenClaw', '#3fb950'], codex: ['Codex', '#58a6ff'],
-          'claude-code': ['Claude', '#d2a8ff'], hermes: ['Hermes', '#f78166'], omp: ['OMP', '#ffd33d']
-        };
-
-        for (const r of results) {
-          const isHistory = !!r.history;
-          const shortId = isHistory
-            ? (r.project || '').replace(/^\/Users\/[^/]+/, '~')
-            : (r.sessionId.length > 20 ? r.sessionId.slice(0, 8) + '\u2026' : r.sessionId);
-          const [platLabel, platColor] = platBadge[r.platform] || [r.platform, 'var(--muted)'];
-          for (const m of r.matches) {
-            // Highlight the query in snippet
-            const escaped = escapeHtml(m.snippet);
-            const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-            const highlighted = escaped.replace(re, '<mark>$1</mark>');
-            const badge = isHistory ? '<span class="sr-role" style="color:#d29922">已清理 · 仅输入记录</span>' : `<span class="sr-role">${escapeHtml(m.role)}</span>`;
-            html += `
-              <div class="search-result-item${isHistory ? ' sr-history' : ''}" data-session-id="${escapeHtml(r.sessionId || '')}" data-platform="${escapeHtml(r.platform || '')}" data-agent="${escapeHtml(r.agent || '')}" data-file="${escapeHtml(r.file)}"${isHistory ? ' style="cursor:default;opacity:0.75"' : ''}>
-                <div class="sr-session"><span class="sr-role" style="color:${platColor};border:1px solid ${platColor}33;border-radius:4px;padding:0 4px">${escapeHtml(platLabel)}</span> ${escapeHtml(shortId)} ${badge}${m.timestamp ? ` <span class="sr-role">${escapeHtml(new Date(m.timestamp).toLocaleDateString())}</span>` : ''}</div>
-                <div class="sr-match">${highlighted}</div>
-              </div>`;
-          }
-        }
-
-        searchResults.innerHTML = html;
+          </div>${searchHitItemsHtml(results, q)}`;
 
         searchResults.querySelectorAll('.search-result-item').forEach(el => {
           el.addEventListener('click', async () => {
@@ -6029,28 +6163,7 @@
             const agent = el.dataset.agent;
             closeSearchResults();
             sessionSearch.value = '';
-            // Switch platform (and OpenClaw agent) when the hit lives elsewhere
-            if (plat && plat !== state.platform) {
-              state.platform = plat;
-              state.selectedAgent = agent || '';
-              state.selectedSessionId = '';
-              state.sessions = [];
-              state.filteredSessions = [];
-              state.sessionData = null;
-              state.navStack = [];
-              renderBreadcrumb();
-              renderAgents();
-              await refreshAll(false);
-            } else if (agent && agent !== state.selectedAgent) {
-              state.selectedAgent = agent;
-              await refreshAll(false);
-            }
-            const found = state.sessions.find(s => s.id === sid);
-            if (found) {
-              state.selectedSessionId = found.id;
-              renderSessions();
-              await loadSession();
-            }
+            await openSearchHit(sid, plat, agent);
           });
         });
       } catch (err) {
@@ -6060,6 +6173,108 @@
     }
     // Make closeSearchResults available from inline onclick
     window.closeSearchResults = closeSearchResults;
+
+    // --- ⌘K global search dialog ---
+    const cmdkOverlay = document.getElementById('cmdkOverlay');
+    const cmdkInput = document.getElementById('cmdkInput');
+    const cmdkResults = document.getElementById('cmdkResults');
+    let cmdkTimer = null;
+    let cmdkSeq = 0;
+    let cmdkSelected = -1;
+
+    function openCmdk() {
+      cmdkOverlay.hidden = false;
+      cmdkInput.focus();
+      cmdkInput.select();
+    }
+
+    function closeCmdk() {
+      cmdkOverlay.hidden = true;
+    }
+
+    function cmdkItems() {
+      return Array.from(cmdkResults.querySelectorAll('.search-result-item'));
+    }
+
+    function cmdkUpdateSelection(items) {
+      items.forEach((el, i) => el.classList.toggle('cmdk-selected', i === cmdkSelected));
+      const sel = items[cmdkSelected];
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+
+    async function cmdkOpenItem(el) {
+      const sid = el.dataset.sessionId;
+      if (!sid) return; // history-only hit: original session was cleaned up
+      const plat = el.dataset.platform;
+      const agent = el.dataset.agent;
+      closeCmdk();
+      await openSearchHit(sid, plat, agent);
+    }
+
+    async function cmdkSearch(q) {
+      const seq = ++cmdkSeq;
+      cmdkSelected = -1;
+      if (!q) {
+        cmdkResults.innerHTML = '';
+        return;
+      }
+      cmdkResults.innerHTML = '<div class="search-spinner">🔍 Searching…</div>';
+      try {
+        const res = await fetch(`/api/search?${globalSearchParams(q)}`);
+        const results = await res.json();
+        if (seq !== cmdkSeq) return; // stale response
+        if (!Array.isArray(results) || !results.length) {
+          cmdkResults.innerHTML = `<div class="search-header"><span>No results for "${escapeHtml(q)}"</span></div>`;
+          return;
+        }
+        cmdkResults.innerHTML = `
+          <div class="search-header"><span>🔍 全平台搜索 "${escapeHtml(q)}" — ${results.length} 个会话命中</span></div>
+          ${searchHitItemsHtml(results, q)}`;
+        cmdkResults.querySelectorAll('.search-result-item').forEach(el => {
+          el.addEventListener('click', () => cmdkOpenItem(el));
+        });
+      } catch (err) {
+        if (seq !== cmdkSeq) return;
+        cmdkResults.innerHTML = `<div class="search-header"><span>Search error: ${escapeHtml(err.message)}</span></div>`;
+      }
+    }
+
+    cmdkInput.addEventListener('input', () => {
+      clearTimeout(cmdkTimer);
+      cmdkTimer = setTimeout(() => cmdkSearch(cmdkInput.value.trim()), 300);
+    });
+
+    cmdkInput.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = cmdkItems();
+        if (!items.length) return;
+        cmdkSelected = e.key === 'ArrowDown'
+          ? Math.min(cmdkSelected + 1, items.length - 1)
+          : Math.max(cmdkSelected - 1, 0);
+        cmdkUpdateSelection(items);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const items = cmdkItems();
+        const sel = items[cmdkSelected];
+        if (sel) cmdkOpenItem(sel);
+      }
+    });
+
+    cmdkOverlay.addEventListener('click', (e) => {
+      if (e.target === cmdkOverlay) closeCmdk();
+    });
+
+    document.getElementById('cmdkHint').addEventListener('click', openCmdk);
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (cmdkOverlay.hidden) openCmdk(); else closeCmdk();
+      } else if (e.key === 'Escape' && !cmdkOverlay.hidden) {
+        closeCmdk();
+      }
+    });
 
     includeArchived.addEventListener('change', async () => {
       state.includeArchived = includeArchived.checked;

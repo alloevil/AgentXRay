@@ -3839,6 +3839,39 @@ app.post('/api/library/:name/uninstall', async (req, res) => {
   }
 });
 
+// Suggest a kebab-case slash-command name for a prompt via the local claude CLI.
+// Always replies { name } — name is null when the CLI is missing or its output
+// can't be shaped into a valid library name. 400 only for a missing/empty text.
+app.post('/api/library/suggest-name', async (req, res) => {
+  const text = typeof (req.body || {}).text === 'string' ? req.body.text.trim() : '';
+  if (!text) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  const prompt = [
+    'Suggest a short slash-command name for the prompt below.',
+    'Reply with ONLY the name: 2-4 English words, kebab-case, ascii lowercase letters/digits/dashes.',
+    'No explanation, no quotes, no punctuation other than dashes.',
+    '',
+    'Prompt:',
+    text.slice(0, 500),
+  ].join('\n');
+  try {
+    const raw = await runClaudeCli(prompt, 10_000);
+    const name = raw
+      .trim()
+      .split('\n')
+      .pop()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 64)
+      .replace(/^-+|-+$/g, '');
+    res.json({ name: sanitizeLibraryName(name) });
+  } catch {
+    res.json({ name: null });
+  }
+});
+
 // --- Backup ---
 // Incremental session backup: copies platform session logs into
 // ARCHIVE_DIR/<platform>/<relative-path-from-platform-root>. A file is skipped
@@ -3917,25 +3950,45 @@ async function backupOmp(counter) {
   } catch { /* no omp dir */ }
 }
 
+// Run every platform backup and return the summary object served by POST /api/backup
+async function runFullBackup() {
+  const byPlatform = {
+    codex: { copied: 0, skipped: 0 },
+    'claude-code': { copied: 0, skipped: 0 },
+    omp: { copied: 0, skipped: 0 },
+  };
+  await Promise.all([
+    backupCodex(byPlatform.codex),
+    backupClaudeCode(byPlatform['claude-code']),
+    backupOmp(byPlatform.omp),
+  ]);
+  let copied = 0;
+  let skipped = 0;
+  for (const c of Object.values(byPlatform)) {
+    copied += c.copied;
+    skipped += c.skipped;
+  }
+  return { copied, skipped, total: copied + skipped, byPlatform, archiveDir: ARCHIVE_DIR };
+}
+
+// Auto-backup: once shortly after startup, then daily. Failures are logged, never fatal.
+const AUTO_BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+async function runAutoBackup() {
+  try {
+    const summary = await runFullBackup();
+    console.log(`[backup] copied=${summary.copied} skipped=${summary.skipped} total=${summary.total}`);
+  } catch (error) {
+    console.log(`[backup] failed: ${error.message}`);
+  }
+}
+
+setTimeout(runAutoBackup, 10_000).unref();
+setInterval(runAutoBackup, AUTO_BACKUP_INTERVAL_MS).unref();
+
 app.post('/api/backup', async (req, res) => {
   try {
-    const byPlatform = {
-      codex: { copied: 0, skipped: 0 },
-      'claude-code': { copied: 0, skipped: 0 },
-      omp: { copied: 0, skipped: 0 },
-    };
-    await Promise.all([
-      backupCodex(byPlatform.codex),
-      backupClaudeCode(byPlatform['claude-code']),
-      backupOmp(byPlatform.omp),
-    ]);
-    let copied = 0;
-    let skipped = 0;
-    for (const c of Object.values(byPlatform)) {
-      copied += c.copied;
-      skipped += c.skipped;
-    }
-    res.json({ copied, skipped, total: copied + skipped, byPlatform, archiveDir: ARCHIVE_DIR });
+    res.json(await runFullBackup());
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
