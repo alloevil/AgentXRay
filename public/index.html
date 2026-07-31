@@ -3732,6 +3732,7 @@
           if (match) {
             state.selectedSessionId = match.id;
             renderSessions();
+            scrollSessionIntoView(match.id);
             await loadSession();
           }
         });
@@ -4094,6 +4095,7 @@
           if (match) {
             state.selectedSessionId = match.id;
             renderSessions();
+            scrollSessionIntoView(match.id);
             await loadSession();
           }
         });
@@ -4372,44 +4374,124 @@
       });
     }
 
+    function sessionCardHtml(session) {
+      const activeClass = session.id === state.selectedSessionId ? 'active' : '';
+      const chips = [];
+      if (session.userCount) chips.push(`<span class="stat-chip user">👤 ${session.userCount}</span>`);
+      if (session.assistantCount) chips.push(`<span class="stat-chip">🤖 ${session.assistantCount}</span>`);
+      if (session.toolCallCount) chips.push(`<span class="stat-chip tool">🔧 ${session.toolCallCount}</span>`);
+      if (session.spawnCount) chips.push(`<span class="stat-chip spawn spawn-tree-link" data-scroll-spawn-tree>\u{1F333} ${session.spawnCount} spawn</span>`);
+      if (session.model) chips.push(`<span class="stat-chip model">🧠 ${escapeHtml(session.model.split('/').pop())}</span>`);
+      if (session.source) {
+        const srcIcons = { cli: '⌨️', telegram: '✈️', discord: '🎮', weixin: '💬', wechat: '💬', slack: '💼', web: '🌐', feishu: '🐦', whatsapp: '📱' };
+        const srcIcon = srcIcons[session.source.toLowerCase()] || '📡';
+        chips.push(`<span class="stat-chip source">${srcIcon} ${escapeHtml(session.source)}</span>`);
+      }
+      // Duration from first to last message
+      const startMs = parseTimestampMs(session.timestamp);
+      const endMs = parseTimestampMs(session.lastActivity);
+      if (startMs && endMs && endMs > startMs) {
+        const dur = endMs - startMs;
+        if (dur >= 5000) chips.push(`<span class="stat-chip duration">⏱ ${formatDurationCompact(dur)}</span>`);
+      }
+      return `
+        <div class="session-item ${activeClass}" data-session-id="${escapeHtml(session.id)}" tabindex="0">
+          <div class="top">
+            <span>${escapeHtml(formatDate(session.timestamp))}</span>
+            ${session.status ? `<span class="badge ${escapeHtml(session.status)}">${escapeHtml(session.status)}</span>` : ''}
+          </div>
+          <div class="stats">${chips.join('')}</div>
+          <div class="id">${session.title ? escapeHtml(session.title) : escapeHtml(session.id)}</div>
+          ${session.firstUserMessage ? `<div class="session-preview">${escapeHtml(session.firstUserMessage.length > 80 ? session.firstUserMessage.slice(0, 80) + '…' : session.firstUserMessage)}</div>` : ''}
+        </div>
+      `;
+    }
+
+    // --- Sidebar virtualization: windowed rendering keeps the DOM bounded on big lists ---
+    const VIRT_THRESHOLD = 200; // below this many sessions, render everything
+    const VIRT_OVERSCAN = 10;   // extra cards above/below the visible range
+    let virtItemHeight = 96;    // estimated card height incl. 8px flex gap
+    let virtMeasured = false;   // estimate refined once, from the first rendered batch
+    let virtRange = { start: -1, end: -1 }; // start < 0 → list not virtualized
+
     function renderSessions() {
       filterSessions();
+      virtRange = { start: -1, end: -1 };
       if (!state.filteredSessions.length) {
         sessionList.innerHTML = '<div class="subtle">No sessions match this filter.</div>';
         return;
       }
-      sessionList.innerHTML = state.filteredSessions.map((session) => {
-        const activeClass = session.id === state.selectedSessionId ? 'active' : '';
-        const chips = [];
-        if (session.userCount) chips.push(`<span class="stat-chip user">👤 ${session.userCount}</span>`);
-        if (session.assistantCount) chips.push(`<span class="stat-chip">🤖 ${session.assistantCount}</span>`);
-        if (session.toolCallCount) chips.push(`<span class="stat-chip tool">🔧 ${session.toolCallCount}</span>`);
-        if (session.spawnCount) chips.push(`<span class="stat-chip spawn spawn-tree-link" data-scroll-spawn-tree>\u{1F333} ${session.spawnCount} spawn</span>`);
-        if (session.model) chips.push(`<span class="stat-chip model">🧠 ${escapeHtml(session.model.split('/').pop())}</span>`);
-        if (session.source) {
-          const srcIcons = { cli: '⌨️', telegram: '✈️', discord: '🎮', weixin: '💬', wechat: '💬', slack: '💼', web: '🌐', feishu: '🐦', whatsapp: '📱' };
-          const srcIcon = srcIcons[session.source.toLowerCase()] || '📡';
-          chips.push(`<span class="stat-chip source">${srcIcon} ${escapeHtml(session.source)}</span>`);
+      if (state.filteredSessions.length <= VIRT_THRESHOLD) {
+        sessionList.innerHTML = state.filteredSessions.map(sessionCardHtml).join('');
+        return;
+      }
+      renderSessionWindow();
+    }
+
+    function virtWindow(viewTop, viewH, total) {
+      let start = Math.max(0, Math.floor(viewTop / virtItemHeight) - VIRT_OVERSCAN);
+      let end = Math.min(total, Math.ceil((viewTop + viewH) / virtItemHeight) + VIRT_OVERSCAN);
+      // At the bottom edge of the rendered content, pin the window to the true end of the list
+      if (end < total && viewTop + viewH >= sessionList.scrollHeight - 2) {
+        end = total;
+        start = Math.max(0, end - Math.ceil(viewH / virtItemHeight) - 2 * VIRT_OVERSCAN);
+      }
+      if (start >= end) start = Math.max(0, end - 1);
+      return { start, end };
+    }
+
+    // Render only the cards near the viewport; spacer divs stand in for the hidden ones
+    function renderSessionWindow() {
+      const total = state.filteredSessions.length;
+      const viewH = sessionList.clientHeight || 600;
+      const { start, end } = virtWindow(sessionList.scrollTop, viewH, total);
+      virtRange = { start, end };
+      const spacer = (h) => `<div style="flex:none;height:${Math.max(0, h).toFixed(1)}px"></div>`;
+      sessionList.innerHTML =
+        spacer(start * virtItemHeight) +
+        state.filteredSessions.slice(start, end).map(sessionCardHtml).join('') +
+        spacer((total - end) * virtItemHeight);
+      // Measure the average card height from the first rendered batch, then keep it fixed
+      // so spacer heights stay consistent between renders (per-window averages oscillate).
+      if (!virtMeasured) {
+        const cards = sessionList.querySelectorAll('.session-item');
+        if (cards.length) {
+          let sum = 0;
+          cards.forEach((c) => { sum += c.offsetHeight; });
+          const avg = sum / cards.length + 8; // + .session-list flex gap
+          if (avg > 20) { // ignore hidden-list measurements (offsetHeight 0)
+            virtItemHeight = avg;
+            virtMeasured = true;
+            renderSessionWindow(); // re-lay spacers once with the real estimate
+          }
         }
-        // Duration from first to last message
-        const startMs = parseTimestampMs(session.timestamp);
-        const endMs = parseTimestampMs(session.lastActivity);
-        if (startMs && endMs && endMs > startMs) {
-          const dur = endMs - startMs;
-          if (dur >= 5000) chips.push(`<span class="stat-chip duration">⏱ ${formatDurationCompact(dur)}</span>`);
-        }
-        return `
-          <div class="session-item ${activeClass}" data-session-id="${escapeHtml(session.id)}" tabindex="0">
-            <div class="top">
-              <span>${escapeHtml(formatDate(session.timestamp))}</span>
-              ${session.status ? `<span class="badge ${escapeHtml(session.status)}">${escapeHtml(session.status)}</span>` : ''}
-            </div>
-            <div class="stats">${chips.join('')}</div>
-            <div class="id">${session.title ? escapeHtml(session.title) : escapeHtml(session.id)}</div>
-            ${session.firstUserMessage ? `<div class="session-preview">${escapeHtml(session.firstUserMessage.length > 80 ? session.firstUserMessage.slice(0, 80) + '…' : session.firstUserMessage)}</div>` : ''}
-          </div>
-        `;
-      }).join('');
+      }
+    }
+
+    let virtScrollScheduled = false;
+    sessionList.addEventListener('scroll', () => {
+      if (virtRange.start < 0 || virtScrollScheduled) return;
+      virtScrollScheduled = true;
+      requestAnimationFrame(() => {
+        virtScrollScheduled = false;
+        if (virtRange.start < 0) return;
+        const total = state.filteredSessions.length;
+        const { start, end } = virtWindow(sessionList.scrollTop, sessionList.clientHeight || 600, total);
+        if (start !== virtRange.start || end !== virtRange.end) renderSessionWindow();
+      });
+    });
+
+    // Ensure the selected card is visible; when virtualized it may not even be in the DOM
+    function scrollSessionIntoView(id) {
+      if (!id) return;
+      const esc = (window.CSS && CSS.escape) ? CSS.escape(id) : id.replace(/"/g, '\\"');
+      const el = sessionList.querySelector(`.session-item[data-session-id="${esc}"]`);
+      if (el) { el.scrollIntoView({ block: 'nearest' }); return; }
+      if (virtRange.start < 0) return;
+      const idx = state.filteredSessions.findIndex((s) => s.id === id);
+      if (idx === -1) return;
+      sessionList.scrollTop = Math.max(0, idx * virtItemHeight - sessionList.clientHeight / 2);
+      renderSessionWindow();
     }
 
     function summarizeTokens(messagesData) {
@@ -4876,14 +4958,14 @@
           <h3>\u{1F333} Spawn Tree</h3>
           <div id="spawnTreeInSummary"></div>
         </div>` : ''}
-        ${state.platform === 'omp' ? `
-        <div class="spawn-tree-section" id="ompChildrenSection" hidden>
+        ${hasChildAgents() ? `
+        <div class="spawn-tree-section" id="agentChildrenSection" hidden>
           <h3>\u{1F333} 子 Agent <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:0.75rem">— 本会话派生的后台 agent，点击查看其完整执行记录</span></h3>
-          <div id="ompChildrenList"></div>
+          <div id="agentChildrenList"></div>
         </div>` : ''}
         </div><!-- /summary-body -->
       `;
-      if (state.platform === 'omp') loadOmpChildren();
+      if (hasChildAgents()) loadChildAgents();
       // Collapse/expand summary details (persisted)
       const summaryToggleBtn = document.getElementById('summaryToggleBtn');
       if (summaryToggleBtn) summaryToggleBtn.addEventListener('click', () => {
@@ -5892,7 +5974,7 @@
       // Refresh insights if currently viewing
       if (currentView === 'insights') loadInsights();
       // Trace view: enable toggle, refresh if active
-      ompChildViewing = null; // back to the parent session
+      childAgentViewing = null; // back to the parent session
       sessionViewToggle.hidden = false;
       if (sessionView === 'trace') renderTrace();
     }
@@ -5972,14 +6054,14 @@
         owner.end = Math.max(owner.end, end);
       }
 
-      // Attach spawned-subagent spans (omp) to the turn they started in
+      // Attach spawned-subagent spans (omp / claude-code) to the turn they started in
       for (const a of agentSpans) {
         if (!a.start) continue;
         const end = a.end && a.end > a.start ? a.end : a.start + 50;
         let owner = null;
         for (const tn of turns) { if (tn.start <= a.start) owner = tn; else break; }
         if (!owner) continue;
-        owner.spans.push({ kind: 'agent', label: a.name, start: a.start, end, agentName: a.name });
+        owner.spans.push({ kind: 'agent', label: a.label || a.name, start: a.start, end, agentName: a.name });
         owner.end = Math.max(owner.end, end);
       }
 
@@ -5987,24 +6069,37 @@
       return turns.filter(tn => tn.spans.length > 0);
     }
 
-    // Cache of the current session's subagent list (shared with loadOmpChildren)
-    let ompChildrenCache = { sid: null, data: [] };
-    let ompChildViewing = null; // non-null while a child transcript is loaded
-    async function getOmpChildren() {
-      if (state.platform !== 'omp' || !state.selectedSessionId) return [];
-      if (ompChildrenCache.sid === state.selectedSessionId) return ompChildrenCache.data;
+    // Platforms whose sessions can spawn child agents, and the API base for each
+    function hasChildAgents() {
+      return state.platform === 'omp' || state.platform === 'claude-code';
+    }
+    function childrenEndpoint() {
+      const base = state.platform === 'claude-code' ? '/api/claude-code' : '/api/omp';
+      return `${base}/sessions/${encodeURIComponent(state.selectedSessionId)}/children`;
+    }
+    // Chip/span label: claude-code children carry meta (description/agentType); omp children only a name
+    function childAgentLabel(c) {
+      return (state.platform === 'claude-code' ? (c.description || c.agentType) : '') || c.name;
+    }
+    // Cache of the current session's subagent list (shared with loadChildAgents)
+    let childrenCache = { sid: null, platform: null, data: [] };
+    let childAgentViewing = null; // non-null while a child transcript is loaded
+    async function getSessionChildren() {
+      if (!hasChildAgents() || !state.selectedSessionId) return [];
+      if (childrenCache.sid === state.selectedSessionId && childrenCache.platform === state.platform) return childrenCache.data;
       try {
-        const data = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children` + dirParam());
-        ompChildrenCache = { sid: state.selectedSessionId, data };
+        const data = await fetchJson(childrenEndpoint() + dirParam());
+        childrenCache = { sid: state.selectedSessionId, platform: state.platform, data };
         return data;
       } catch { return []; }
     }
 
     async function renderTrace() {
       const msgs = state.sessionData?.messages || [];
-      const children = ompChildViewing ? [] : await getOmpChildren();
+      const children = childAgentViewing ? [] : await getSessionChildren();
       const agentSpans = children.map(c => ({
         name: c.name,
+        label: childAgentLabel(c),
         start: parseTimestampMs(c.timestamp),
         end: parseTimestampMs(c.lastActivity)
       }));
@@ -6060,7 +6155,7 @@
         });
       });
       tracePanel.querySelectorAll('.tr-bar[data-agent-name]').forEach(bar => {
-        bar.addEventListener('click', () => viewOmpChild(bar.dataset.agentName));
+        bar.addEventListener('click', () => viewChildAgent(bar.dataset.agentName));
       });
     }
 
@@ -6402,6 +6497,7 @@
       if (found) {
         state.selectedSessionId = found.id;
         renderSessions();
+        scrollSessionIntoView(found.id);
         await loadSession();
       }
     }
@@ -6586,6 +6682,7 @@
       if (!next || next.id === state.selectedSessionId) return;
       state.selectedSessionId = next.id;
       renderSessions();
+      scrollSessionIntoView(next.id);
       await loadSession();
     });
 
@@ -6621,38 +6718,45 @@
     }
     initialLoad();
 
-    // ========== OMP subagents (spawned children) ==========
-    async function loadOmpChildren() {
-      const section = document.getElementById('ompChildrenSection');
-      const list = document.getElementById('ompChildrenList');
+    // ========== Subagents (omp / claude-code spawned children) ==========
+    async function loadChildAgents() {
+      const section = document.getElementById('agentChildrenSection');
+      const list = document.getElementById('agentChildrenList');
       if (!section || !list || !state.selectedSessionId) return;
       try {
-        const children = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children` + dirParam());
+        const children = await fetchJson(childrenEndpoint() + dirParam());
+        childrenCache = { sid: state.selectedSessionId, platform: state.platform, data: children };
         if (!children.length) { section.hidden = true; return; }
         section.hidden = false;
-        list.innerHTML = children.map(c => `
-          <span class="stat-chip omp-child-chip" data-name="${escapeHtml(c.name)}" style="cursor:pointer;margin:2px 6px 2px 0" title="${escapeHtml(c.title || c.name)} — ${c.messageCount} 条消息，${c.toolCallCount} 次工具调用">
-            🤖 ${escapeHtml(c.name)} <span style="color:var(--muted)">· ${c.messageCount} msg · 🔧 ${c.toolCallCount}</span>
-          </span>`).join('');
-        list.querySelectorAll('.omp-child-chip').forEach(chip => {
-          chip.addEventListener('click', () => viewOmpChild(chip.dataset.name));
+        list.innerHTML = children.map(c => {
+          const label = childAgentLabel(c);
+          const tip = [c.title || label, c.agentType].filter(Boolean).join(' · ');
+          return `
+          <span class="stat-chip child-agent-chip" data-name="${escapeHtml(c.name)}" style="cursor:pointer;margin:2px 6px 2px 0" title="${escapeHtml(tip)} — ${c.messageCount} 条消息，${c.toolCallCount} 次工具调用">
+            🤖 ${escapeHtml(label)} <span style="color:var(--muted)">· ${c.messageCount} msg · 🔧 ${c.toolCallCount}</span>
+          </span>`;
+        }).join('');
+        list.querySelectorAll('.child-agent-chip').forEach(chip => {
+          chip.addEventListener('click', () => viewChildAgent(chip.dataset.name));
         });
       } catch { section.hidden = true; }
     }
 
-    async function viewOmpChild(name) {
+    async function viewChildAgent(name) {
       try {
-        const payload = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children/${encodeURIComponent(name)}` + dirParam());
+        const payload = await fetchJson(`${childrenEndpoint()}/${encodeURIComponent(name)}` + dirParam());
         state.sessionData = payload;
-        ompChildViewing = name; // child trace must not embed sibling agent spans
+        childAgentViewing = name; // child trace must not embed sibling agent spans
         state.visibleUnitCount = (payload?.messages?.length || 0) <= 200 ? Infinity : MSG_BATCH_SIZE;
         sessionView = 'messages';
         applySessionView();
         renderMessages();
+        const meta = (childrenCache.data || []).find(c => c.name === name);
+        const label = meta ? childAgentLabel(meta) : name;
         const banner = document.createElement('div');
         banner.className = 'prompts-summary';
         banner.style.cssText = 'padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px';
-        banner.innerHTML = `\u{1F333} 正在查看子 Agent <b>${escapeHtml(name)}</b> 的执行记录 — <a href="#" style="color:#58a6ff">返回主会话</a>`;
+        banner.innerHTML = `\u{1F333} 正在查看子 Agent <b>${escapeHtml(label)}</b> 的执行记录 — <a href="#" style="color:#58a6ff">返回主会话</a>`;
         banner.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadSession(); });
         document.getElementById('messages').prepend(banner);
       } catch (error) {
@@ -6713,6 +6817,7 @@
               state.sessionId = found.id;
               state.sessionFile = found.file;
               renderSessions();
+              scrollSessionIntoView(found.id);
               loadSession();
             }
           });

@@ -3559,6 +3559,71 @@ app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
   }
 });
 
+// Claude Code subagents: a session that spawns children keeps them as
+// <slug>/<sessionId>/subagents/agent-<id>.jsonl next to its own file, with
+// an optional sibling agent-<id>.meta.json ({agentType, description, ...}).
+async function findClaudeSpawnDir(baseDir, sessionId) {
+  const filePath = await findClaudeCodeSessionFile(baseDir, sessionId);
+  if (!filePath) return null;
+  const spawnDir = path.join(path.dirname(filePath), sessionId, 'subagents');
+  try {
+    const st = await fsp.stat(spawnDir);
+    return st.isDirectory() ? spawnDir : null;
+  } catch { return null; }
+}
+
+app.get('/api/claude-code/sessions/:sessionId/children', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) return res.status(400).json({ error: 'Invalid session ID' });
+  try {
+    const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
+    const spawnDir = await findClaudeSpawnDir(dir, sessionId);
+    if (!spawnDir) return res.json([]);
+    const entries = await fsp.readdir(spawnDir, { withFileTypes: true });
+    const children = [];
+    for (const e of entries) {
+      if (!e.isFile() || !e.name.startsWith('agent-') || !e.name.endsWith('.jsonl')) continue;
+      const stem = e.name.replace(/\.jsonl$/, '');
+      const meta = await parseClaudeCodeSessionMetadata(path.join(spawnDir, e.name), e.name).catch(() => null);
+      let agentMeta = null;
+      try {
+        agentMeta = JSON.parse(await fsp.readFile(path.join(spawnDir, stem + '.meta.json'), 'utf8'));
+      } catch { /* absent or corrupt meta.json */ }
+      children.push({
+        name: stem,
+        file: e.name,
+        title: meta?.title || null,
+        timestamp: meta?.timestamp || null,
+        lastActivity: meta?.lastActivity || null,
+        messageCount: meta?.messageCount || 0,
+        toolCallCount: meta?.toolCallCount || 0,
+        agentType: agentMeta?.agentType || null,
+        description: agentMeta?.description || null
+      });
+    }
+    children.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+    res.json(children);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/claude-code/sessions/:sessionId/children/:name', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  const name = sanitizeAgentName(req.params.name);
+  if (!sessionId || !name) return res.status(400).json({ error: 'Invalid session or agent name' });
+  try {
+    const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
+    const spawnDir = await findClaudeSpawnDir(dir, sessionId);
+    if (!spawnDir) return res.status(404).json({ error: 'No subagents for this session' });
+    const payload = await parseClaudeCodeSessionFile(path.join(spawnDir, name + '.jsonl'));
+    res.json(payload);
+  } catch (error) {
+    if (error.code === 'ENOENT') return res.status(404).json({ error: 'Subagent not found' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- OTLP export: serialize a session's trace as OpenTelemetry OTLP/JSON ---
 // One trace per session; per user-turn a root `invoke_agent` span with child
 // `chat {model}` and `execute_tool {toolName}` spans. Turn/chat/tool timing
