@@ -1550,6 +1550,97 @@
       cursor: help;
     }
 
+    /* --- Trace waterfall --- */
+    .session-view-toggle {
+      display: flex;
+      gap: 6px;
+      padding: 8px 0 0;
+    }
+    .sv-btn {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .sv-btn.active {
+      color: var(--text);
+      border-color: #58a6ff;
+    }
+    .trace-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 0;
+    }
+    .trace-turn {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .trace-turn-head {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      padding: 8px 12px;
+      background: var(--panel-alt);
+      font-size: 0.82rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .trace-turn-head .tt-time { color: var(--muted); font-family: var(--mono); font-size: 0.72rem; }
+    .trace-turn-head .tt-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .trace-turn-head .tt-dur { color: #58a6ff; font-family: var(--mono); font-size: 0.75rem; }
+    .trace-rows { padding: 6px 12px 10px; }
+    .trace-row {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 10px;
+      align-items: center;
+      height: 22px;
+    }
+    .trace-row .tr-label {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+    }
+    .trace-row .tr-track { position: relative; height: 14px; }
+    .trace-row .tr-bar {
+      position: absolute;
+      top: 0;
+      height: 14px;
+      border-radius: 3px;
+      min-width: 3px;
+      cursor: pointer;
+      opacity: 0.85;
+    }
+    .trace-row .tr-bar:hover { opacity: 1; outline: 1px solid var(--text); }
+    .trace-row .tr-bar .tr-dur {
+      position: absolute;
+      left: calc(100% + 6px);
+      top: -1px;
+      font-size: 0.68rem;
+      font-family: var(--mono);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .tr-bar.chat { background: #58a6ff; }
+    .tr-bar.tool { background: #3fb950; }
+    .tr-bar.tool-error { background: #f85149; }
+    .trace-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .trace-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
     .agent-nav-empty {
       font-size: 0.78rem;
       color: var(--muted);
@@ -2424,6 +2515,10 @@
         </section>
         <div id="errorBanner" class="error-banner" hidden></div>
         <div id="loading" class="loading" hidden>Loading…</div>
+        <div id="sessionViewToggle" class="session-view-toggle" hidden>
+          <button class="sv-btn active" data-sv="messages" title="按消息回放会话">💬 消息</button>
+          <button class="sv-btn" data-sv="trace" title="Trace 瀑布图：每轮对话中模型推理与工具执行的时间分布，点击色条跳到对应消息">📊 Trace</button>
+        </div>
         <section id="messages" class="messages">
           <div class="empty feature-guide">
             <h3>AgentXRay 能做什么</h3>
@@ -2434,6 +2529,7 @@
             <div class="fg-item"><b>⚙ 设置</b> — 自定义各平台的日志目录（默认已指向本机标准路径）。</div>
           </div>
         </section>
+        <section id="tracePanel" class="trace-panel" hidden></section>
         </div><!-- /mainContent -->
         <section id="insightsPanel" class="insights-panel" hidden></section>
         <section id="promptsPanel" class="insights-panel" hidden></section>
@@ -5517,6 +5613,8 @@
         closeSse();
         renderSummary();
         renderMessages();
+        sessionViewToggle.hidden = true;
+        tracePanel.hidden = true;
         if (currentView === 'insights') loadInsights();
         return;
       }
@@ -5545,6 +5643,139 @@
       startSse();
       // Refresh insights if currently viewing
       if (currentView === 'insights') loadInsights();
+      // Trace view: enable toggle, refresh if active
+      sessionViewToggle.hidden = false;
+      if (sessionView === 'trace') renderTrace();
+    }
+
+    // --- Trace waterfall view (Langfuse-style per-turn spans) ---
+    let sessionView = 'messages';
+    const tracePanel = document.getElementById('tracePanel');
+    const sessionViewToggle = document.getElementById('sessionViewToggle');
+
+    sessionViewToggle.querySelectorAll('.sv-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.sv === sessionView) return;
+        sessionView = btn.dataset.sv;
+        applySessionView();
+      });
+    });
+
+    function applySessionView() {
+      sessionViewToggle.querySelectorAll('.sv-btn').forEach(b => b.classList.toggle('active', b.dataset.sv === sessionView));
+      document.getElementById('messages').style.display = sessionView === 'messages' ? '' : 'none';
+      tracePanel.hidden = sessionView !== 'trace';
+      if (sessionView === 'trace') renderTrace();
+    }
+
+    // Build spans from normalized messages: chat spans from message-timestamp deltas,
+    // tool spans from toolCall→toolResult pairing (both standalone records and content parts).
+    function buildTraceTurns(msgs) {
+      const ts = (m) => parseTimestampMs(m.timestamp);
+      const calls = new Map();   // callId → { name, ts, msgId }
+      const results = new Map(); // callId → { ts, isError }
+      for (const m of msgs) {
+        const t = ts(m);
+        if (m.role === 'toolCall' && m.toolCallId) calls.set(m.toolCallId, { name: m.toolName || '?', ts: t, msgId: m.id });
+        if (m.role === 'toolResult' && m.toolCallId) results.set(m.toolCallId, { ts: t, isError: !!m.isError });
+        for (const c of (m.content || [])) {
+          if ((c.type === 'toolCall' || c.type === 'tool_use') && c.id) calls.set(c.id, { name: c.name || '?', ts: t, msgId: m.id });
+          if (c.type === 'tool_result' && c.tool_use_id) results.set(c.tool_use_id, { ts: t, isError: !!c.is_error });
+        }
+      }
+
+      const turns = [];
+      let turn = null;
+      let prevTs = null;
+      for (const m of msgs) {
+        const t = ts(m);
+        if (!t) continue;
+        if (m.role === 'user') {
+          const text = getTextContent(m.content || []).replace(/\s+/g, ' ').trim();
+          turn = { start: t, end: t, text: text.slice(0, 140) || '(user)', spans: [] };
+          turns.push(turn);
+          prevTs = t;
+          continue;
+        }
+        if (!turn) {
+          turn = { start: t, end: t, text: '(session start)', spans: [] };
+          turns.push(turn);
+          prevTs = t;
+        }
+        if (m.role === 'assistant' && prevTs && t > prevTs) {
+          turn.spans.push({ kind: 'chat', label: (m.model || 'model').split('/').pop(), start: prevTs, end: t, msgId: m.id });
+        }
+        // Reasoning shares the API call with its assistant message — don't advance the clock
+        if (m.role !== 'reasoning') prevTs = t;
+        turn.end = Math.max(turn.end, t);
+      }
+
+      // Attach tool spans to the turn they started in
+      for (const [cid, c] of calls) {
+        if (!c.ts) continue;
+        const r = results.get(cid);
+        const end = r && r.ts && r.ts > c.ts ? r.ts : c.ts + 50;
+        let owner = null;
+        for (const tn of turns) { if (tn.start <= c.ts) owner = tn; else break; }
+        if (!owner) continue;
+        owner.spans.push({ kind: r && r.isError ? 'tool-error' : 'tool', label: c.name, start: c.ts, end, msgId: c.msgId });
+        owner.end = Math.max(owner.end, end);
+      }
+
+      for (const tn of turns) tn.spans.sort((a, b) => a.start - b.start);
+      return turns.filter(tn => tn.spans.length > 0);
+    }
+
+    function renderTrace() {
+      const msgs = state.sessionData?.messages || [];
+      const turns = buildTraceTurns(msgs);
+      if (!turns.length) {
+        tracePanel.innerHTML = '<div class="insights-empty">此会话没有可视化的时间数据（消息缺少时间戳或没有模型/工具活动）。</div>';
+        return;
+      }
+      const html = turns.map(tn => {
+        const dur = Math.max(tn.end - tn.start, 1);
+        const rows = tn.spans.map(s => {
+          const left = ((s.start - tn.start) / dur) * 100;
+          const width = Math.max(((s.end - s.start) / dur) * 100, 0.4);
+          const durText = formatDurationCompact(s.end - s.start);
+          const cls = s.kind === 'chat' ? 'chat' : s.kind;
+          const showDur = width < 78; // avoid overflowing the track for near-full bars
+          return `
+            <div class="trace-row">
+              <div class="tr-label" title="${escapeHtml(s.label)}">${s.kind === 'chat' ? '🤖' : '🔧'} ${escapeHtml(s.label)}</div>
+              <div class="tr-track">
+                <div class="tr-bar ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%" data-msg-id="${escapeHtml(s.msgId || '')}" title="${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击跳到消息">${showDur ? `<span class="tr-dur">${escapeHtml(durText)}</span>` : ''}</div>
+              </div>
+            </div>`;
+        }).join('');
+        return `
+          <div class="trace-turn">
+            <div class="trace-turn-head">
+              <span class="tt-time">${escapeHtml(new Date(tn.start).toLocaleTimeString())}</span>
+              <span class="tt-text" title="${escapeHtml(tn.text)}">👤 ${escapeHtml(tn.text)}</span>
+              <span class="tt-dur">${escapeHtml(formatDurationCompact(tn.end - tn.start))}</span>
+            </div>
+            <div class="trace-rows">${rows}</div>
+          </div>`;
+      }).join('');
+      tracePanel.innerHTML = `
+        <div class="trace-legend">
+          <span><span class="lg" style="background:#58a6ff"></span>模型推理</span>
+          <span><span class="lg" style="background:#3fb950"></span>工具执行</span>
+          <span><span class="lg" style="background:#f85149"></span>工具报错</span>
+          <span style="margin-left:auto">每轮独立时间轴 · 点击色条跳到对应消息</span>
+        </div>${html}`;
+
+      tracePanel.querySelectorAll('.tr-bar[data-msg-id]').forEach(bar => {
+        bar.addEventListener('click', () => {
+          const msgId = bar.dataset.msgId;
+          if (!msgId) return;
+          sessionView = 'messages';
+          applySessionView();
+          scrollToMessage(msgId);
+        });
+      });
     }
 
     function restartRefreshLoop() {
