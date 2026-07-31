@@ -1022,6 +1022,31 @@
       padding-left: 64px;
     }
 
+    .feature-guide {
+      max-width: 640px;
+      text-align: left;
+      padding-left: 0;
+      line-height: 1.65;
+      font-size: 0.88rem;
+    }
+    .feature-guide h3 {
+      color: var(--text);
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .feature-guide .fg-item {
+      margin-bottom: 10px;
+    }
+    .feature-guide b { color: #58a6ff; }
+    .feature-guide code {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0 4px;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+
     .message {
       max-width: min(920px, 100%);
       animation: fadein 180ms ease;
@@ -2351,11 +2376,11 @@
           <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
         </div>
         <div id="agentNav" class="agent-nav" hidden></div>
-        <input id="sessionSearch" class="control" type="search" placeholder="Filter / Enter to search content">
+        <input id="sessionSearch" class="control" type="search" placeholder="输入过滤列表 · 回车全文搜索会话内容" title="直接输入：按 ID/文件名/首条消息过滤左侧列表；按回车：全文搜索当前平台所有会话内容">
         <div class="toggle-row">
-          <label class="toggle" id="archivedToggle"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
-          <label class="toggle"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
-          <label class="toggle"><span>Auto-scroll</span><input id="autoScroll" type="checkbox"></label>
+          <label class="toggle" id="archivedToggle" title="显示已归档（.reset/.deleted）的会话"><span>Include archived</span><input id="includeArchived" type="checkbox"></label>
+          <label class="toggle" title="自动轮询新会话与新消息"><span>Auto-refresh</span><input id="autoRefresh" type="checkbox" checked></label>
+          <label class="toggle" title="新消息到达时自动滚动到底部"><span>Auto-scroll</span><input id="autoScroll" type="checkbox"></label>
           <span id="sseIndicator" class="sse-indicator" title="Real-time tail status"></span>
         </div>
         <div id="searchResults" class="search-results" hidden></div>
@@ -2363,19 +2388,19 @@
       </aside>
       <main class="main">
         <div class="view-toggle-bar" id="viewToggleBar">
-          <button class="view-toggle-btn active" data-view="sessions">Sessions</button>
-          <button class="view-toggle-btn" data-view="insights">Insights</button>
-          <button class="view-toggle-btn" data-view="prompts">Prompts</button>
-          <button class="view-toggle-btn" data-view="library">Library</button>
+          <button class="view-toggle-btn active" data-view="sessions" title="浏览与回放会话：消息、工具调用、耗时与 token">Sessions</button>
+          <button class="view-toggle-btn" data-view="insights" title="聚合统计：工具调用、错误聚类、token 消耗、按日趋势">Insights</button>
+          <button class="view-toggle-btn" data-view="prompts" title="自动提取历史里所有真人 prompt：搜索、收藏、聚类分析与改写">Prompts</button>
+          <button class="view-toggle-btn" data-view="library" title="Prompt 资产库：标签管理，一键安装为各工具的 slash command">Library</button>
         </div>
         <div id="mainContent">
         <div id="breadcrumb" class="breadcrumb" hidden></div>
         <section id="summary" class="summary">
           <div class="summary-top">
             <div>
-              <h2>No session selected</h2>
+              <h2>从左侧选择一个会话</h2>
               <div class="summary-meta">
-                <span>Select an agent and session from the left.</span>
+                <span>顶部先选平台（OMP / Codex / Claude Code…），左侧列表点击任意会话即可回放。</span>
               </div>
             </div>
           </div>
@@ -2383,7 +2408,14 @@
         <div id="errorBanner" class="error-banner" hidden></div>
         <div id="loading" class="loading" hidden>Loading…</div>
         <section id="messages" class="messages">
-          <div class="empty">Session messages will appear here.</div>
+          <div class="empty feature-guide">
+            <h3>AgentXRay 能做什么</h3>
+            <div class="fg-item"><b>Sessions</b> — 跨工具浏览与回放 AI agent 会话：每条消息、每次工具调用的参数与结果、耗时拆分、token 成本。左侧搜索框<b>直接输入</b>过滤列表，<b>按回车</b>全文搜索会话内容（含已被 Claude 清理的历史输入）。</div>
+            <div class="fg-item"><b>Insights</b> — 聚合分析：哪些工具用得最多、哪里报错、token 花在哪、每天用量趋势。选中某个会话后变为单会话分析。</div>
+            <div class="fg-item"><b>Prompts</b> — 自动提取你在所有会话里输入过的真人 prompt（滤掉工具输出和系统注入），按目录分组。每条可 <b>⭐ 收藏</b>入库、<b>优化</b>（Claude 改写）；「分析优化」把相似 prompt 聚成模板并统计效果。</div>
+            <div class="fg-item"><b>Library</b> — prompt 资产库：标签分类、编辑、搜索。每条有 <b>Claude / Codex / OMP</b> 三个开关，点亮即安装为该工具的 slash command——之后在工具里输 <code>/名字</code> 直接调用，<code>$ARGUMENTS</code> 传参。</div>
+            <div class="fg-item"><b>⚙ 设置</b> — 自定义各平台的日志目录（默认已指向本机标准路径）。</div>
+          </div>
         </section>
         </div><!-- /mainContent -->
         <section id="insightsPanel" class="insights-panel" hidden></section>
@@ -2831,7 +2863,8 @@
       platformBar.innerHTML = platforms
         .map((p) => {
           const activeClass = p.id === state.platform ? 'active' : '';
-          return `<button class="platform-tab ${activeClass}" data-platform="${p.id}">${p.label}</button>`;
+          const tips = { openclaw: 'OpenClaw 会话（~/.openclaw/agents）', codex: 'Codex 会话（~/.codex/sessions）', 'claude-code': 'Claude Code 会话（~/.claude/projects）', hermes: 'Hermes 会话（~/.hermes）', omp: 'oh-my-pi 会话（~/.omp/agent/sessions）' };
+          return `<button class="platform-tab ${activeClass}" data-platform="${p.id}" title="${tips[p.id] || ''}">${p.label}</button>`;
         })
         .join('');
 
@@ -3532,7 +3565,7 @@
           <button class="export-btn" id="promptsAnalyzeBtn" ${promptAnalysisLoading ? 'disabled' : ''}>${promptAnalysisLoading ? '分析中…' : (promptAnalysis && promptAnalysis.platform === state.platform ? '重新分析' : '分析优化')}</button>
           <button class="export-btn" id="promptsExportBtn">Export JSON</button>
         </div>
-        <div class="prompts-summary">${promptsData.totalPrompts} prompts across ${promptsData.totalSessions} sessions in ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}</div>
+        <div class="prompts-summary">从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}</div>
         ${renderAnalysisHtml()}
         ${groupsHtml || '<div class="insights-empty">No matches.</div>'}
       `;
@@ -3788,7 +3821,7 @@
           <input type="search" id="librarySearchInput" placeholder="Filter by name / tags / description / content" value="${escapeHtml(librarySearch)}">
           <button class="export-btn" id="libraryNewBtn">新建 Prompt</button>
         </div>
-        <div class="prompts-summary">${all.length} prompt${all.length === 1 ? '' : 's'} in library${q ? ` — showing ${prompts.length}` : ''}</div>
+        <div class="prompts-summary">Prompt 资产库（~/.agentxray/library）— 点亮 Claude / Codex / OMP 开关即安装为该工具的 slash command，工具内 <code>/名字</code> 调用 · ${all.length} prompt${all.length === 1 ? '' : 's'}${q ? ` — showing ${prompts.length}` : ''}</div>
         ${cardsHtml || `<div class="insights-empty">${all.length ? 'No matches.' : 'Library 为空。在 Prompts 视图点 ⭐ 收藏，或点击「新建 Prompt」。'}</div>`}
       `;
 
@@ -4306,8 +4339,8 @@
         summary.innerHTML = `
           <div class="summary-top">
             <div>
-              <h2>No session selected</h2>
-              <div class="summary-meta"><span>Select an agent and session from the left.</span></div>
+              <h2>从左侧选择一个会话</h2>
+              <div class="summary-meta"><span>顶部先选平台，左侧列表点击任意会话即可回放。</span></div>
             </div>
           </div>
         `;
