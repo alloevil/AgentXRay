@@ -1677,6 +1677,7 @@
     .tr-bar.chat { background: #58a6ff; }
     .tr-bar.tool { background: #3fb950; }
     .tr-bar.tool-error { background: #f85149; }
+    .tr-bar.agent { background: #d2a8ff; }
     .trace-legend {
       display: flex;
       gap: 16px;
@@ -5772,6 +5773,7 @@
       // Refresh insights if currently viewing
       if (currentView === 'insights') loadInsights();
       // Trace view: enable toggle, refresh if active
+      ompChildViewing = null; // back to the parent session
       sessionViewToggle.hidden = false;
       if (sessionView === 'trace') renderTrace();
     }
@@ -5798,7 +5800,7 @@
 
     // Build spans from normalized messages: chat spans from message-timestamp deltas,
     // tool spans from toolCall→toolResult pairing (both standalone records and content parts).
-    function buildTraceTurns(msgs) {
+    function buildTraceTurns(msgs, agentSpans = []) {
       const ts = (m) => parseTimestampMs(m.timestamp);
       const calls = new Map();   // callId → { name, ts, msgId }
       const results = new Map(); // callId → { ts, isError }
@@ -5850,13 +5852,43 @@
         owner.end = Math.max(owner.end, end);
       }
 
+      // Attach spawned-subagent spans (omp) to the turn they started in
+      for (const a of agentSpans) {
+        if (!a.start) continue;
+        const end = a.end && a.end > a.start ? a.end : a.start + 50;
+        let owner = null;
+        for (const tn of turns) { if (tn.start <= a.start) owner = tn; else break; }
+        if (!owner) continue;
+        owner.spans.push({ kind: 'agent', label: a.name, start: a.start, end, agentName: a.name });
+        owner.end = Math.max(owner.end, end);
+      }
+
       for (const tn of turns) tn.spans.sort((a, b) => a.start - b.start);
       return turns.filter(tn => tn.spans.length > 0);
     }
 
-    function renderTrace() {
+    // Cache of the current session's subagent list (shared with loadOmpChildren)
+    let ompChildrenCache = { sid: null, data: [] };
+    let ompChildViewing = null; // non-null while a child transcript is loaded
+    async function getOmpChildren() {
+      if (state.platform !== 'omp' || !state.selectedSessionId) return [];
+      if (ompChildrenCache.sid === state.selectedSessionId) return ompChildrenCache.data;
+      try {
+        const data = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children` + dirParam());
+        ompChildrenCache = { sid: state.selectedSessionId, data };
+        return data;
+      } catch { return []; }
+    }
+
+    async function renderTrace() {
       const msgs = state.sessionData?.messages || [];
-      const turns = buildTraceTurns(msgs);
+      const children = ompChildViewing ? [] : await getOmpChildren();
+      const agentSpans = children.map(c => ({
+        name: c.name,
+        start: parseTimestampMs(c.timestamp),
+        end: parseTimestampMs(c.lastActivity)
+      }));
+      const turns = buildTraceTurns(msgs, agentSpans);
       if (!turns.length) {
         tracePanel.innerHTML = '<div class="insights-empty">此会话没有可视化的时间数据（消息缺少时间戳或没有模型/工具活动）。</div>';
         return;
@@ -5869,11 +5901,15 @@
           const durText = formatDurationCompact(s.end - s.start);
           const cls = s.kind === 'chat' ? 'chat' : s.kind;
           const showDur = width < 78; // avoid overflowing the track for near-full bars
+          const icon = s.kind === 'chat' ? '🤖' : (s.kind === 'agent' ? '🌳' : '🔧');
+          const action = s.kind === 'agent'
+            ? `data-agent-name="${escapeHtml(s.agentName)}" title="子 Agent ${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击查看其执行记录"`
+            : `data-msg-id="${escapeHtml(s.msgId || '')}" title="${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击跳到消息"`;
           return `
             <div class="trace-row">
-              <div class="tr-label" title="${escapeHtml(s.label)}">${s.kind === 'chat' ? '🤖' : '🔧'} ${escapeHtml(s.label)}</div>
+              <div class="tr-label" title="${escapeHtml(s.label)}">${icon} ${escapeHtml(s.label)}</div>
               <div class="tr-track">
-                <div class="tr-bar ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%" data-msg-id="${escapeHtml(s.msgId || '')}" title="${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击跳到消息">${showDur ? `<span class="tr-dur">${escapeHtml(durText)}</span>` : ''}</div>
+                <div class="tr-bar ${cls}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%" ${action}>${showDur ? `<span class="tr-dur">${escapeHtml(durText)}</span>` : ''}</div>
               </div>
             </div>`;
         }).join('');
@@ -5892,6 +5928,7 @@
           <span><span class="lg" style="background:#58a6ff"></span>模型推理</span>
           <span><span class="lg" style="background:#3fb950"></span>工具执行</span>
           <span><span class="lg" style="background:#f85149"></span>工具报错</span>
+          <span><span class="lg" style="background:#d2a8ff"></span>子 Agent</span>
           <span style="margin-left:auto">每轮独立时间轴 · 点击色条跳到对应消息</span>
         </div>${html}`;
 
@@ -5903,6 +5940,9 @@
           applySessionView();
           scrollToMessage(msgId);
         });
+      });
+      tracePanel.querySelectorAll('.tr-bar[data-agent-name]').forEach(bar => {
+        bar.addEventListener('click', () => viewOmpChild(bar.dataset.agentName));
       });
     }
 
@@ -6369,6 +6409,7 @@
       try {
         const payload = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children/${encodeURIComponent(name)}` + dirParam());
         state.sessionData = payload;
+        ompChildViewing = name; // child trace must not embed sibling agent spans
         state.visibleUnitCount = (payload?.messages?.length || 0) <= 200 ? Infinity : MSG_BATCH_SIZE;
         sessionView = 'messages';
         applySessionView();

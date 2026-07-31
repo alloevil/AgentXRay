@@ -2761,6 +2761,7 @@ app.get('/api/omp/sessions/:sessionId/children', async (req, res) => {
         file: e.name,
         title: meta?.title || null,
         timestamp: meta?.timestamp || null,
+        lastActivity: meta?.lastActivity || null,
         messageCount: meta?.messageCount || 0,
         toolCallCount: meta?.toolCallCount || 0
       });
