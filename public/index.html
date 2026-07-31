@@ -5607,16 +5607,13 @@
       sessionList.style.display = 'none';
 
       try {
-        const params = new URLSearchParams({ q, platform: state.platform });
-        if (state.platform === 'openclaw' && state.selectedAgent) params.set('agent', state.selectedAgent);
-        // Pass custom dir if configured
-        let dir = '';
-        if (state.platform === 'openclaw') dir = state.settings.openclawDir;
-        else if (state.platform === 'codex') dir = state.settings.codexDir;
-        else if (state.platform === 'claude-code') dir = state.settings.claudeCodeDir;
-        else if (state.platform === 'hermes') dir = state.settings.hermesDir;
-        else if (state.platform === 'omp') dir = state.settings.ompDir;
-        if (dir) params.set('dir', dir);
+        // Global search across every platform; per-platform dir overrides
+        const params = new URLSearchParams({ q, platform: 'all' });
+        if (state.settings.openclawDir) params.set('dirOpenclaw', state.settings.openclawDir);
+        if (state.settings.codexDir) params.set('dirCodex', state.settings.codexDir);
+        if (state.settings.claudeCodeDir) params.set('dirClaude', state.settings.claudeCodeDir);
+        if (state.settings.hermesDir) params.set('dirHermes', state.settings.hermesDir);
+        if (state.settings.ompDir) params.set('dirOmp', state.settings.ompDir);
         const res = await fetch(`/api/search?${params}`);
         const results = await res.json();
 
@@ -5631,15 +5628,21 @@
 
         let html = `
           <div class="search-header">
-            <span>🔍 ${results.length} session(s) match "${escapeHtml(q)}"</span>
+            <span>🔍 全平台搜索 "${escapeHtml(q)}" — ${results.length} 个会话命中</span>
             <button class="search-close" onclick="closeSearchResults(); sessionSearch.value=''">✕ Close</button>
           </div>`;
+
+        const platBadge = {
+          openclaw: ['OpenClaw', '#3fb950'], codex: ['Codex', '#58a6ff'],
+          'claude-code': ['Claude', '#d2a8ff'], hermes: ['Hermes', '#f78166'], omp: ['OMP', '#ffd33d']
+        };
 
         for (const r of results) {
           const isHistory = !!r.history;
           const shortId = isHistory
             ? (r.project || '').replace(/^\/Users\/[^/]+/, '~')
             : (r.sessionId.length > 20 ? r.sessionId.slice(0, 8) + '\u2026' : r.sessionId);
+          const [platLabel, platColor] = platBadge[r.platform] || [r.platform, 'var(--muted)'];
           for (const m of r.matches) {
             // Highlight the query in snippet
             const escaped = escapeHtml(m.snippet);
@@ -5647,8 +5650,8 @@
             const highlighted = escaped.replace(re, '<mark>$1</mark>');
             const badge = isHistory ? '<span class="sr-role" style="color:#d29922">已清理 · 仅输入记录</span>' : `<span class="sr-role">${escapeHtml(m.role)}</span>`;
             html += `
-              <div class="search-result-item${isHistory ? ' sr-history' : ''}" data-session-id="${escapeHtml(r.sessionId || '')}" data-file="${escapeHtml(r.file)}"${isHistory ? ' style="cursor:default;opacity:0.75"' : ''}>
-                <div class="sr-session">${escapeHtml(shortId)} ${badge}${m.timestamp ? ` <span class="sr-role">${escapeHtml(new Date(m.timestamp).toLocaleDateString())}</span>` : ''}</div>
+              <div class="search-result-item${isHistory ? ' sr-history' : ''}" data-session-id="${escapeHtml(r.sessionId || '')}" data-platform="${escapeHtml(r.platform || '')}" data-agent="${escapeHtml(r.agent || '')}" data-file="${escapeHtml(r.file)}"${isHistory ? ' style="cursor:default;opacity:0.75"' : ''}>
+                <div class="sr-session"><span class="sr-role" style="color:${platColor};border:1px solid ${platColor}33;border-radius:4px;padding:0 4px">${escapeHtml(platLabel)}</span> ${escapeHtml(shortId)} ${badge}${m.timestamp ? ` <span class="sr-role">${escapeHtml(new Date(m.timestamp).toLocaleDateString())}</span>` : ''}</div>
                 <div class="sr-match">${highlighted}</div>
               </div>`;
           }
@@ -5657,18 +5660,34 @@
         searchResults.innerHTML = html;
 
         searchResults.querySelectorAll('.search-result-item').forEach(el => {
-          el.addEventListener('click', () => {
+          el.addEventListener('click', async () => {
             const sid = el.dataset.sessionId;
             if (!sid) return; // history-only hit: original session was cleaned up
+            const plat = el.dataset.platform;
+            const agent = el.dataset.agent;
             closeSearchResults();
             sessionSearch.value = '';
-            // Find and click the session in the list
-            const found = state.filteredSessions.find(s => s.id === sid);
+            // Switch platform (and OpenClaw agent) when the hit lives elsewhere
+            if (plat && plat !== state.platform) {
+              state.platform = plat;
+              state.selectedAgent = agent || '';
+              state.selectedSessionId = '';
+              state.sessions = [];
+              state.filteredSessions = [];
+              state.sessionData = null;
+              state.navStack = [];
+              renderBreadcrumb();
+              renderAgents();
+              await refreshAll(false);
+            } else if (agent && agent !== state.selectedAgent) {
+              state.selectedAgent = agent;
+              await refreshAll(false);
+            }
+            const found = state.sessions.find(s => s.id === sid);
             if (found) {
-              state.sessionId = found.id;
-              state.sessionFile = found.file;
+              state.selectedSessionId = found.id;
               renderSessions();
-              loadSession();
+              await loadSession();
             }
           });
         });

@@ -1367,19 +1367,30 @@ app.get('/api/search', async (req, res) => {
     const maxResults = Math.min(parseInt(req.query.limit) || 50, 100);
     if (!q) return res.json([]);
 
-    let sessionFiles = [];
+    // Per-platform dir overrides: `dir` applies to the selected platform;
+    // in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirHermes/dirOmp.
+    const all = platform === 'all';
+    const dirFor = (key, fallback) => resolveDir(all ? req.query[key] : req.query.dir, fallback);
 
-    if (platform === 'openclaw' && agent) {
-      const dir = resolveDir(req.query.dir, DATA_DIR);
-      const agentDir = path.join(dir, agent, 'sessions');
-      try {
-        const entries = await fsp.readdir(agentDir);
-        sessionFiles = entries
-          .filter(f => f.endsWith('.jsonl') && !isArchivedFile(f))
-          .map(f => ({ path: path.join(agentDir, f), file: f, platform: 'openclaw' }));
-      } catch { /* no sessions */ }
-    } else if (platform === 'codex') {
-      const dir = resolveDir(req.query.dir, CODEX_DIR);
+    const sessionFiles = [];
+
+    if (platform === 'openclaw' || all) {
+      const dir = dirFor('dirOpenclaw', DATA_DIR);
+      const agents = agent && !all ? [agent] : await readAgents(dir).catch(() => []);
+      for (const a of agents) {
+        const agentDir = path.join(dir, a, 'sessions');
+        try {
+          const entries = await fsp.readdir(agentDir);
+          for (const f of entries) {
+            if (f.endsWith('.jsonl') && !isArchivedFile(f)) {
+              sessionFiles.push({ path: path.join(agentDir, f), file: f, agent: a, platform: 'openclaw' });
+            }
+          }
+        } catch { /* no sessions */ }
+      }
+    }
+    if (platform === 'codex' || all) {
+      const dir = dirFor('dirCodex', CODEX_DIR);
       try {
         // Codex sessions live at <dir>/YYYY/MM/DD/rollout-*.jsonl
         const entries = await fsp.readdir(dir, { recursive: true });
@@ -1392,12 +1403,9 @@ app.get('/api/search', async (req, res) => {
           }
         }
       } catch {}
-    } else if (platform === 'hermes') {
-      const dir = resolveDir(req.query.dir, HERMES_DIR);
-      const hermesResults = searchHermesSessions(dir, q, maxResults);
-      return res.json(hermesResults);
-    } else if (platform === 'claude-code') {
-      const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
+    }
+    if (platform === 'claude-code' || all) {
+      const dir = dirFor('dirClaude', CLAUDE_CODE_DIR);
       try {
         // Claude Code sessions live at <dir>/<project-slug>/*.jsonl
         const slugs = await fsp.readdir(dir, { withFileTypes: true });
@@ -1412,8 +1420,9 @@ app.get('/api/search', async (req, res) => {
           }
         }
       } catch {}
-    } else if (platform === 'omp') {
-      const dir = resolveDir(req.query.dir, OMP_DIR);
+    }
+    if (platform === 'omp' || all) {
+      const dir = dirFor('dirOmp', OMP_DIR);
       try {
         const slugs = await fsp.readdir(dir, { withFileTypes: true });
         for (const s of slugs) {
@@ -1427,6 +1436,10 @@ app.get('/api/search', async (req, res) => {
           }
         }
       } catch {}
+    }
+    if (platform === 'hermes' && !all) {
+      const dir = resolveDir(req.query.dir, HERMES_DIR);
+      return res.json(searchHermesSessions(dir, q, maxResults));
     }
 
     const results = [];
@@ -1476,14 +1489,14 @@ app.get('/api/search', async (req, res) => {
       }
 
       if (matches.length > 0) {
-        results.push({ sessionId, file: sf.file, platform: sf.platform, matches });
+        results.push({ sessionId, file: sf.file, platform: sf.platform, ...(sf.agent ? { agent: sf.agent } : {}), matches });
       }
     }
 
     // Claude Code: also surface prompt history (~/.claude/history.jsonl) so sessions
     // removed by Claude's cleanupPeriodDays retention still leave a searchable trace.
-    if (platform === 'claude-code') {
-      const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
+    if (platform === 'claude-code' || all) {
+      const dir = dirFor('dirClaude', CLAUDE_CODE_DIR);
       const historyPath = path.join(path.dirname(dir), 'history.jsonl');
       const liveSnippets = new Set(results.flatMap(r => r.matches.map(m => m.snippet)));
       const byProject = new Map(); // project → matches[]
@@ -1516,6 +1529,16 @@ app.get('/api/search', async (req, res) => {
           results.push({ sessionId: null, file: 'history.jsonl', platform: 'claude-code', project, history: true, matches });
         }
       } catch { /* no history file */ }
+    }
+
+    // Hermes stores sessions in SQLite; merge its hits in all-platform mode
+    if (all) {
+      try {
+        const remaining = Math.max(0, maxResults - results.length);
+        if (remaining > 0) {
+          results.push(...searchHermesSessions(dirFor('dirHermes', HERMES_DIR), q, remaining));
+        }
+      } catch { /* no hermes db */ }
     }
 
     res.json(results);
