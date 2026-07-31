@@ -5,6 +5,7 @@ const path = require('path');
 const readline = require('readline');
 const Database = require('better-sqlite3');
 const { execFile } = require('child_process');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3800;
@@ -443,6 +444,7 @@ async function scanFileForInsights(filePath, sessionId) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalCacheRead = 0;
+  let totalCost = 0;
   let sessionDate = null;
   const toolStats = {};   // name → { calls, errors, totalDurationMs }
   const errorExamples = []; // { toolName, snippet, pattern }
@@ -472,6 +474,7 @@ async function scanFileForInsights(filePath, sessionId) {
           totalInputTokens += msg.usage.input || 0;
           totalOutputTokens += msg.usage.output || 0;
           totalCacheRead += msg.usage.cacheRead || msg.usage.cache_read || 0;
+          if (msg.usage.cost && typeof msg.usage.cost.total === 'number') totalCost += msg.usage.cost.total;
         }
 
         for (const c of content) {
@@ -605,7 +608,7 @@ async function scanFileForInsights(filePath, sessionId) {
     stream.destroy();
   }
 
-  return { messageCount, toolCallCount, toolResultCount, errorCount, totalInputTokens, totalOutputTokens, totalCacheRead, sessionDate, toolStats, errorExamples };
+  return { messageCount, toolCallCount, toolResultCount, errorCount, totalInputTokens, totalOutputTokens, totalCacheRead, totalCost, sessionDate, toolStats, errorExamples };
 }
 
 // Scan a single Hermes session for insights (from SQLite)
@@ -710,7 +713,7 @@ async function computeInsights(platform, agentName, dirOverride) {
         }
       }
 
-      return buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, 0, toolStats, allErrors, dailyTrend);
+      return buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, 0, 0, toolStats, allErrors, dailyTrend);
     } finally {
       db.close();
     }
@@ -722,7 +725,7 @@ async function computeInsights(platform, agentName, dirOverride) {
 
   let totalSessions = files.length;
   let totalMessages = 0, totalToolCalls = 0, totalToolResultCount = 0, totalErrors = 0;
-  let totalInput = 0, totalOutput = 0, totalCacheRead = 0;
+  let totalInput = 0, totalOutput = 0, totalCacheRead = 0, totalCost = 0;
   const toolStats = {};
   const allErrors = [];
   const dailyTrend = {};
@@ -738,6 +741,7 @@ async function computeInsights(platform, agentName, dirOverride) {
     totalInput += data.totalInputTokens;
     totalOutput += data.totalOutputTokens;
     totalCacheRead += data.totalCacheRead;
+    totalCost += data.totalCost || 0;
 
     for (const [name, st] of Object.entries(data.toolStats)) {
       if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
@@ -748,17 +752,18 @@ async function computeInsights(platform, agentName, dirOverride) {
     allErrors.push(...data.errorExamples);
 
     if (data.sessionDate) {
-      if (!dailyTrend[data.sessionDate]) dailyTrend[data.sessionDate] = { sessions: 0, errors: 0, toolCalls: 0 };
+      if (!dailyTrend[data.sessionDate]) dailyTrend[data.sessionDate] = { sessions: 0, errors: 0, toolCalls: 0, cost: 0 };
       dailyTrend[data.sessionDate].sessions++;
       dailyTrend[data.sessionDate].errors += data.errorCount;
       dailyTrend[data.sessionDate].toolCalls += data.toolCallCount;
+      dailyTrend[data.sessionDate].cost += data.totalCost || 0;
     }
   }
 
-  return buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, totalCacheRead, toolStats, allErrors, dailyTrend);
+  return buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, totalCacheRead, totalCost, toolStats, allErrors, dailyTrend);
 }
 
-function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, totalCacheRead, toolStats, allErrors, dailyTrend) {
+function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, totalToolResultCount, totalErrors, totalInput, totalOutput, totalCacheRead, totalCost, toolStats, allErrors, dailyTrend) {
   const errorRate = totalToolResultCount > 0 ? totalErrors / totalToolResultCount : 0;
 
   // Tool stats array
@@ -786,7 +791,7 @@ function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, tot
 
   // Daily trend sorted by date
   const trend = Object.entries(dailyTrend)
-    .map(([date, d]) => ({ date, sessions: d.sessions, errors: d.errors, toolCalls: d.toolCalls }))
+    .map(([date, d]) => ({ date, sessions: d.sessions, errors: d.errors, toolCalls: d.toolCalls, cost: Math.round((d.cost || 0) * 10000) / 10000 }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return {
@@ -794,6 +799,7 @@ function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, tot
     totalMessages,
     totalToolCalls,
     errorRate: Math.round(errorRate * 10000) / 10000,
+    totalCost: Math.round(totalCost * 10000) / 10000,
     tokenUsage: { input: totalInput, output: totalOutput, cacheRead: totalCacheRead },
     toolStats: toolStatsArray,
     errorClusters,
@@ -3545,6 +3551,191 @@ app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
     }
     const payload = await parseClaudeCodeSessionFile(filePath);
     res.json(payload);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- OTLP export: serialize a session's trace as OpenTelemetry OTLP/JSON ---
+// One trace per session; per user-turn a root `invoke_agent` span with child
+// `chat {model}` and `execute_tool {toolName}` spans. Turn/chat/tool timing
+// mirrors the frontend buildTraceTurns semantics (reasoning does not advance
+// the clock). All ids are deterministic sha256 digests of the session id.
+
+const OTLP_PLATFORMS = {
+  codex: { defaultDir: () => CODEX_DIR, find: findCodexSessionFile, parse: parseCodexSessionFile },
+  'claude-code': { defaultDir: () => CLAUDE_CODE_DIR, find: findClaudeCodeSessionFile, parse: parseClaudeCodeSessionFile },
+  omp: { defaultDir: () => OMP_DIR, find: findOmpSessionFile, parse: parseOmpSessionFile },
+};
+
+function otlpHexId(seed, bytes) {
+  return crypto.createHash('sha256').update(seed).digest('hex').slice(0, bytes * 2);
+}
+
+function otlpStrAttr(key, value) {
+  return { key, value: { stringValue: String(value) } };
+}
+
+function otlpIntAttr(key, value) {
+  return { key, value: { intValue: String(value) } };
+}
+
+function otlpNano(ms) {
+  return String(ms) + '000000';
+}
+
+// Mirror of the frontend buildTraceTurns: chat spans from message-timestamp
+// deltas, tool spans from toolCall→toolResult pairing (standalone records and
+// content parts), turns keyed by user messages.
+function buildOtlpTurns(messages) {
+  const ts = (m) => {
+    const t = Date.parse(m.timestamp || '');
+    return Number.isFinite(t) ? t : null;
+  };
+  const calls = new Map();   // callId → { name, ts }
+  const results = new Map(); // callId → { ts, isError }
+  for (const m of messages) {
+    const t = ts(m);
+    if (m.role === 'toolCall' && m.toolCallId) calls.set(m.toolCallId, { name: m.toolName || '?', ts: t });
+    if (m.role === 'toolResult' && m.toolCallId) results.set(m.toolCallId, { ts: t, isError: !!m.isError });
+    for (const c of (m.content || [])) {
+      if ((c.type === 'toolCall' || c.type === 'tool_use') && c.id) calls.set(c.id, { name: c.name || '?', ts: t });
+      if (c.type === 'tool_result' && c.tool_use_id) results.set(c.tool_use_id, { ts: t, isError: !!c.is_error });
+    }
+  }
+
+  const turns = [];
+  let turn = null;
+  let prevTs = null;
+  for (const m of messages) {
+    const t = ts(m);
+    if (!t) continue;
+    if (m.role === 'user') {
+      turn = { start: t, end: t, chat: [], tools: [] };
+      turns.push(turn);
+      prevTs = t;
+      continue;
+    }
+    if (!turn) {
+      turn = { start: t, end: t, chat: [], tools: [] };
+      turns.push(turn);
+      prevTs = t;
+    }
+    if (m.role === 'assistant' && prevTs && t > prevTs) {
+      turn.chat.push({ model: m.model || 'model', start: prevTs, end: t, usage: m.usage || null });
+    }
+    // Reasoning shares the API call with its assistant message — don't advance the clock
+    if (m.role !== 'reasoning') prevTs = t;
+    turn.end = Math.max(turn.end, t);
+  }
+
+  // Attach tool spans to the turn they started in
+  for (const [cid, c] of calls) {
+    if (!c.ts) continue;
+    const r = results.get(cid);
+    const end = r && r.ts && r.ts > c.ts ? r.ts : c.ts + 50;
+    let owner = null;
+    for (const tn of turns) { if (tn.start <= c.ts) owner = tn; else break; }
+    if (!owner) continue;
+    owner.tools.push({ callId: cid, name: c.name, start: c.ts, end, isError: !!(r && r.isError) });
+    owner.end = Math.max(owner.end, end);
+  }
+
+  return turns.filter(tn => tn.chat.length > 0 || tn.tools.length > 0);
+}
+
+function buildOtlpPayload(messages, sessionId) {
+  const traceId = otlpHexId(`agentxray:trace:${sessionId}`, 16);
+  const turns = buildOtlpTurns(messages);
+  const spans = [];
+
+  turns.forEach((tn, ti) => {
+    const rootId = otlpHexId(`${sessionId}:turn:${ti}`, 8);
+    spans.push({
+      traceId,
+      spanId: rootId,
+      name: 'invoke_agent',
+      kind: 1,
+      startTimeUnixNano: otlpNano(tn.start),
+      endTimeUnixNano: otlpNano(tn.end),
+      attributes: [otlpStrAttr('gen_ai.operation.name', 'invoke_agent')]
+    });
+
+    tn.chat.forEach((c, ci) => {
+      const usage = c.usage || {};
+      spans.push({
+        traceId,
+        spanId: otlpHexId(`${sessionId}:turn:${ti}:chat:${ci}`, 8),
+        parentSpanId: rootId,
+        name: `chat ${c.model}`,
+        kind: 1,
+        startTimeUnixNano: otlpNano(c.start),
+        endTimeUnixNano: otlpNano(c.end),
+        attributes: [
+          otlpStrAttr('gen_ai.operation.name', 'chat'),
+          otlpStrAttr('gen_ai.request.model', c.model),
+          otlpIntAttr('gen_ai.usage.input_tokens', usage.input || usage.input_tokens || 0),
+          otlpIntAttr('gen_ai.usage.output_tokens', usage.output || usage.output_tokens || 0)
+        ]
+      });
+    });
+
+    tn.tools.forEach((tl, tli) => {
+      const span = {
+        traceId,
+        spanId: otlpHexId(`${sessionId}:turn:${ti}:tool:${tl.callId || tli}`, 8),
+        parentSpanId: rootId,
+        name: `execute_tool ${tl.name}`,
+        kind: 1,
+        startTimeUnixNano: otlpNano(tl.start),
+        endTimeUnixNano: otlpNano(tl.end),
+        attributes: [
+          otlpStrAttr('gen_ai.operation.name', 'execute_tool'),
+          otlpStrAttr('gen_ai.tool.name', tl.name)
+        ]
+      };
+      if (tl.isError) span.status = { code: 2 };
+      spans.push(span);
+    });
+  });
+
+  return {
+    resourceSpans: [{
+      resource: {
+        attributes: [
+          otlpStrAttr('service.name', 'agentxray'),
+          otlpStrAttr('gen_ai.conversation.id', sessionId)
+        ]
+      },
+      scopeSpans: [{
+        scope: { name: 'agentxray' },
+        spans
+      }]
+    }]
+  };
+}
+
+app.get('/api/otlp/:platform/:sessionId', async (req, res) => {
+  const platform = OTLP_PLATFORMS[req.params.platform];
+  if (!platform) {
+    return res.status(400).json({ error: 'Invalid platform' });
+  }
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
+  try {
+    const dir = resolveDir(req.query.dir, platform.defaultDir());
+    const filePath = await platform.find(dir, sessionId);
+    if (!filePath) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const { messages } = await platform.parse(filePath);
+    res.json(buildOtlpPayload(messages, sessionId));
   } catch (error) {
     if (error.code === 'ENOENT') {
       return res.status(404).json({ error: 'Session not found' });

@@ -1,8 +1,18 @@
 {
   "name": "agent-xray",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Web dashboard for viewing AI agent session logs — supports OpenClaw, Codex, Claude Code, and Hermes",
   "main": "server.js",
+  "bin": {
+    "agentxray": "bin/agentxray.js",
+    "agent-xray": "bin/agentxray.js"
+  },
+  "files": [
+    "server.js",
+    "public",
+    "bin",
+    "README.md"
+  ],
   "scripts": {
     "start": "node server.js"
   },
@@ -23,6 +33,6 @@
     "express": "^4.21.2"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.17"
   }
 }

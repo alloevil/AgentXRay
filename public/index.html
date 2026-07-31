@@ -1687,6 +1687,101 @@
     }
     .trace-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
 
+    /* Trace span detail sidebar */
+    .span-sidebar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 420px;
+      max-width: 92vw;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      z-index: 150;
+      display: flex;
+      flex-direction: column;
+    }
+    .span-sidebar[hidden] { display: none; }
+    .span-sidebar-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--panel-alt);
+      border-bottom: 1px solid var(--border);
+    }
+    .span-sidebar-head .ss-title {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .span-sidebar-head .ss-head-meta {
+      margin-left: auto;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+    .span-sidebar-head .ss-close {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 2px 8px;
+    }
+    .span-sidebar-head .ss-close:hover { color: var(--text); border-color: var(--muted); }
+    .span-sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 16px 16px;
+    }
+    .span-sidebar-body .ss-section-title {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 14px 0 6px;
+    }
+    .span-sidebar-body .ss-pre {
+      margin: 0;
+      padding: 8px 10px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.75rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .span-sidebar-body .ss-error {
+      color: #f85149;
+      border: 1px solid rgba(248, 81, 73, 0.4);
+      background: rgba(248, 81, 73, 0.08);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.82rem;
+      margin-top: 12px;
+    }
+    .span-sidebar-body .ss-empty { color: var(--muted); font-size: 0.8rem; }
+    .span-sidebar-foot {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .trend-bar-cost {
+      position: absolute;
+      top: -13px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: #d29922;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+
     .agent-nav-empty {
       font-size: 0.78rem;
       color: var(--muted);
@@ -3506,6 +3601,11 @@
             <div class="value">${tokenFmt}</div>
             <div class="label">Tokens (in+out)</div>
           </div>
+          ${data.totalCost > 0 ? `
+          <div class="insight-card cost-card">
+            <div class="value">💰 ${formatCost(data.totalCost)}</div>
+            <div class="label">Cost</div>
+          </div>` : ''}
         </div>
       `;
 
@@ -3563,10 +3663,11 @@
           const tH = Math.max(1, Math.round((d.toolCalls / maxVal) * 90));
           const label = d.date.slice(5); // MM-DD
           return `
-            <div class="trend-bar-group" title="${escapeHtml(d.date)}: ${d.sessions} sessions, ${d.errors} errors, ${d.toolCalls} tool calls">
+            <div class="trend-bar-group" title="${escapeHtml(d.date)}: ${d.sessions} sessions, ${d.errors} errors, ${d.toolCalls} tool calls${d.cost > 0 ? `, ${formatCost(d.cost)}` : ''}">
               <div class="trend-bar sessions-bar" style="height:${sH}px"></div>
               <div class="trend-bar errors-bar" style="height:${eH}px"></div>
               <div class="trend-bar toolcalls-bar" style="height:${tH}px"></div>
+              ${d.cost > 0 ? `<span class="trend-bar-cost">${formatCost(d.cost)}</span>` : ''}
               <span class="trend-bar-label">${escapeHtml(label)}</span>
             </div>
           `;
@@ -4323,6 +4424,10 @@
       }, {});
     }
 
+    function formatCost(dollars) {
+      return '$' + (dollars >= 0.01 ? dollars.toFixed(2) : dollars.toFixed(4));
+    }
+
     function renderMarkdownInline(s) {
       // s is already HTML-escaped. Apply inline markdown.
       // Links [text](url) — url may contain &amp; from escaping, which is valid in href
@@ -4638,6 +4743,7 @@
       const msgs = state.sessionData.messages;
       const timing = buildTimingAnalysis(msgs);
       const tokenSummary = summarizeTokens(msgs);
+      const sessionCost = msgs.reduce((sum, m) => sum + (m.usage?.cost?.total || 0), 0);
 
       // Compute stats from loaded messages
       let userCount = 0, assistantCount = 0, toolCallCount = 0, toolResultCount = 0, errorCount = 0, spawnCount = 0;
@@ -4693,11 +4799,12 @@
         .map(([name, count]) => `<span class="badge">${escapeHtml(name)}: ${count}</span>`)
         .join('');
 
-      const tokenBadges = Object.keys(tokenSummary).length
+      const tokenBadges = (Object.keys(tokenSummary).length
         ? Object.entries(tokenSummary)
             .map(([key, value]) => `<span class="badge">${escapeHtml(key)}: ${escapeHtml(formatNumber(value))}</span>`)
             .join('')
-        : '<span class="badge">No token data</span>';
+        : '<span class="badge">No token data</span>')
+        + (sessionCost > 0 ? `<span class="badge" title="按消息 usage.cost.total 合计">💰 ${escapeHtml(formatCost(sessionCost))}</span>` : '');
 
       summary.innerHTML = `
         <div class="summary-top">
@@ -4720,6 +4827,7 @@
                 <button data-export="markdown">📝 Markdown (.md)</button>
                 <button data-export="json">📦 JSON (.json)</button>
                 <button data-export="clipboard">📋 Copy to clipboard</button>
+                ${['codex', 'claude-code', 'omp'].includes(state.platform) ? '<button data-export="otlp">🔭 OTLP JSON</button>' : ''}
               </div>
             </div>
           </div>
@@ -4847,6 +4955,7 @@
             if (fmt === 'markdown') exportAsMarkdown();
             else if (fmt === 'json') exportAsJson();
             else if (fmt === 'clipboard') exportToClipboard();
+            else if (fmt === 'otlp') exportAsOtlp();
           });
         });
       }
@@ -4993,6 +5102,16 @@
       if (!state.sessionData) return;
       const json = JSON.stringify(state.sessionData, null, 2);
       downloadFile(json, getExportFilename('json'), 'application/json;charset=utf-8');
+    }
+
+    async function exportAsOtlp() {
+      if (!state.selectedSessionId) return;
+      try {
+        const data = await fetchJson(`/api/otlp/${encodeURIComponent(state.platform)}/${encodeURIComponent(state.selectedSessionId)}` + dirParam());
+        downloadFile(JSON.stringify(data, null, 2), `${state.selectedSessionId}-otlp.json`, 'application/json;charset=utf-8');
+      } catch (error) {
+        showError('OTLP 导出失败: ' + error.message);
+      }
     }
 
     async function exportToClipboard() {
@@ -5782,6 +5901,7 @@
     let sessionView = 'messages';
     const tracePanel = document.getElementById('tracePanel');
     const sessionViewToggle = document.getElementById('sessionViewToggle');
+    let traceSpans = []; // flat span list of the current trace render, for sidebar lookup
 
     sessionViewToggle.querySelectorAll('.sv-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5848,7 +5968,7 @@
         let owner = null;
         for (const tn of turns) { if (tn.start <= c.ts) owner = tn; else break; }
         if (!owner) continue;
-        owner.spans.push({ kind: r && r.isError ? 'tool-error' : 'tool', label: c.name, start: c.ts, end, msgId: c.msgId });
+        owner.spans.push({ kind: r && r.isError ? 'tool-error' : 'tool', label: c.name, start: c.ts, end, msgId: c.msgId, toolCallId: cid });
         owner.end = Math.max(owner.end, end);
       }
 
@@ -5893,6 +6013,7 @@
         tracePanel.innerHTML = '<div class="insights-empty">此会话没有可视化的时间数据（消息缺少时间戳或没有模型/工具活动）。</div>';
         return;
       }
+      traceSpans = [];
       const html = turns.map(tn => {
         const dur = Math.max(tn.end - tn.start, 1);
         const rows = tn.spans.map(s => {
@@ -5904,7 +6025,7 @@
           const icon = s.kind === 'chat' ? '🤖' : (s.kind === 'agent' ? '🌳' : '🔧');
           const action = s.kind === 'agent'
             ? `data-agent-name="${escapeHtml(s.agentName)}" title="子 Agent ${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击查看其执行记录"`
-            : `data-msg-id="${escapeHtml(s.msgId || '')}" title="${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击跳到消息"`;
+            : `data-span-idx="${traceSpans.push(s) - 1}" title="${escapeHtml(s.label)} — ${escapeHtml(durText)}，点击查看详情"`;
           return `
             <div class="trace-row">
               <div class="tr-label" title="${escapeHtml(s.label)}">${icon} ${escapeHtml(s.label)}</div>
@@ -5929,20 +6050,134 @@
           <span><span class="lg" style="background:#3fb950"></span>工具执行</span>
           <span><span class="lg" style="background:#f85149"></span>工具报错</span>
           <span><span class="lg" style="background:#d2a8ff"></span>子 Agent</span>
-          <span style="margin-left:auto">每轮独立时间轴 · 点击色条跳到对应消息</span>
+          <span style="margin-left:auto">每轮独立时间轴 · 点击色条查看详情</span>
         </div>${html}`;
 
-      tracePanel.querySelectorAll('.tr-bar[data-msg-id]').forEach(bar => {
+      tracePanel.querySelectorAll('.tr-bar[data-span-idx]').forEach(bar => {
         bar.addEventListener('click', () => {
-          const msgId = bar.dataset.msgId;
-          if (!msgId) return;
-          sessionView = 'messages';
-          applySessionView();
-          scrollToMessage(msgId);
+          const span = traceSpans[Number(bar.dataset.spanIdx)];
+          if (span) openSpanSidebar(span);
         });
       });
       tracePanel.querySelectorAll('.tr-bar[data-agent-name]').forEach(bar => {
         bar.addEventListener('click', () => viewOmpChild(bar.dataset.agentName));
+      });
+    }
+
+    // --- Trace span detail sidebar ---
+    let spanSidebar = null;
+    function ensureSpanSidebar() {
+      if (spanSidebar) return spanSidebar;
+      spanSidebar = document.createElement('aside');
+      spanSidebar.className = 'span-sidebar';
+      spanSidebar.hidden = true;
+      document.body.appendChild(spanSidebar);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !spanSidebar.hidden) closeSpanSidebar();
+      });
+      return spanSidebar;
+    }
+
+    function closeSpanSidebar() {
+      if (spanSidebar) spanSidebar.hidden = true;
+    }
+
+    // Text of a Claude-style tool_result content part (string / part array / plain text)
+    function toolResultPartText(part) {
+      if (typeof part.content === 'string') return part.content;
+      if (Array.isArray(part.content)) {
+        return part.content.map(p => (typeof p === 'string' ? p : p.text || '')).join('\n');
+      }
+      return part.text || '';
+    }
+
+    // Locate the arguments + paired result for a tool span by toolCallId
+    function findSpanToolData(toolCallId, msgs) {
+      let args = null;
+      let hasArgs = false;
+      let result = null;
+      if (!toolCallId) return { args, hasArgs, result };
+      for (const m of msgs) {
+        if (m.role === 'toolCall' && m.toolCallId === toolCallId && m.details != null) {
+          args = m.details; hasArgs = true;
+        }
+        if (m.role === 'toolResult' && m.toolCallId === toolCallId) {
+          result = { text: getTextContent(m.content || []) };
+        }
+        for (const c of (m.content || [])) {
+          if ((c.type === 'toolCall' || c.type === 'tool_use') && c.id === toolCallId) {
+            args = c.arguments ?? c.input ?? null; hasArgs = args != null;
+          }
+          if (c.type === 'tool_result' && c.tool_use_id === toolCallId) {
+            result = { text: toolResultPartText(c) };
+          }
+        }
+      }
+      return { args, hasArgs, result };
+    }
+
+    function openSpanSidebar(span) {
+      const el = ensureSpanSidebar();
+      const msgs = state.sessionData?.messages || [];
+      const durText = formatDurationCompact(span.end - span.start);
+      const isTool = span.kind === 'tool' || span.kind === 'tool-error';
+      const icon = isTool ? '🔧' : '🤖';
+      const clamp = (html, len) => `
+        <div class="prompt-text${len > 600 ? ' clamped' : ''}">${html}</div>
+        ${len > 600 ? '<span class="show-more">Show more</span>' : ''}`;
+
+      let bodyHtml = '';
+      if (isTool) {
+        const { args, hasArgs, result } = findSpanToolData(span.toolCallId, msgs);
+        const argsJson = hasArgs ? JSON.stringify(args, null, 2) : '';
+        const resultText = result ? (result.text || '').trim() : '';
+        bodyHtml = `
+          ${span.kind === 'tool-error' ? '<div class="ss-error">❌ 工具执行报错</div>' : ''}
+          <div class="ss-section-title">Arguments</div>
+          ${argsJson ? clamp(`<pre class="mono ss-pre">${escapeHtml(argsJson)}</pre>`, argsJson.length) : '<div class="ss-empty">无参数数据</div>'}
+          <div class="ss-section-title">Result</div>
+          ${result
+            ? clamp(`<pre class="mono ss-pre">${escapeHtml(resultText || '(空输出)')}</pre>`, resultText.length)
+            : '<div class="ss-empty">未找到配对的工具结果</div>'}`;
+      } else {
+        const msg = msgs.find(m => m.id === span.msgId);
+        const text = msg ? getTextContent(msg.content || []) : '';
+        const usageBadges = Object.entries(msg?.usage || {})
+          .filter(([, v]) => typeof v === 'number' && v > 0)
+          .map(([k, v]) => `<span class="badge">${escapeHtml(k)}: ${escapeHtml(formatNumber(v))}</span>`)
+          .join('');
+        bodyHtml = `
+          ${msg?.model ? `<div class="ss-section-title">Model</div><span class="badge">🧠 ${escapeHtml(msg.model)}</span>` : ''}
+          ${usageBadges ? `<div class="ss-section-title">Tokens</div><div class="token-grid">${usageBadges}</div>` : ''}
+          <div class="ss-section-title">回复内容</div>
+          ${text ? clamp(renderMarkdown(text), text.length) : '<div class="ss-empty">无文本内容</div>'}`;
+      }
+
+      el.innerHTML = `
+        <div class="span-sidebar-head">
+          <span class="ss-icon">${icon}</span>
+          <span class="ss-title" title="${escapeHtml(span.label)}">${escapeHtml(span.label)}</span>
+          <span class="ss-head-meta">${escapeHtml(durText)} · ${escapeHtml(new Date(span.start).toLocaleTimeString())}</span>
+          <button class="ss-close" title="关闭 (Esc)">✕</button>
+        </div>
+        <div class="span-sidebar-body">${bodyHtml}</div>
+        ${span.msgId ? '<div class="span-sidebar-foot"><button class="export-btn ss-jump-btn">↪ 跳到消息</button></div>' : ''}`;
+      el.hidden = false;
+
+      el.querySelector('.ss-close').addEventListener('click', closeSpanSidebar);
+      el.querySelectorAll('.show-more').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const textEl = btn.previousElementSibling;
+          const clamped = textEl.classList.toggle('clamped');
+          btn.textContent = clamped ? 'Show more' : 'Show less';
+        });
+      });
+      const jumpBtn = el.querySelector('.ss-jump-btn');
+      if (jumpBtn) jumpBtn.addEventListener('click', () => {
+        closeSpanSidebar();
+        sessionView = 'messages';
+        applySessionView();
+        scrollToMessage(span.msgId);
       });
     }
 
