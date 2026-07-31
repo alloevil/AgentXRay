@@ -1541,6 +1541,23 @@
       border-color: var(--user);
     }
 
+    .agent-nav-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+      cursor: help;
+    }
+
+    .agent-nav-empty {
+      font-size: 0.78rem;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+
     .agent-tab {
       border: 1px solid var(--border);
       background: var(--panel);
@@ -2893,11 +2910,14 @@
       if (state.platform === 'openclaw') {
         archivedToggle.hidden = false;
         agentNav.hidden = false;
-        agentNav.innerHTML = `<select class="agent-select" id="agentSelect">
-          ${state.agents.map((agent) =>
-            `<option value="${escapeHtml(agent)}"${agent === state.selectedAgent ? ' selected' : ''}>${escapeHtml(agent)}</option>`
-          ).join('')}
-        </select>`;
+        const label = '<div class="agent-nav-label" title="OpenClaw 按 agent 分目录存储会话（~/.openclaw/agents/<名字>/sessions），先选 agent 再浏览其会话">OpenClaw Agent ⓘ</div>';
+        agentNav.innerHTML = state.agents.length
+          ? `${label}<select class="agent-select" id="agentSelect" title="选择要浏览哪个 OpenClaw agent 的会话">
+              ${state.agents.map((agent) =>
+                `<option value="${escapeHtml(agent)}"${agent === state.selectedAgent ? ' selected' : ''}>${escapeHtml(agent)}</option>`
+              ).join('')}
+            </select>`
+          : `${label}<div class="agent-nav-empty">未检测到 OpenClaw agent（~/.openclaw/agents 不存在或为空）</div>`;
         document.getElementById('agentSelect')?.addEventListener('change', async (e) => {
           const agent = e.target.value;
           if (agent === state.selectedAgent) return;
