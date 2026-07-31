@@ -4511,6 +4511,9 @@
       return html;
     }
 
+    // Summary details collapsed by default so 消息/Trace get the vertical space
+    let summaryCollapsed = (() => { try { return localStorage.getItem('axr-summary-collapsed') !== '0'; } catch { return true; } })();
+
     function renderSummary() {
       if (!state.sessionData) {
         summary.innerHTML = `
@@ -4601,6 +4604,7 @@
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:flex-start">
+            <button class="export-btn" id="summaryToggleBtn" title="折叠/展开会话统计详情">${summaryCollapsed ? '▸ 详情' : '▾ 收起'}</button>
             ${['codex', 'claude-code', 'omp'].includes(state.platform) ? '<button class="export-btn" id="resumeCmdBtn" title="复制在终端恢复此会话的命令">📋 复制恢复命令</button>' : ''}
             <div class="export-dropdown" id="exportDropdown">
               <button class="export-btn" id="exportBtn">📥 Export</button>
@@ -4612,6 +4616,7 @@
             </div>
           </div>
         </div>
+        <div class="summary-body" id="summaryBody" ${summaryCollapsed ? 'hidden' : ''}>
         <div class="summary-sections">
           <div class="summary-section">
             <div class="summary-section-title">Messages</div>
@@ -4660,8 +4665,17 @@
           <h3>\u{1F333} 子 Agent <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:0.75rem">— 本会话派生的后台 agent，点击查看其完整执行记录</span></h3>
           <div id="ompChildrenList"></div>
         </div>` : ''}
+        </div><!-- /summary-body -->
       `;
       if (state.platform === 'omp') loadOmpChildren();
+      // Collapse/expand summary details (persisted)
+      const summaryToggleBtn = document.getElementById('summaryToggleBtn');
+      if (summaryToggleBtn) summaryToggleBtn.addEventListener('click', () => {
+        summaryCollapsed = !summaryCollapsed;
+        try { localStorage.setItem('axr-summary-collapsed', summaryCollapsed ? '1' : '0'); } catch {}
+        document.getElementById('summaryBody').hidden = summaryCollapsed;
+        summaryToggleBtn.textContent = summaryCollapsed ? '▸ 详情' : '▾ 收起';
+      });
 
       // Bind filter badge clicks
       summary.querySelectorAll('.filter-badge').forEach((badge) => {
