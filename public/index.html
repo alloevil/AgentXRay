@@ -4650,10 +4650,11 @@
             <span class="tl-leg-gap">Gap &gt;30s</span>
           </div>
         </div>
+        ${state.platform === 'openclaw' ? `
         <div class="spawn-tree-section">
           <h3>\u{1F333} Spawn Tree</h3>
           <div id="spawnTreeInSummary"></div>
-        </div>
+        </div>` : ''}
       `;
 
       // Bind filter badge clicks
@@ -6110,6 +6111,8 @@
       const container = document.getElementById('spawnTreeInSummary');
       if (!container) return;
       if (!sessionId) { container.innerHTML = ''; return; }
+      // Spawn-tree data comes from OpenClaw agent logs only; other platforms have no spawn map
+      if (state.platform !== 'openclaw') { container.innerHTML = ''; return; }
       container.innerHTML = '<div class="tree-stats">Loading spawn tree...</div>';
 
       const dir = state.settings.openclawDir || '';
