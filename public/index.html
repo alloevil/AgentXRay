@@ -4655,7 +4655,13 @@
           <h3>\u{1F333} Spawn Tree</h3>
           <div id="spawnTreeInSummary"></div>
         </div>` : ''}
+        ${state.platform === 'omp' ? `
+        <div class="spawn-tree-section" id="ompChildrenSection" hidden>
+          <h3>\u{1F333} 子 Agent <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-size:0.75rem">— 本会话派生的后台 agent，点击查看其完整执行记录</span></h3>
+          <div id="ompChildrenList"></div>
+        </div>` : ''}
       `;
+      if (state.platform === 'omp') loadOmpChildren();
 
       // Bind filter badge clicks
       summary.querySelectorAll('.filter-badge').forEach((badge) => {
@@ -6105,6 +6111,44 @@
       restartRefreshLoop();
     }
     initialLoad();
+
+    // ========== OMP subagents (spawned children) ==========
+    async function loadOmpChildren() {
+      const section = document.getElementById('ompChildrenSection');
+      const list = document.getElementById('ompChildrenList');
+      if (!section || !list || !state.selectedSessionId) return;
+      try {
+        const children = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children` + dirParam());
+        if (!children.length) { section.hidden = true; return; }
+        section.hidden = false;
+        list.innerHTML = children.map(c => `
+          <span class="stat-chip omp-child-chip" data-name="${escapeHtml(c.name)}" style="cursor:pointer;margin:2px 6px 2px 0" title="${escapeHtml(c.title || c.name)} — ${c.messageCount} 条消息，${c.toolCallCount} 次工具调用">
+            🤖 ${escapeHtml(c.name)} <span style="color:var(--muted)">· ${c.messageCount} msg · 🔧 ${c.toolCallCount}</span>
+          </span>`).join('');
+        list.querySelectorAll('.omp-child-chip').forEach(chip => {
+          chip.addEventListener('click', () => viewOmpChild(chip.dataset.name));
+        });
+      } catch { section.hidden = true; }
+    }
+
+    async function viewOmpChild(name) {
+      try {
+        const payload = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}/children/${encodeURIComponent(name)}` + dirParam());
+        state.sessionData = payload;
+        state.visibleUnitCount = (payload?.messages?.length || 0) <= 200 ? Infinity : MSG_BATCH_SIZE;
+        sessionView = 'messages';
+        applySessionView();
+        renderMessages();
+        const banner = document.createElement('div');
+        banner.className = 'prompts-summary';
+        banner.style.cssText = 'padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px';
+        banner.innerHTML = `\u{1F333} 正在查看子 Agent <b>${escapeHtml(name)}</b> 的执行记录 — <a href="#" style="color:#58a6ff">返回主会话</a>`;
+        banner.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadSession(); });
+        document.getElementById('messages').prepend(banner);
+      } catch (error) {
+        showError(error.message);
+      }
+    }
 
     // ========== Spawn Tree (per-session) ==========
     async function loadSpawnTree(sessionId) {

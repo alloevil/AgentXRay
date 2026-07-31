@@ -2732,6 +2732,62 @@ app.get('/api/omp/sessions/:sessionId', async (req, res) => {
   }
 });
 
+// OMP subagents: a session that spawns children keeps them as
+// <slug>/<timestamp>_<sessionId>/<AgentName>.jsonl next to its own file.
+async function findOmpSpawnDir(baseDir, sessionId) {
+  const filePath = await findOmpSessionFile(baseDir, sessionId);
+  if (!filePath) return null;
+  const spawnDir = filePath.replace(/\.jsonl$/, '');
+  try {
+    const st = await fsp.stat(spawnDir);
+    return st.isDirectory() ? spawnDir : null;
+  } catch { return null; }
+}
+
+app.get('/api/omp/sessions/:sessionId/children', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) return res.status(400).json({ error: 'Invalid session ID' });
+  try {
+    const dir = resolveDir(req.query.dir, OMP_DIR);
+    const spawnDir = await findOmpSpawnDir(dir, sessionId);
+    if (!spawnDir) return res.json([]);
+    const entries = await fsp.readdir(spawnDir, { withFileTypes: true });
+    const children = [];
+    for (const e of entries) {
+      if (!e.isFile() || !e.name.endsWith('.jsonl')) continue;
+      const meta = await parseOmpSessionMetadata(path.join(spawnDir, e.name), e.name).catch(() => null);
+      children.push({
+        name: e.name.replace(/\.jsonl$/, ''),
+        file: e.name,
+        title: meta?.title || null,
+        timestamp: meta?.timestamp || null,
+        messageCount: meta?.messageCount || 0,
+        toolCallCount: meta?.toolCallCount || 0
+      });
+    }
+    children.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+    res.json(children);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/omp/sessions/:sessionId/children/:name', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  const name = sanitizeAgentName(req.params.name);
+  if (!sessionId || !name) return res.status(400).json({ error: 'Invalid session or agent name' });
+  try {
+    const dir = resolveDir(req.query.dir, OMP_DIR);
+    const spawnDir = await findOmpSpawnDir(dir, sessionId);
+    if (!spawnDir) return res.status(404).json({ error: 'No subagents for this session' });
+    const payload = await parseOmpSessionFile(path.join(spawnDir, name + '.jsonl'));
+    res.json(payload);
+  } catch (error) {
+    if (error.code === 'ENOENT') return res.status(404).json({ error: 'Subagent not found' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Hermes platform (SQLite) ---
 
 function getHermesDbPath(dir) {
