@@ -4754,7 +4754,7 @@
         resumeCmdBtn.addEventListener('click', async () => {
           const id = state.selectedSessionId;
           let cmd = '';
-          if (state.platform === 'codex') cmd = `codex resume ${id} --dangerously-bypass-approvals-and-sandbox`;
+          if (state.platform === 'codex') cmd = `codex resume ${id} --yolo`;
           else if (state.platform === 'claude-code') cmd = `claude --dangerously-skip-permissions --resume ${id}`;
           else if (state.platform === 'omp') cmd = `omp --auto-approve --resume=${id}`;
           const cwd = state.sessionData.session?.cwd;
