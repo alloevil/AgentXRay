@@ -2368,6 +2368,153 @@
 
     .cluster-metric.warn { background: rgba(248, 81, 73, 0.15); color: #f85149; }
 
+    .cluster-topic {
+      background: rgba(88, 166, 255, 0.12);
+      border-radius: 999px;
+      padding: 2px 9px;
+      color: #58a6ff;
+      white-space: nowrap;
+    }
+
+    .cluster-save-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: #3fb950;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 2px 9px;
+      white-space: nowrap;
+    }
+
+    .cluster-save-btn:hover { border-color: #3fb950; }
+    .cluster-save-btn:disabled { opacity: 0.6; cursor: default; }
+
+    /* --- Prompt 画像: 主题构成 / 周趋势 / 差生榜 --- */
+    .portrait-subhead {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+    }
+
+    .portrait-topics { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+
+    .portrait-topic-row {
+      display: grid;
+      grid-template-columns: 110px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.78rem;
+    }
+
+    .portrait-topic-row .name {
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .portrait-topic-row .bar {
+      height: 10px;
+      border-radius: 5px;
+      background: rgba(139, 148, 158, 0.1);
+      overflow: hidden;
+    }
+
+    .portrait-topic-row .bar .fill { height: 100%; border-radius: 5px; }
+
+    .portrait-topic-row .num { color: var(--muted); white-space: nowrap; }
+
+    .portrait-week-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .portrait-week-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+    .portrait-week-col {
+      display: flex;
+      flex-direction: column-reverse;
+      width: 26px;
+      height: 64px;
+      justify-content: flex-start;
+    }
+
+    .portrait-week-col .seg { width: 100%; }
+
+    .portrait-week-label { font-size: 0.65rem; color: var(--muted); }
+
+    .portrait-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .portrait-legend .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    .portrait-flop {
+      border: 1px solid rgba(248, 81, 73, 0.35);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 4px;
+      background: rgba(248, 81, 73, 0.04);
+    }
+
+    .portrait-flop-item { margin-bottom: 10px; font-size: 0.78rem; }
+    .portrait-flop-item:last-child { margin-bottom: 0; }
+
+    .portrait-flop-item .pat {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 3px;
+    }
+
+    .portrait-flop-sample {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: rgba(139, 148, 158, 0.08);
+      border-left: 2px solid #f85149;
+      padding: 3px 8px;
+      margin-top: 4px;
+      border-radius: 0 4px 4px 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* --- 工具体检 --- */
+    .tools-audit-head { display: flex; align-items: center; gap: 10px; }
+
+    .tools-audit-unused { margin-top: 12px; color: var(--muted); font-size: 0.8rem; }
+
+    .tools-audit-unused code {
+      font-family: var(--mono);
+      background: rgba(139, 148, 158, 0.12);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin: 0 6px 4px 0;
+      display: inline-block;
+    }
+
+    .tools-audit-hint { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+
     .cluster-body {
       border-top: 1px solid var(--border);
       padding: 12px 14px;
@@ -3537,6 +3684,12 @@
     let hiddenPrompts = [];
     let promptSelectMode = false;
     const promptSelection = new Set(); // "gi:si:pi" keys, cleared on every re-render
+    let toolsAudit = null;           // last /api/tools/audit payload (platform=all)
+    let toolsAuditChecked = false;   // cached=1 probe completed (204 counts as checked)
+    let toolsAuditLoading = false;
+    let toolsAuditError = null;
+    let toolsAuditShowAll = false;
+    const clusterSavedPatterns = new Set(); // 「入库」-saved cluster patterns (session-local)
     let libraryData = null;
     let librarySearch = '';
     let libraryUsage = null;
@@ -3983,6 +4136,7 @@
           </div>
         </div>
         ${trendHtml}
+        <div class="insight-section" id="toolsAuditSection"></div>
       `;
 
       // Bind error cluster expand/collapse
@@ -4020,6 +4174,123 @@
           }
         });
       });
+
+      initToolsAudit();
+    }
+
+    // --- 工具体检 (Tools Audit, aggregate across all platforms) ---
+    function toolsAuditParams() {
+      const params = new URLSearchParams({ platform: 'all' });
+      if (state.settings.openclawDir) params.set('dirOpenclaw', state.settings.openclawDir);
+      if (state.settings.codexDir) params.set('dirCodex', state.settings.codexDir);
+      if (state.settings.claudeCodeDir) params.set('dirClaude', state.settings.claudeCodeDir);
+      if (state.settings.ompDir) params.set('dirOmp', state.settings.ompDir);
+      return params;
+    }
+
+    function initToolsAudit() {
+      if (toolsAuditChecked || toolsAuditLoading) { renderToolsAudit(); return; }
+      loadToolsAudit(false);
+    }
+
+    async function loadToolsAudit(refresh) {
+      if (toolsAuditLoading) return;
+      toolsAuditLoading = true;
+      toolsAuditError = null;
+      renderToolsAudit();
+      try {
+        const params = toolsAuditParams();
+        params.set(refresh ? 'refresh' : 'cached', '1');
+        const resp = await fetch('/api/tools/audit?' + params.toString());
+        if (resp.status === 204) {
+          toolsAudit = null; // no persisted audit yet — offer 运行体检
+        } else if (!resp.ok) {
+          throw new Error((await resp.json().catch(() => null))?.error || resp.statusText);
+        } else {
+          toolsAudit = await resp.json();
+        }
+      } catch (error) {
+        toolsAuditError = error.message;
+      } finally {
+        toolsAuditChecked = true;
+        toolsAuditLoading = false;
+        renderToolsAudit();
+      }
+    }
+
+    function fmtAuditMs(ms) {
+      if (ms == null) return '—';
+      if (ms >= 60000) return (ms / 60000).toFixed(1) + 'm';
+      if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+      return Math.round(ms) + 'ms';
+    }
+
+    function fmtAuditDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+    }
+
+    function renderToolsAudit() {
+      const section = document.getElementById('toolsAuditSection');
+      if (!section) return;
+
+      const btnHtml = `<button class="export-btn" id="toolsAuditRunBtn" ${toolsAuditLoading ? 'disabled' : ''} title="扫描全部平台会话，统计每个工具的调用/错误率/耗时">${toolsAuditLoading ? '体检中…' : (toolsAudit ? '重新体检' : '运行体检')}</button>`;
+      const metaHtml = toolsAudit && toolsAudit.generatedAt
+        ? ` <span style="text-transform:none;letter-spacing:0;color:var(--muted)">— ${(toolsAudit.tools || []).length} 个工具 / ${escapeHtml(new Date(toolsAudit.generatedAt).toLocaleString())}</span>` : '';
+
+      let bodyHtml;
+      if (toolsAuditLoading && !toolsAudit) {
+        bodyHtml = '<div class="insights-loading">体检中…扫描全部平台会话统计工具调用</div>';
+      } else if (toolsAuditError) {
+        bodyHtml = `<div class="analysis-error">体检失败: ${escapeHtml(toolsAuditError)}</div>`;
+      } else if (!toolsAudit) {
+        bodyHtml = '<div style="color:var(--muted);font-size:13px">暂无体检结果 — 点击「运行体检」扫描全部平台的工具使用情况（调用量、错误率、平均耗时、闲置配置）。</div>';
+      } else {
+        const tools = toolsAudit.tools || [];
+        const shown = toolsAuditShowAll ? tools : tools.slice(0, 30);
+        const maxCalls = tools.length ? Math.max(tools[0].calls, 1) : 1;
+        const rowsHtml = shown.map(t => {
+          const barW = Math.max(2, Math.round((t.calls / maxCalls) * 100));
+          const errPctStr = t.errors > 0 ? (t.errorRate * 100).toFixed(1) + '%' : '—';
+          return `<tr>
+            <td>${escapeHtml(t.name)}</td>
+            <td style="color:var(--muted)">${escapeHtml((t.platforms || []).join(', '))}</td>
+            <td>${t.calls}</td>
+            <td style="color:${t.errors > 0 ? '#f85149' : 'inherit'}">${errPctStr}</td>
+            <td>${fmtAuditMs(t.avgMs)}</td>
+            <td style="color:var(--muted)">${fmtAuditDate(t.lastUsed)}</td>
+            <td class="bar-cell"><div class="tool-stats-bar"><div class="fill" style="width:${barW}%"></div></div></td>
+          </tr>`;
+        }).join('');
+        const moreHtml = tools.length > shown.length
+          ? `<button class="export-btn" id="toolsAuditMoreBtn" style="margin-top:8px">展开全部 ${tools.length} 个工具</button>` : '';
+        const unused = toolsAudit.configuredUnused || [];
+        const unusedHtml = unused.length ? `
+          <div class="tools-audit-unused">
+            <div style="margin-bottom:6px">配置了但从未使用（${unused.length}）：</div>
+            ${unused.map(u => `<code title="${escapeHtml(u.source || '')}">${escapeHtml(u.name)}</code>`).join('')}
+            <div class="tools-audit-hint">这些配置每轮都会占用上下文 — 建议考虑移除以节省每轮 token。</div>
+          </div>` : '';
+        bodyHtml = `
+          ${tools.length ? `
+          <table class="tool-stats-table">
+            <thead><tr><th>工具</th><th>平台</th><th>调用</th><th>错误率</th><th>平均耗时</th><th>最近使用</th><th class="bar-cell"></th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>${moreHtml}` : '<div style="color:var(--muted);font-size:13px">没有工具调用数据</div>'}
+          ${unusedHtml}
+        `;
+      }
+
+      section.innerHTML = `
+        <div class="tools-audit-head"><h3 style="margin:0">🔧 工具体检${metaHtml}</h3>${btnHtml}</div>
+        ${bodyHtml}
+      `;
+
+      const runBtn = document.getElementById('toolsAuditRunBtn');
+      if (runBtn) runBtn.addEventListener('click', () => loadToolsAudit(true));
+      const moreBtn = document.getElementById('toolsAuditMoreBtn');
+      if (moreBtn) moreBtn.addEventListener('click', () => { toolsAuditShowAll = true; renderToolsAudit(); });
     }
 
     // --- Prompts View ---
@@ -4109,9 +4380,27 @@
       }
     }
 
+    // 入库 prefill: longest common prefix of a cluster's example prompts when it is a
+    // meaningful template (≥30 chars), with the variable tail replaced by $ARGUMENTS;
+    // otherwise the first example verbatim.
+    function clusterPrefillContent(c) {
+      const examples = (c.samples || c.examples || []).map(s => String(s || '')).filter(Boolean);
+      if (!examples.length) return c.pattern || '';
+      let prefix = examples[0];
+      for (const ex of examples.slice(1)) {
+        let i = 0;
+        while (i < prefix.length && i < ex.length && prefix[i] === ex[i]) i++;
+        prefix = prefix.slice(0, i);
+      }
+      if (examples.length > 1 && prefix.trim().length >= 30 && prefix.length < examples[0].length) {
+        return prefix.replace(/\s+$/, '') + ' $ARGUMENTS';
+      }
+      return examples[0];
+    }
+
     function renderAnalysisHtml() {
       if (promptAnalysisLoading) {
-        return '<div class="insight-section analysis-section"><h3>Prompt Analysis</h3><div class="analysis-loading">Claude 分析中… 约 1-2 分钟(聚类 → 归因 → LLM 建议)</div></div>';
+        return '<div class="insight-section analysis-section"><h3>📊 Prompt 画像</h3><div class="analysis-loading">Claude 分析中… 约 1-2 分钟(聚类 → 归因 → 主题标注 → LLM 建议)</div></div>';
       }
       if (!promptAnalysis || promptAnalysis.platform !== state.platform) return '';
 
@@ -4123,13 +4412,94 @@
       const rawHtml = a.rawText
         ? `<div class="prompt-text" style="margin-bottom:12px">${renderMarkdown(a.rawText)}</div>` : '';
 
-      const clustersHtml = (a.clusters || []).filter(c => c.count > 1).slice(0, 20).map((c, ci) => {
+      // Topic → color: topics[] order first, then any extras seen in weeklyTrend
+      const palette = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#79c0ff', '#56d364', '#e3b341', '#ff7b72', '#8b949e'];
+      const topicOrder = (a.topics || []).map(t => t.topic);
+      for (const w of a.weeklyTrend || []) {
+        for (const t of Object.keys(w.topics || {})) if (!topicOrder.includes(t)) topicOrder.push(t);
+      }
+      const topicColor = t => palette[Math.max(0, topicOrder.indexOf(t)) % palette.length];
+
+      // 主题构成 — horizontal bars, skipped when the LLM stage produced no topics
+      let topicsHtml = '';
+      if ((a.topics || []).length) {
+        const maxPrompts = Math.max(...a.topics.map(t => t.prompts), 1);
+        topicsHtml = `
+          <div class="portrait-subhead">主题构成</div>
+          <div class="portrait-topics">
+            ${a.topics.map(t => `
+            <div class="portrait-topic-row">
+              <span class="name" title="${escapeHtml(t.topic)}">${escapeHtml(t.topic)}</span>
+              <div class="bar"><div class="fill" style="width:${Math.max(2, Math.round(t.prompts / maxPrompts * 100))}%;background:${topicColor(t.topic)}"></div></div>
+              <span class="num">${t.prompts} prompts / ${t.clusters} 簇</span>
+            </div>`).join('')}
+          </div>`;
+      }
+
+      // 周趋势 — last 8 weeks, stacked by topic
+      let weeklyHtml = '';
+      const weeks = (a.weeklyTrend || []).slice(-8);
+      if (weeks.length) {
+        const maxTotal = Math.max(...weeks.map(w => w.total), 1);
+        const usedTopics = new Set();
+        const colsHtml = weeks.map(w => {
+          const h = Math.max(2, Math.round(w.total / maxTotal * 64));
+          const entries = Object.entries(w.topics || {}).filter(([, n]) => n > 0).sort((x, y) => y[1] - x[1]);
+          const segs = entries.map(([t, n]) => {
+            usedTopics.add(t);
+            return `<div class="seg" style="height:${Math.max(1, Math.round(n / w.total * h))}px;background:${topicColor(t)}"></div>`;
+          }).join('');
+          const tip = `${w.week} 起的一周: ${w.total} prompts${entries.length ? ' · ' + entries.map(([t, n]) => `${t} ${n}`).join(' · ') : ''}`;
+          return `
+            <div class="portrait-week-group" title="${escapeHtml(tip)}">
+              <div class="portrait-week-col">${segs || `<div class="seg" style="height:${h}px;background:${palette[palette.length - 1]}"></div>`}</div>
+              <span class="portrait-week-label">${escapeHtml(w.week.slice(5))}</span>
+            </div>`;
+        }).join('');
+        weeklyHtml = `
+          <div class="portrait-subhead">周趋势（近 ${weeks.length} 周）</div>
+          <div class="portrait-week-chart">${colsHtml}</div>
+          ${usedTopics.size ? `<div class="portrait-legend">${[...usedTopics].map(t => `<span><span class="dot" style="background:${topicColor(t)}"></span>${escapeHtml(t)}</span>`).join('')}</div>` : ''}`;
+      }
+
+      const displayClusters = (a.clusters || []).filter(c => c.count > 1).slice(0, 20);
+
+      // 差生榜 — errorRate above the library mean, or avgMessages notably high
+      let flopHtml = '';
+      const attributed = displayClusters.filter(c => c.attribution);
+      if (attributed.length >= 2) {
+        const meanErr = attributed.reduce((s, c) => s + c.attribution.errorRate, 0) / attributed.length;
+        const meanMsgs = attributed.reduce((s, c) => s + c.attribution.avgMessages, 0) / attributed.length;
+        const flops = attributed
+          .filter(c => c.attribution.errorRate > meanErr || c.attribution.avgMessages > meanMsgs * 1.5)
+          .sort((x, y) => y.attribution.errorRate - x.attribution.errorRate)
+          .slice(0, 5);
+        if (flops.length) {
+          flopHtml = `
+            <div class="portrait-subhead">差生榜（错误率高于库均值 ${meanErr.toFixed(1)}% 或平均轮数明显偏高）</div>
+            <div class="portrait-flop">
+              ${flops.map(c => `
+              <div class="portrait-flop-item">
+                <span class="pat" title="${escapeHtml(c.pattern)}">${escapeHtml(c.pattern)}</span>
+                <span class="cluster-metric${c.attribution.errorRate > meanErr ? ' warn' : ''}">err ${c.attribution.errorRate}%</span>
+                <span class="cluster-metric">avg ${c.attribution.avgMessages} msgs</span>
+                <span class="cluster-metric">×${c.count}</span>
+                ${(c.errorSamples || []).slice(0, 3).map(sm => `<div class="portrait-flop-sample">${escapeHtml(String(sm).replace(/\s+/g, ' ').slice(0, 200))}</div>`).join('')}
+              </div>`).join('')}
+            </div>`;
+        }
+      }
+
+      const clustersHtml = displayClusters.map((c, ci) => {
         const attr = c.attribution;
+        const saved = clusterSavedPatterns.has(c.pattern);
         const metrics = [
+          c.topic ? `<span class="cluster-topic">${escapeHtml(c.topic)}</span>` : '',
           `<span class="cluster-metric">×${c.count}</span>`,
           attr ? `<span class="cluster-metric">avg ${attr.avgMessages} msgs</span>` : '',
           attr ? `<span class="cluster-metric">avg ${attr.avgToolCalls} tools</span>` : '',
-          attr ? `<span class="cluster-metric${attr.errorRate > 10 ? ' warn' : ''}">err ${attr.errorRate}%</span>` : ''
+          attr ? `<span class="cluster-metric${attr.errorRate > 10 ? ' warn' : ''}">err ${attr.errorRate}%</span>` : '',
+          `<button class="cluster-save-btn" data-ci="${ci}" ${saved ? 'disabled' : ''} title="以本簇为模板存入 Prompt Library（自动取公共前缀 + $ARGUMENTS）">${saved ? '✓ 已入库' : '📥 入库'}</button>`
         ].filter(Boolean).join('');
         const s = c.suggestion;
         const body = s ? `
@@ -4156,8 +4526,10 @@
 
       return `
         <div class="insight-section analysis-section">
-          <h3>Prompt Analysis <span style="text-transform:none;letter-spacing:0;color:var(--muted)">— ${a.totalClusters} 个模板簇 / ${escapeHtml(new Date(a.generatedAt).toLocaleString())}${a.persisted ? ' · 已保存的上次结果 · 点击重新分析可更新' : ''}</span></h3>
+          <h3>📊 Prompt 画像 <span style="text-transform:none;letter-spacing:0;color:var(--muted)">— ${a.totalClusters} 个模板簇 / ${escapeHtml(new Date(a.generatedAt).toLocaleString())}${a.persisted ? ' · 已保存的上次结果 · 点击重新分析可更新' : ''}</span></h3>
           ${errorHtml}${rawHtml}${overallHtml}
+          ${topicsHtml}${weeklyHtml}${flopHtml}
+          ${(topicsHtml || weeklyHtml || flopHtml) ? '<div class="portrait-subhead">模板簇</div>' : ''}
           ${clustersHtml || '<div style="color:var(--muted)">没有出现 2 次以上的模板</div>'}
         </div>
       `;
@@ -4485,6 +4857,26 @@
             btn.textContent = 'Copied!';
             setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
           });
+        });
+      });
+
+      // Cluster 入库: prefill = longest common prefix of examples (≥30 chars → prefix + $ARGUMENTS), else first example
+      promptsPanel.querySelectorAll('.cluster-save-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const c = analysisClusters[Number(btn.dataset.ci)];
+          if (!c || clusterSavedPatterns.has(c.pattern)) return;
+          const content = clusterPrefillContent(c);
+          if (!content) return;
+          openLibraryForm({
+            content,
+            source: 'history',
+            onSaved: () => {
+              clusterSavedPatterns.add(c.pattern);
+              btn.textContent = '✓ 已入库';
+              btn.disabled = true;
+            }
+          }, false);
         });
       });
 
@@ -4820,6 +5212,7 @@
     const libraryFormError = document.getElementById('libraryFormError');
     let libraryFormEditingName = null;
     let libraryFormSource = 'manual';
+    let libraryFormOnSaved = null;   // fired once after a successful (non-edit) save
     let libraryNameSuggestSeq = 0;
 
     function suggestLibraryName(text) {
@@ -4854,6 +5247,7 @@
       libraryNameSuggestSeq++; // invalidate any in-flight suggestion
       libraryFormEditingName = isEdit && prefill ? prefill.name : null;
       libraryFormSource = (prefill && prefill.source) || 'manual';
+      libraryFormOnSaved = (!isEdit && prefill && prefill.onSaved) || null;
       libraryFormTitle.textContent = isEdit ? '编辑 Prompt' : '新建 Prompt';
       libraryFormName.placeholder = 'my-prompt';
       const prefillName = (prefill && prefill.name) || '';
@@ -4908,6 +5302,10 @@
           await libraryRequest('/api/library', 'POST', { name, description, tags, content, source: libraryFormSource });
         }
         closeLibraryForm();
+        if (libraryFormOnSaved) {
+          try { libraryFormOnSaved(); } catch {}
+          libraryFormOnSaved = null;
+        }
         libraryData = null;
         if (currentView === 'library') await loadLibrary();
       } catch (error) {

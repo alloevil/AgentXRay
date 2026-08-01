@@ -1129,13 +1129,14 @@ function clusterPrompts(promptsData) {
         const pattern = promptFingerprint(p.text);
         let c = clusters.get(pattern);
         if (!c) {
-          c = { pattern, count: 0, sessionIds: new Set(), directories: new Set(), totalLength: 0, shortest: null, longest: null };
+          c = { pattern, count: 0, sessionIds: new Set(), directories: new Set(), totalLength: 0, shortest: null, longest: null, timestamps: [] };
           clusters.set(pattern, c);
         }
         c.count++;
         c.sessionIds.add(s.id);
         c.directories.add(g.directory);
         c.totalLength += p.text.length;
+        if (p.timestamp) c.timestamps.push(p.timestamp);
         if (!c.shortest || p.text.length < c.shortest.length) c.shortest = p.text;
         if (!c.longest || p.text.length > c.longest.length) c.longest = p.text;
       }
@@ -1148,6 +1149,9 @@ function clusterPrompts(promptsData) {
       sessionIds: Array.from(c.sessionIds),
       directories: Array.from(c.directories),
       avgLength: Math.round(c.totalLength / c.count),
+      timestamps: c.timestamps,
+      topic: null,
+      errorSamples: [],
       samples: c.shortest === c.longest
         ? [c.shortest.slice(0, 2000)]
         : [c.shortest.slice(0, 2000), c.longest.slice(0, 2000)]
@@ -1180,6 +1184,7 @@ async function attributeClusters(clusters, platform, agentName, dirOverride) {
 
   for (const c of top) {
     let sessions = 0, messages = 0, toolCalls = 0, toolResults = 0, errors = 0, outputTokens = 0;
+    const errorSamples = [];
     for (const sid of c.sessionIds) {
       const scan = scans.get(sid);
       if (!scan) continue;
@@ -1189,7 +1194,15 @@ async function attributeClusters(clusters, platform, agentName, dirOverride) {
       toolResults += scan.toolResultCount || 0;
       errors += scan.errorCount || 0;
       outputTokens += scan.totalOutputTokens || 0;
+      if (errorSamples.length < 3 && Array.isArray(scan.errorExamples)) {
+        for (const ex of scan.errorExamples) {
+          if (errorSamples.length >= 3) break;
+          const snippet = String(ex.snippet || '').split('\n')[0].trim().slice(0, 160);
+          if (snippet) errorSamples.push(snippet);
+        }
+      }
     }
+    c.errorSamples = errorSamples;
     if (sessions > 0) {
       c.attribution = {
         sampledSessions: sessions,
@@ -1231,10 +1244,14 @@ async function runClaudeAnalysis(clusters) {
     const attr = c.attribution
       ? `归因(采样${c.attribution.sampledSessions}个session): 平均${c.attribution.avgMessages}条消息/${c.attribution.avgToolCalls}次工具调用, 工具错误率${c.attribution.errorRate}%, 平均输出${c.attribution.avgOutputTokens} tokens`
       : '无归因数据';
+    const errs = (c.errorSamples && c.errorSamples.length > 0)
+      ? `工具错误样例:\n${c.errorSamples.map(e => `- ${e}`).join('\n')}`
+      : '无工具错误样例';
     return `## 模板 ${i + 1}
 指纹: ${c.pattern}
 出现次数: ${c.count}
 ${attr}
+${errs}
 样例:
 """
 ${c.samples[0].slice(0, 1500)}
@@ -1243,14 +1260,14 @@ ${c.samples[0].slice(0, 1500)}
 
   const input = `你是 prompt 工程专家。以下是从 AI agent 会话日志中聚类出的高频 prompt 模板(按出现次数降序),附带每个模板对应 session 的效果归因数据。
 
-请针对每个模板给出优化建议。评估维度: 意图明确性、上下文充分性、约束与输出格式定义、避免模型误解的措辞。归因数据中,高消息数/高工具调用/高错误率可能暗示 prompt 引导不足。
+请针对每个模板给出优化建议。评估维度: 意图明确性、上下文充分性、约束与输出格式定义、避免模型误解的措辞。归因数据中,高消息数/高工具调用/高错误率可能暗示 prompt 引导不足。改写建议必须结合该模板的工具错误样例(若有),在 rewrite/rationale 中针对性规避这些错误。同时为每个模板打一个主题标签 topic: 2-6 个汉字,如 编码调试/飞书办公/简历求职/UI打磨/爬虫采集。
 
 ${clusterDescriptions}
 
 只输出一个 JSON 对象,不要任何其它文字或 markdown 围栏,结构:
 {
   "suggestions": [
-    { "index": 1, "assessment": "一句话诊断", "issues": ["问题1", "问题2"], "rewrite": "改写后的完整模板(变量部分用 {占位符} 表示)", "rationale": "改写理由" }
+    { "index": 1, "topic": "2-6个汉字的主题标签", "assessment": "一句话诊断", "issues": ["问题1", "问题2"], "rewrite": "改写后的完整模板(变量部分用 {占位符} 表示)", "rationale": "改写理由" }
   ],
   "overall": ["跨模板的整体建议1", "建议2"]
 }
@@ -1290,6 +1307,16 @@ async function savePersistedAnalysis(platform, agentName, result) {
   await fsp.rename(tmpPath, filePath);
 }
 
+// Monday (UTC) of the ISO week containing the timestamp, as YYYY-MM-DD.
+function isoWeekMonday(isoTs) {
+  const t = Date.parse(isoTs || '');
+  if (!Number.isFinite(t)) return null;
+  const d = new Date(t);
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
 async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) {
   const promptsData = await computePrompts(platform, agentName, dirOverride);
   const clusters = clusterPrompts(promptsData);
@@ -1302,6 +1329,8 @@ async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) 
     totalClusters: clusters.length,
     clusters: clusters.slice(0, 50),
     overall: [],
+    topics: [],
+    weeklyTrend: [],
     llmError: null
   };
 
@@ -1314,7 +1343,10 @@ async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) 
         const top = clusters.filter(c => c.count > 1).slice(0, ANALYZE_TOP_K);
         for (const s of llm.suggestions) {
           const target = top[(s.index || 0) - 1];
-          if (target) target.suggestion = { assessment: s.assessment, issues: s.issues || [], rewrite: s.rewrite, rationale: s.rationale };
+          if (target) {
+            target.suggestion = { assessment: s.assessment, issues: s.issues || [], rewrite: s.rewrite, rationale: s.rationale };
+            if (typeof s.topic === 'string' && s.topic.trim()) target.topic = s.topic.trim().slice(0, 12);
+          }
         }
         result.overall = llm.overall;
       }
@@ -1322,6 +1354,43 @@ async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) 
       result.llmError = error.message;
     }
   }
+
+  // Topic aggregation: clusters labeled by the LLM, everything else under
+  // '其他' (only meaningful once at least one cluster got a label).
+  const anyTopic = clusters.some(c => c.topic);
+  if (anyTopic) {
+    const topicTotals = new Map();
+    let otherClusters = 0, otherPrompts = 0;
+    for (const c of clusters) {
+      if (c.topic) {
+        let t = topicTotals.get(c.topic);
+        if (!t) { t = { topic: c.topic, clusters: 0, prompts: 0 }; topicTotals.set(c.topic, t); }
+        t.clusters++;
+        t.prompts += c.count;
+      } else {
+        otherClusters++;
+        otherPrompts += c.count;
+      }
+    }
+    result.topics = Array.from(topicTotals.values()).sort((a, b) => b.prompts - a.prompts);
+    if (otherClusters > 0) result.topics.push({ topic: '其他', clusters: otherClusters, prompts: otherPrompts });
+  }
+
+  // Weekly trend: bucket every cluster member prompt by ISO week (Monday).
+  const weeks = new Map();
+  for (const c of clusters) {
+    const label = c.topic || (anyTopic ? '其他' : '未分类');
+    for (const ts of c.timestamps || []) {
+      const week = isoWeekMonday(ts);
+      if (!week) continue;
+      let w = weeks.get(week);
+      if (!w) { w = { week, total: 0, topics: {} }; weeks.set(week, w); }
+      w.total++;
+      w.topics[label] = (w.topics[label] || 0) + 1;
+    }
+  }
+  result.weeklyTrend = Array.from(weeks.values()).sort((a, b) => a.week.localeCompare(b.week));
+  for (const c of clusters) delete c.timestamps;
 
   await savePersistedAnalysis(platform, agentName, result).catch(() => {});
   return result;
@@ -1417,6 +1486,244 @@ app.get('/api/prompts/analyze', async (req, res) => {
     } finally {
       analyzeInFlight.delete(cacheKey);
     }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Tool Audit: per-tool usage/health across platforms ---
+// Streams every session file once, collecting toolCall records/content-parts
+// (name, callId, timestamp) and toolResult records (callId, timestamp, isError).
+// callId pairing yields durations and attributes results to the real tool name
+// (claude tool_result / codex outputs don't carry one). configuredUnused
+// surfaces claude MCP servers (~/.claude.json mcpServers keys) never matched
+// by any used tool name containing mcp__<server>.
+
+const TOOL_AUDIT_PLATFORMS = ['openclaw', 'codex', 'claude-code', 'omp'];
+const TOOL_AUDIT_TTL_MS = 5 * 60 * 1000;
+const TOOLS_AUDIT_FILE = path.join(ANALYSIS_DIR, 'tools-audit.json');
+const toolAuditCache = new Map(); // key → { expires, data }
+
+function toolAuditEntry(tools, name, platform) {
+  let t = tools.get(name);
+  if (!t) {
+    t = { platforms: new Set(), calls: 0, errors: 0, totalMs: 0, msCount: 0, lastUsedMs: 0, sessions: 0 };
+    tools.set(name, t);
+  }
+  t.platforms.add(platform);
+  return t;
+}
+
+// Scan one raw session JSONL file, folding per-tool aggregates into `tools`.
+// Handles the same record shapes as scanFileForInsights: standard
+// (type:'message' with toolCall parts / toolResult role), Claude Code
+// (tool_use / tool_result content blocks) and Codex (response_item payloads).
+async function scanFileForToolAudit(filePath, tools, platform) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  const pending = new Map(); // callId → { name, tsMs }
+  const seen = new Set();    // tool names used in this file
+
+  const onCall = (name, callId, ts) => {
+    const t = toolAuditEntry(tools, name, platform);
+    t.calls++;
+    seen.add(name);
+    const tsMs = ts ? Date.parse(ts) : NaN;
+    if (Number.isFinite(tsMs) && tsMs > t.lastUsedMs) t.lastUsedMs = tsMs;
+    if (callId) pending.set(callId, { name, tsMs: Number.isFinite(tsMs) ? tsMs : null });
+  };
+
+  const onResult = (callId, ts, isError, name, durationMs) => {
+    const call = callId ? pending.get(callId) : undefined;
+    if (call) pending.delete(callId);
+    const toolName = (call && call.name) || name;
+    if (!toolName) return; // unpaired result without a name: nothing to attribute
+    const t = toolAuditEntry(tools, toolName, platform);
+    seen.add(toolName);
+    if (isError) t.errors++;
+    let ms = typeof durationMs === 'number' && durationMs >= 0 ? durationMs : null;
+    if (ms === null && call && call.tsMs !== null && ts) {
+      const endMs = Date.parse(ts);
+      if (Number.isFinite(endMs) && endMs >= call.tsMs) ms = endMs - call.tsMs;
+    }
+    if (ms !== null) {
+      t.totalMs += ms;
+      t.msCount++;
+    }
+  };
+
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+
+      // --- Standard format (openclaw/omp): type === 'message' ---
+      if (rec.type === 'message') {
+        const msg = rec.message || {};
+        const content = Array.isArray(msg.content) ? msg.content : [];
+        for (const c of content) {
+          if (c.type === 'toolCall') onCall(c.name || 'unknown', c.id || null, rec.timestamp || null);
+        }
+        if (msg.role === 'toolResult') {
+          const details = msg.details || {};
+          const durationMs = typeof details.durationMs === 'number' ? details.durationMs
+            : typeof details.wallTimeMs === 'number' ? Math.round(details.wallTimeMs) : null;
+          onResult(msg.toolCallId || null, rec.timestamp || null, Boolean(msg.isError), msg.toolName || null, durationMs);
+        }
+      }
+
+      // --- Claude Code format: tool_use / tool_result content blocks ---
+      if (rec.type === 'assistant') {
+        const content = Array.isArray((rec.message || {}).content) ? rec.message.content : [];
+        for (const c of content) {
+          if (c.type === 'tool_use') onCall(c.name || 'unknown', c.id || null, rec.timestamp || null);
+        }
+      }
+      if (rec.type === 'user') {
+        const content = Array.isArray((rec.message || {}).content) ? rec.message.content : [];
+        for (const c of content) {
+          if (c.type === 'tool_result') onResult(c.tool_use_id || null, rec.timestamp || null, Boolean(c.is_error), null, null);
+        }
+      }
+
+      // --- Codex format: type === 'response_item' payloads ---
+      if (rec.type === 'response_item') {
+        const payload = rec.payload || {};
+        if (payload.type === 'function_call' || payload.type === 'custom_tool_call') {
+          onCall(payload.name || 'unknown', payload.call_id || null, rec.timestamp || null);
+        }
+        if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+          const output = payload.output;
+          let isErr = false;
+          let durationMs = null;
+          if (typeof output === 'string') {
+            isErr = output.includes('Process exited with code') && !output.includes('exited with code 0');
+          } else if (output && typeof output === 'object') {
+            if (output.metadata && output.metadata.exit_code !== undefined) isErr = output.metadata.exit_code !== 0;
+            if (output.metadata && output.metadata.duration_seconds) durationMs = Math.round(output.metadata.duration_seconds * 1000);
+          }
+          onResult(payload.call_id || null, rec.timestamp || null, isErr, null, durationMs);
+        }
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+
+  for (const name of seen) tools.get(name).sessions++;
+}
+
+// Claude MCP server names from ~/.claude.json: top-level mcpServers keys plus
+// per-project mcpServers keys. A missing or corrupt file yields an empty list.
+async function readClaudeMcpServers() {
+  let cfg;
+  try { cfg = JSON.parse(await fsp.readFile(path.join(HOME, '.claude.json'), 'utf8')); } catch { return []; }
+  if (!cfg || typeof cfg !== 'object') return [];
+  const names = new Set();
+  if (cfg.mcpServers && typeof cfg.mcpServers === 'object') {
+    for (const name of Object.keys(cfg.mcpServers)) names.add(name);
+  }
+  if (cfg.projects && typeof cfg.projects === 'object') {
+    for (const proj of Object.values(cfg.projects)) {
+      if (proj && proj.mcpServers && typeof proj.mcpServers === 'object') {
+        for (const name of Object.keys(proj.mcpServers)) names.add(name);
+      }
+    }
+  }
+  return [...names];
+}
+
+async function computeToolAudit(platform, dirs) {
+  const platforms = platform === 'all' ? TOOL_AUDIT_PLATFORMS : [platform];
+  const tools = new Map(); // name → { platforms, calls, errors, totalMs, msCount, lastUsedMs, sessions }
+
+  for (const p of platforms) {
+    const files = await collectSessionFiles(p, '', dirs[p] || '');
+    for (const f of files) {
+      await scanFileForToolAudit(f.path, tools, p).catch(() => {});
+    }
+  }
+
+  const usedNames = [...tools.keys()].map(n => n.toLowerCase());
+  const configuredUnused = [];
+  for (const server of await readClaudeMcpServers()) {
+    const marker = `mcp__${server.toLowerCase()}`;
+    if (!usedNames.some(n => n.includes(marker))) configuredUnused.push({ name: server, source: 'claude-mcp' });
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    tools: [...tools.entries()]
+      .map(([name, t]) => ({
+        name,
+        platforms: [...t.platforms],
+        calls: t.calls,
+        errors: t.errors,
+        errorRate: t.calls > 0 ? Math.round((t.errors / t.calls) * 10000) / 10000 : 0,
+        avgMs: t.msCount > 0 ? Math.round(t.totalMs / t.msCount) : null,
+        lastUsed: t.lastUsedMs ? new Date(t.lastUsedMs).toISOString() : null,
+        sessions: t.sessions
+      }))
+      .sort((a, b) => b.calls - a.calls),
+    configuredUnused
+  };
+}
+
+async function loadPersistedToolAudit() {
+  try {
+    return JSON.parse(await fsp.readFile(TOOLS_AUDIT_FILE, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// Atomic write: tmp file + rename so a crash never truncates the store.
+async function savePersistedToolAudit(result) {
+  await fsp.mkdir(ANALYSIS_DIR, { recursive: true });
+  const tmpPath = `${TOOLS_AUDIT_FILE}.tmp`;
+  await fsp.writeFile(tmpPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  await fsp.rename(tmpPath, TOOLS_AUDIT_FILE);
+}
+
+// Tool audit: per-tool usage/health, optionally scoped to one platform.
+// cached=1 → persisted result or 204; refresh=1 → recompute past the 5-min
+// memory cache. Only platform=all runs are persisted to tools-audit.json.
+app.get('/api/tools/audit', async (req, res) => {
+  try {
+    const platform = req.query.platform || 'all';
+    if (platform !== 'all' && !TOOL_AUDIT_PLATFORMS.includes(platform)) {
+      return res.status(400).json({ error: `unknown platform: ${platform}` });
+    }
+
+    // Per-platform dir overrides, mirroring /api/search: `dir` applies to the
+    // selected platform; in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirOmp.
+    const all = platform === 'all';
+    const dirs = {
+      'openclaw': (all ? req.query.dirOpenclaw : req.query.dir) || '',
+      'codex': (all ? req.query.dirCodex : req.query.dir) || '',
+      'claude-code': (all ? req.query.dirClaude : req.query.dir) || '',
+      'omp': (all ? req.query.dirOmp : req.query.dir) || ''
+    };
+
+    // cached=1: return the persisted result if present, never compute
+    if (req.query.cached === '1') {
+      const persisted = await loadPersistedToolAudit();
+      if (!persisted) return res.status(204).end();
+      return res.json({ ...persisted, persisted: true });
+    }
+
+    const cacheKey = `${platform}|${dirs['openclaw']}|${dirs['codex']}|${dirs['claude-code']}|${dirs['omp']}`;
+    if (req.query.refresh !== '1') {
+      const cached = toolAuditCache.get(cacheKey);
+      if (cached && cached.expires > Date.now()) return res.json(cached.data);
+    }
+
+    const data = await computeToolAudit(platform, dirs);
+    toolAuditCache.set(cacheKey, { data, expires: Date.now() + TOOL_AUDIT_TTL_MS });
+    if (all) await savePersistedToolAudit(data).catch(() => {});
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
