@@ -1460,17 +1460,32 @@ app.get('/api/prompts/hidden', async (req, res) => {
 
 app.post('/api/prompts/hidden', async (req, res) => {
   try {
-    const normalized = normalizePromptText(req.body && req.body.text);
-    if (!normalized) return res.status(400).json({ error: 'text is required' });
-    const hash = hashPromptText(normalized);
+    // Accept a single {text} or a batch {texts: [...]} (up to 500)
+    const body = req.body || {};
+    const rawTexts = Array.isArray(body.texts) ? body.texts : (body.text !== undefined ? [body.text] : []);
+    if (rawTexts.length > 500) return res.status(400).json({ error: 'too many texts (max 500)' });
+    const normalized = rawTexts.map((t) => normalizePromptText(t)).filter(Boolean);
+    if (!normalized.length) return res.status(400).json({ error: 'text or texts is required' });
     const entries = await loadHiddenPrompts();
-    if (!entries.some((entry) => entry.hash === hash)) {
-      entries.push({ hash, preview: normalized.slice(0, 120), hiddenAt: new Date().toISOString() });
+    const known = new Set(entries.map((entry) => entry.hash));
+    const hashes = [];
+    let added = 0;
+    const hiddenAt = new Date().toISOString();
+    for (const text of normalized) {
+      const hash = hashPromptText(text);
+      hashes.push(hash);
+      if (!known.has(hash)) {
+        known.add(hash);
+        entries.push({ hash, preview: text.slice(0, 120), hiddenAt });
+        added++;
+      }
+    }
+    if (added > 0) {
       await saveHiddenPrompts(entries);
       promptsCache.clear();
       analyzeCache.clear();
     }
-    res.json({ hash, hidden: entries.length });
+    res.json({ hash: hashes[0], hashes, added, hidden: entries.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

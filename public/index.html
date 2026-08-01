@@ -2461,6 +2461,70 @@
     .prompt-hide-btn:hover { border-color: #f85149; }
     .prompt-hide-btn:disabled { opacity: 0.5; cursor: default; }
 
+    /* --- Prompts batch selection --- */
+    .export-btn.mode-active { border-color: #58a6ff; color: #58a6ff; }
+
+    .prompt-item.selectable { padding-left: 34px; cursor: pointer; }
+
+    .prompt-select-cb {
+      position: absolute;
+      left: 10px;
+      top: 11px;
+      cursor: pointer;
+    }
+
+    .session-select-cb { cursor: pointer; flex-shrink: 0; }
+
+    .session-hide-btn {
+      background: #21262d;
+      color: var(--muted);
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+
+    .prompt-session-header:hover .session-hide-btn { opacity: 1; }
+    .session-hide-btn:hover { border-color: #f85149; }
+    .session-hide-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .prompt-select-bar {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #161b22;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+      z-index: 60;
+      font-size: 0.85rem;
+    }
+
+    .prompt-select-bar .danger { border-color: #f85149; color: #f85149; }
+
+    .prompts-notice {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f6feb;
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 0.85rem;
+      z-index: 70;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    }
+
     .hidden-manage-link {
       background: none;
       border: none;
@@ -3469,6 +3533,8 @@
     let promptAnalysis = null;
     let promptAnalysisLoading = false;
     let hiddenPrompts = [];
+    let promptSelectMode = false;
+    const promptSelection = new Set(); // "gi:si:pi" keys, cleared on every re-render
     let libraryData = null;
     let librarySearch = '';
     let libraryUsage = null;
@@ -3989,6 +4055,28 @@
       }
     }
 
+    // Batch-hide helper: dedupes texts and chunks POSTs at 500 per request (backend limit)
+    async function hidePromptTexts(texts) {
+      const unique = [...new Set(texts)];
+      for (let i = 0; i < unique.length; i += 500) {
+        const resp = await fetch('/api/prompts/hidden', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ texts: unique.slice(i, i + 500) })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || resp.statusText);
+      }
+    }
+
+    function showPromptsNotice(text) {
+      const note = document.createElement('div');
+      note.className = 'prompts-notice';
+      note.textContent = text;
+      document.body.appendChild(note);
+      setTimeout(() => note.remove(), 4000);
+    }
+
     // Restore the last persisted clustering analysis (never computes; 204 = none)
     async function restoreCachedAnalysis() {
       try {
@@ -4087,6 +4175,7 @@
         return;
       }
 
+      promptSelection.clear();
       const q = promptsSearch.trim().toLowerCase();
       let groups = promptsData.groups
         .map(g => ({ ...g, sessions: g.sessions.filter(s => promptsMatchesSearch(s, q) || g.directory.toLowerCase().includes(q)) }))
@@ -4118,6 +4207,7 @@
             return `
             <div class="prompt-session" data-gi="${gi}" data-si="${si}">
               <div class="prompt-session-header">
+                ${promptSelectMode ? `<input type="checkbox" class="session-select-cb" data-gi="${gi}" data-si="${si}" title="选择本 session 全部 prompt">` : ''}
                 <span class="caret">${expanded ? '▼' : '▶'}</span>
                 <span class="meta">${escapeHtml(dateStr)}</span>
                 <span class="session-open-link" data-session-id="${escapeHtml(s.id)}" title="Open session">${escapeHtml(s.id.slice(0, 12))}…</span>
@@ -4125,10 +4215,12 @@
                 ${s.slug ? `<span class="meta">${escapeHtml(s.slug)}</span>` : ''}
                 ${s.title ? `<span class="meta">${escapeHtml(s.title)}</span>` : ''}
                 <span class="prompt-count-chip">${s.promptCount} prompt${s.promptCount > 1 ? 's' : ''}</span>
+                ${promptSelectMode ? '' : `<button class="session-hide-btn" data-gi="${gi}" data-si="${si}" title="隐藏本 session 全部 prompt">🗑</button>`}
               </div>
               <div class="prompt-list" ${expanded ? '' : 'hidden'}>
                 ${s.prompts.map((p, pi) => `
-                  <div class="prompt-item">
+                  <div class="prompt-item${promptSelectMode ? ' selectable' : ''}" data-key="${gi}:${si}:${pi}">
+                    ${promptSelectMode ? `<input type="checkbox" class="prompt-select-cb" data-key="${gi}:${si}:${pi}">` : ''}
                     ${p.timestamp ? `<div class="prompt-time">${escapeHtml(new Date(p.timestamp).toLocaleString())}</div>` : ''}
                     <div class="prompt-text${p.text.length > 500 ? ' clamped' : ''}">${renderMarkdown(p.text)}</div>
                     ${p.text.length > 500 ? '<span class="show-more">Show more</span>' : ''}
@@ -4150,11 +4242,18 @@
           <button class="export-btn" id="promptsAnalyzeBtn" ${promptAnalysisLoading ? 'disabled' : ''} title="把相似 prompt 聚成模板簇，统计每类平均轮数/错误率，并由 Claude 给出改写建议（约 1-2 分钟）">${promptAnalysisLoading ? '分析中…' : (promptAnalysis && promptAnalysis.platform === state.platform ? '重新分析' : '🧮 聚类分析')}</button>
           <label class="toggle" title="隐藏折叠后不足 12 字符的琐碎 prompt（搜索时自动停用）"><span>隐藏琐碎 prompt</span><input id="promptsHideTrivial" type="checkbox" ${promptsHideTrivial ? 'checked' : ''}></label>
           ${hiddenPrompts.length ? `<button class="hidden-manage-link" id="promptsHiddenManageBtn">已隐藏 ${hiddenPrompts.length} · 管理</button>` : ''}
+          <button class="export-btn${promptSelectMode ? ' mode-active' : ''}" id="promptsSelectModeBtn" title="批量选择 prompt 后一键隐藏（可恢复）">☑ 批量选择</button>
           <button class="export-btn" id="promptsExportBtn">Export JSON</button>
         </div>
         <div class="prompts-summary">从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}${trivialActive && hiddenTrivial ? ` · 已隐藏 ${hiddenTrivial} 条琐碎 prompt` : ''}</div>
         ${renderAnalysisHtml()}
         ${groupsHtml || '<div class="insights-empty">No matches.</div>'}
+        ${promptSelectMode ? `
+        <div class="prompt-select-bar" id="promptSelectBar">
+          <span>已选 <span id="promptSelCount">0</span> 条</span>
+          <button class="export-btn danger" id="promptSelHideBtn" disabled>🗑 隐藏选中</button>
+          <button class="export-btn" id="promptSelCancelBtn">取消</button>
+        </div>` : ''}
       `;
 
       // Search input (debounced re-render, keep focus)
@@ -4195,10 +4294,120 @@
       // Collapse/expand sessions
       promptsPanel.querySelectorAll('.prompt-session-header').forEach(header => {
         header.addEventListener('click', (e) => {
-          if (e.target.classList.contains('session-open-link')) return;
+          if (e.target.closest('.session-open-link, .session-select-cb, .session-hide-btn')) return;
           const list = header.parentElement.querySelector('.prompt-list');
           list.hidden = !list.hidden;
           header.querySelector('.caret').textContent = list.hidden ? '▶' : '▼';
+        });
+      });
+
+      // --- Batch selection mode ---
+      document.getElementById('promptsSelectModeBtn').addEventListener('click', () => {
+        promptSelectMode = !promptSelectMode;
+        promptSelection.clear();
+        renderPrompts();
+      });
+
+      if (promptSelectMode) {
+        const selCountEl = document.getElementById('promptSelCount');
+        const selHideBtn = document.getElementById('promptSelHideBtn');
+        const syncSelectBar = () => {
+          selCountEl.textContent = promptSelection.size;
+          selHideBtn.disabled = promptSelection.size === 0;
+        };
+        const syncSessionCb = (sessionEl) => {
+          const cbs = [...sessionEl.querySelectorAll('.prompt-select-cb')];
+          const checked = cbs.filter(cb => cb.checked).length;
+          const scb = sessionEl.querySelector('.session-select-cb');
+          if (!scb) return;
+          scb.checked = checked > 0 && checked === cbs.length;
+          scb.indeterminate = checked > 0 && checked < cbs.length;
+        };
+        const setItem = (cb, on) => {
+          cb.checked = on;
+          if (on) promptSelection.add(cb.dataset.key);
+          else promptSelection.delete(cb.dataset.key);
+        };
+
+        promptsPanel.querySelectorAll('.prompt-select-cb').forEach(cb => {
+          cb.addEventListener('change', () => {
+            setItem(cb, cb.checked);
+            syncSessionCb(cb.closest('.prompt-session'));
+            syncSelectBar();
+          });
+        });
+
+        promptsPanel.querySelectorAll('.session-select-cb').forEach(scb => {
+          scb.addEventListener('click', (e) => e.stopPropagation());
+          scb.addEventListener('change', () => {
+            const sessionEl = scb.closest('.prompt-session');
+            sessionEl.querySelectorAll('.prompt-select-cb').forEach(cb => setItem(cb, scb.checked));
+            scb.indeterminate = false;
+            syncSelectBar();
+          });
+        });
+
+        // Clicking a prompt row toggles its checkbox (inner buttons/links keep working)
+        promptsPanel.querySelectorAll('.prompt-item').forEach(item => {
+          item.addEventListener('click', (e) => {
+            if (e.target.closest('button, input, a, .show-more')) return;
+            const cb = item.querySelector('.prompt-select-cb');
+            if (!cb) return;
+            setItem(cb, !cb.checked);
+            syncSessionCb(item.closest('.prompt-session'));
+            syncSelectBar();
+          });
+        });
+
+        document.getElementById('promptSelCancelBtn').addEventListener('click', () => {
+          promptSelectMode = false;
+          promptSelection.clear();
+          renderPrompts();
+        });
+
+        selHideBtn.addEventListener('click', async () => {
+          if (!promptSelection.size || selHideBtn.textContent !== '🗑 隐藏选中') return;
+          const texts = [];
+          for (const key of promptSelection) {
+            const [kgi, ksi, kpi] = key.split(':').map(Number);
+            const p = groups[kgi] && groups[kgi].sessions[ksi] && groups[kgi].sessions[ksi].prompts[kpi];
+            if (p) texts.push(p.text);
+          }
+          const n = texts.length;
+          selHideBtn.disabled = true;
+          selHideBtn.textContent = '隐藏中…';
+          try {
+            await hidePromptTexts(texts);
+            promptSelectMode = false;
+            promptSelection.clear();
+            await loadPrompts();
+            showPromptsNotice(`已隐藏 ${n} 条`);
+          } catch (error) {
+            selHideBtn.disabled = false;
+            selHideBtn.textContent = '🗑 隐藏选中';
+            showPromptsNotice('隐藏失败: ' + error.message);
+          }
+        });
+      }
+
+      // Session-level quick hide (outside selection mode; reversible via 管理 modal)
+      promptsPanel.querySelectorAll('.session-hide-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (btn.disabled) return;
+          const g = groups[Number(btn.dataset.gi)];
+          const s = g && g.sessions[Number(btn.dataset.si)];
+          if (!s) return;
+          btn.disabled = true;
+          const n = s.prompts.length;
+          try {
+            await hidePromptTexts(s.prompts.map(p => p.text));
+            await loadPrompts();
+            showPromptsNotice(`已隐藏 ${n} 条`);
+          } catch (error) {
+            btn.disabled = false;
+            showPromptsNotice('隐藏失败: ' + error.message);
+          }
         });
       });
 
