@@ -2475,6 +2475,8 @@
 
     .session-select-cb { cursor: pointer; flex-shrink: 0; }
 
+    .group-select-cb { cursor: pointer; margin-right: 8px; vertical-align: middle; }
+
     .session-hide-btn {
       background: #21262d;
       color: var(--muted);
@@ -4200,7 +4202,7 @@
 
       const groupsHtml = groups.map((g, gi) => `
         <div class="insight-section">
-          <h3>${escapeHtml(g.directory)} <span style="text-transform:none;letter-spacing:0;">— ${g.sessions.length} sessions / ${g.sessions.reduce((m, s) => m + s.promptCount, 0)} prompts</span></h3>
+          <h3>${promptSelectMode ? `<input type="checkbox" class="group-select-cb" data-gi="${gi}" title="选择本组（目录）全部 prompt">` : ''}${escapeHtml(g.directory)} <span style="text-transform:none;letter-spacing:0;">— ${g.sessions.length} sessions / ${g.sessions.reduce((m, s) => m + s.promptCount, 0)} prompts</span></h3>
           ${g.sessions.map((s, si) => {
             const dateStr = s.timestamp ? new Date(s.timestamp).toLocaleString() : '—';
             const expanded = !!q;
@@ -4323,6 +4325,15 @@
           scb.checked = checked > 0 && checked === cbs.length;
           scb.indeterminate = checked > 0 && checked < cbs.length;
         };
+        const syncGroupCb = (groupEl) => {
+          if (!groupEl) return;
+          const cbs = [...groupEl.querySelectorAll('.prompt-select-cb')];
+          const checked = cbs.filter(cb => cb.checked).length;
+          const gcb = groupEl.querySelector('.group-select-cb');
+          if (!gcb) return;
+          gcb.checked = checked > 0 && checked === cbs.length;
+          gcb.indeterminate = checked > 0 && checked < cbs.length;
+        };
         const setItem = (cb, on) => {
           cb.checked = on;
           if (on) promptSelection.add(cb.dataset.key);
@@ -4333,6 +4344,7 @@
           cb.addEventListener('change', () => {
             setItem(cb, cb.checked);
             syncSessionCb(cb.closest('.prompt-session'));
+            syncGroupCb(cb.closest('.insight-section'));
             syncSelectBar();
           });
         });
@@ -4343,6 +4355,19 @@
             const sessionEl = scb.closest('.prompt-session');
             sessionEl.querySelectorAll('.prompt-select-cb').forEach(cb => setItem(cb, scb.checked));
             scb.indeterminate = false;
+            syncGroupCb(scb.closest('.insight-section'));
+            syncSelectBar();
+          });
+        });
+
+        // Group (directory) checkbox: toggle every prompt in the whole group
+        promptsPanel.querySelectorAll('.group-select-cb').forEach(gcb => {
+          gcb.addEventListener('click', (e) => e.stopPropagation());
+          gcb.addEventListener('change', () => {
+            const groupEl = gcb.closest('.insight-section');
+            groupEl.querySelectorAll('.prompt-select-cb').forEach(cb => setItem(cb, gcb.checked));
+            groupEl.querySelectorAll('.prompt-session').forEach(syncSessionCb);
+            gcb.indeterminate = false;
             syncSelectBar();
           });
         });
@@ -4355,7 +4380,7 @@
             if (!cb) return;
             setItem(cb, !cb.checked);
             syncSessionCb(item.closest('.prompt-session'));
-            syncSelectBar();
+            syncGroupCb(item.closest('.insight-section'));
           });
         });
 
