@@ -1228,12 +1228,58 @@ function runClaudeCli(input, timeoutMs) {
 }
 
 function parseLlmJson(raw) {
-  let text = raw.trim();
+  const text = String(raw || '').trim();
+  const candidates = [text];
+  // Anchored fence: whole reply wrapped in one ```json ... ``` block
+  // (fences INSIDE the JSON strings would truncate a non-greedy match)
+  const anchored = text.match(/^```(?:json)?\s*\n([\s\S]*)\n```\s*$/);
+  if (anchored) candidates.push(anchored[1]);
+  // First fenced block (legacy behavior)
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) text = fence[1].trim();
+  if (fence) candidates.push(fence[1]);
+  // Outermost braces/brackets span
   const start = text.search(/[[{]/);
-  if (start > 0) text = text.slice(start);
-  try { return JSON.parse(text); } catch { return null; }
+  const end = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (start !== -1 && end > start) candidates.push(text.slice(start, end + 1));
+  for (const candidate of candidates) {
+    try { return JSON.parse(candidate.trim()); } catch { /* try next strategy */ }
+  }
+  // Last resort: repair unescaped double quotes inside string values
+  // (LLMs often quote 中文 with literal " — a " inside a string is treated
+  // as content unless the next non-space char is structural).
+  for (const candidate of candidates.slice().reverse()) {
+    try { return JSON.parse(repairLlmJsonQuotes(candidate.trim())); } catch { /* try next */ }
+  }
+  return null;
+}
+
+function repairLlmJsonQuotes(text) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (!inString) {
+      if (ch === '"') inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '\\') { out += ch + (text[i + 1] || ''); i++; continue; }
+    if (ch === '"') {
+      // Real terminator only when followed by a structural char
+      let j = i + 1;
+      while (j < text.length && (text[j] === ' ' || text[j] === '\t')) j++;
+      const next = text[j];
+      if (next === undefined || next === ',' || next === '}' || next === ']' || next === ':' || next === '\n' || next === '\r') {
+        inString = false;
+        out += ch;
+      } else {
+        out += '\\"'; // content quote — escape it
+      }
+      continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 
 async function runClaudeAnalysis(clusters) {
@@ -1271,7 +1317,7 @@ ${clusterDescriptions}
   ],
   "overall": ["跨模板的整体建议1", "建议2"]
 }
-suggestions 数组按模板顺序,每个模板一项。用中文回答。`;
+suggestions 数组按模板顺序,每个模板一项。用中文回答。JSON 字符串值内部不要使用英文双引号("),引用词语请用中文引号「」。`;
 
   const raw = await runClaudeCli(input, 240_000);
   const parsed = parseLlmJson(raw);
