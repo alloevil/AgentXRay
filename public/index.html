@@ -2442,6 +2442,70 @@
     .prompt-item:hover .prompt-star-btn { opacity: 1; }
     .prompt-star-btn:hover { border-color: #d29922; }
 
+    .prompt-hide-btn {
+      position: absolute;
+      top: 6px;
+      right: 164px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #f85149;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .prompt-item:hover .prompt-hide-btn { opacity: 1; }
+    .prompt-hide-btn:hover { border-color: #f85149; }
+    .prompt-hide-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .hidden-manage-link {
+      background: none;
+      border: none;
+      color: #58a6ff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      padding: 0;
+      white-space: nowrap;
+    }
+
+    .hidden-manage-link:hover { text-decoration: underline; }
+
+    .hidden-prompt-row {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px;
+      font-size: 0.8rem;
+    }
+
+    .hidden-prompt-row:last-child { border-bottom: none; }
+
+    .hidden-prompt-row .preview {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hidden-restore-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #58a6ff;
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      white-space: nowrap;
+    }
+
+    .hidden-restore-btn:hover { border-color: #58a6ff; }
+    .hidden-restore-btn:disabled { opacity: 0.5; cursor: default; }
+
     /* --- Prompt Library --- */
     .library-card-head {
       display: flex;
@@ -2776,7 +2840,7 @@
             <h3>AgentXRay 能做什么</h3>
             <div class="fg-item"><b>Sessions</b> — 跨工具浏览与回放 AI agent 会话：每条消息、每次工具调用的参数与结果、耗时拆分、token 成本。左侧搜索框<b>直接输入</b>过滤列表，<b>按回车</b>全文搜索会话内容（含已被 Claude 清理的历史输入）。</div>
             <div class="fg-item"><b>Insights</b> — 聚合分析：哪些工具用得最多、哪里报错、token 花在哪、每天用量趋势。选中某个会话后变为单会话分析。</div>
-            <div class="fg-item"><b>Prompts</b> — 自动提取你在所有会话里输入过的真人 prompt（滤掉工具输出和系统注入），按目录分组。每条可 <b>⭐ 收藏</b>入库、<b>优化</b>（Claude 改写）；「分析优化」把相似 prompt 聚成模板并统计效果。</div>
+            <div class="fg-item"><b>Prompts</b> — 自动提取你在所有会话里输入过的真人 prompt（滤掉工具输出和系统注入），按目录分组。每条可 <b>⭐ 收藏</b>入库、<b>优化</b>（Claude 改写）、<b>🗑 隐藏</b>（可恢复）；「🧮 聚类分析」把相似 prompt 聚成模板并统计效果。</div>
             <div class="fg-item"><b>Library</b> — prompt 资产库：标签分类、编辑、搜索。每条有 <b>Claude / Codex / OMP</b> 三个开关，点亮即安装为该工具的 slash command——之后在工具里输 <code>/名字</code> 直接调用，<code>$ARGUMENTS</code> 传参。</div>
             <div class="fg-item"><b>⚙ 设置</b> — 自定义各平台的日志目录（默认已指向本机标准路径）。</div>
           </div>
@@ -2879,6 +2943,17 @@
       <div class="analysis-error" id="libraryHistoryError" hidden style="margin-top:10px"></div>
       <div class="settings-actions">
         <button class="btn-reset" id="libraryHistoryClose">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div class="settings-overlay" id="hiddenPromptsOverlay" hidden>
+    <div class="settings-panel history-panel">
+      <h2>🗑 已隐藏的 Prompt</h2>
+      <div class="history-list" id="hiddenPromptsList"></div>
+      <div class="analysis-error" id="hiddenPromptsError" hidden style="margin-top:10px"></div>
+      <div class="settings-actions">
+        <button class="btn-save" id="hiddenPromptsRestoreAll">全部恢复</button>
+        <button class="btn-reset" id="hiddenPromptsClose">关闭</button>
       </div>
     </div>
   </div>
@@ -3393,6 +3468,7 @@
     let promptsHideTrivial = (() => { try { return localStorage.getItem('axr-hide-trivial') !== '0'; } catch { return true; } })();
     let promptAnalysis = null;
     let promptAnalysisLoading = false;
+    let hiddenPrompts = [];
     let libraryData = null;
     let librarySearch = '';
     let libraryUsage = null;
@@ -3898,13 +3974,33 @@
       promptsPanel.innerHTML = '<div class="insights-loading">Loading prompts…</div>';
       if (promptAnalysis && promptAnalysis.platform !== state.platform) promptAnalysis = null;
 
+      const hiddenFetch = fetchJson('/api/prompts/hidden')
+        .then(d => (d && d.hidden) || [])
+        .catch(() => hiddenPrompts);
+      if (!promptAnalysis) restoreCachedAnalysis();
+
       try {
         const data = await fetchJson('/api/prompts?' + promptsQueryParams().toString());
+        hiddenPrompts = await hiddenFetch;
         promptsData = data;
         renderPrompts();
       } catch (error) {
         promptsPanel.innerHTML = `<div class="insights-empty">Failed to load prompts: ${escapeHtml(error.message)}</div>`;
       }
+    }
+
+    // Restore the last persisted clustering analysis (never computes; 204 = none)
+    async function restoreCachedAnalysis() {
+      try {
+        const params = promptsQueryParams();
+        params.set('cached', '1');
+        const resp = await fetch('/api/prompts/analyze?' + params.toString());
+        if (resp.status !== 200) return;
+        const data = await resp.json();
+        if (!data || data.platform !== state.platform || promptAnalysis || promptAnalysisLoading) return;
+        promptAnalysis = data;
+        if (currentView === 'prompts' && promptsData) renderPrompts();
+      } catch {}
     }
 
     async function loadPromptAnalysis(refresh) {
@@ -3970,7 +4066,7 @@
 
       return `
         <div class="insight-section analysis-section">
-          <h3>Prompt Analysis <span style="text-transform:none;letter-spacing:0;color:var(--muted)">— ${a.totalClusters} 个模板簇 / ${escapeHtml(new Date(a.generatedAt).toLocaleString())}</span></h3>
+          <h3>Prompt Analysis <span style="text-transform:none;letter-spacing:0;color:var(--muted)">— ${a.totalClusters} 个模板簇 / ${escapeHtml(new Date(a.generatedAt).toLocaleString())}${a.persisted ? ' · 已保存的上次结果 · 点击重新分析可更新' : ''}</span></h3>
           ${errorHtml}${rawHtml}${overallHtml}
           ${clustersHtml || '<div style="color:var(--muted)">没有出现 2 次以上的模板</div>'}
         </div>
@@ -4036,6 +4132,7 @@
                     ${p.timestamp ? `<div class="prompt-time">${escapeHtml(new Date(p.timestamp).toLocaleString())}</div>` : ''}
                     <div class="prompt-text${p.text.length > 500 ? ' clamped' : ''}">${renderMarkdown(p.text)}</div>
                     ${p.text.length > 500 ? '<span class="show-more">Show more</span>' : ''}
+                    <button class="prompt-hide-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="隐藏此 prompt（同文重复项一并隐藏，可恢复）">🗑</button>
                     <button class="prompt-optimize-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="用 Claude 改写这条 prompt">优化</button>
                     <button class="prompt-copy-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="Copy prompt">Copy</button>
                     <button class="prompt-star-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="收藏到 Prompt Library">⭐ 收藏</button>
@@ -4050,8 +4147,9 @@
       promptsPanel.innerHTML = `
         <div class="prompts-toolbar">
           <input type="search" id="promptsSearchInput" placeholder="Filter prompts / directories / sessions" value="${escapeHtml(promptsSearch)}">
-          <button class="export-btn" id="promptsAnalyzeBtn" ${promptAnalysisLoading ? 'disabled' : ''}>${promptAnalysisLoading ? '分析中…' : (promptAnalysis && promptAnalysis.platform === state.platform ? '重新分析' : '分析优化')}</button>
+          <button class="export-btn" id="promptsAnalyzeBtn" ${promptAnalysisLoading ? 'disabled' : ''} title="把相似 prompt 聚成模板簇，统计每类平均轮数/错误率，并由 Claude 给出改写建议（约 1-2 分钟）">${promptAnalysisLoading ? '分析中…' : (promptAnalysis && promptAnalysis.platform === state.platform ? '重新分析' : '🧮 聚类分析')}</button>
           <label class="toggle" title="隐藏折叠后不足 12 字符的琐碎 prompt（搜索时自动停用）"><span>隐藏琐碎 prompt</span><input id="promptsHideTrivial" type="checkbox" ${promptsHideTrivial ? 'checked' : ''}></label>
+          ${hiddenPrompts.length ? `<button class="hidden-manage-link" id="promptsHiddenManageBtn">已隐藏 ${hiddenPrompts.length} · 管理</button>` : ''}
           <button class="export-btn" id="promptsExportBtn">Export JSON</button>
         </div>
         <div class="prompts-summary">从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}${trivialActive && hiddenTrivial ? ` · 已隐藏 ${hiddenTrivial} 条琐碎 prompt` : ''}</div>
@@ -4089,6 +4187,10 @@
         try { localStorage.setItem('axr-hide-trivial', promptsHideTrivial ? '1' : '0'); } catch {}
         renderPrompts();
       });
+
+      // Hidden-prompts management modal opener
+      const hiddenManageBtn = document.getElementById('promptsHiddenManageBtn');
+      if (hiddenManageBtn) hiddenManageBtn.addEventListener('click', openHiddenPromptsModal);
 
       // Collapse/expand sessions
       promptsPanel.querySelectorAll('.prompt-session-header').forEach(header => {
@@ -4199,6 +4301,35 @@
           } finally {
             btn.disabled = false;
             btn.textContent = '优化';
+          }
+        });
+      });
+
+      // Hide prompt (non-destructive; hides all identical occurrences, reversible)
+      promptsPanel.querySelectorAll('.prompt-hide-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const g = groups[Number(btn.dataset.gi)];
+          const s = g && g.sessions[Number(btn.dataset.si)];
+          const p = s && s.prompts[Number(btn.dataset.pi)];
+          if (!p || btn.disabled) return;
+          btn.disabled = true;
+          try {
+            const resp = await fetch('/api/prompts/hidden', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ text: p.text })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || resp.statusText);
+            await loadPrompts();
+          } catch (error) {
+            btn.disabled = false;
+            const item = btn.closest('.prompt-item');
+            const err = document.createElement('div');
+            err.className = 'analysis-error';
+            err.textContent = '隐藏失败: ' + error.message;
+            item.appendChild(err);
+            setTimeout(() => err.remove(), 5000);
           }
         });
       });
@@ -4782,6 +4913,68 @@
     });
 
     document.getElementById('libraryHistoryClose').addEventListener('click', closeLibraryHistory);
+
+    // --- Hidden prompts management modal ---
+    const hiddenPromptsOverlay = document.getElementById('hiddenPromptsOverlay');
+    const hiddenPromptsListEl = document.getElementById('hiddenPromptsList');
+    const hiddenPromptsErrorEl = document.getElementById('hiddenPromptsError');
+    const hiddenPromptsRestoreAllBtn = document.getElementById('hiddenPromptsRestoreAll');
+
+    function openHiddenPromptsModal() {
+      hiddenPromptsErrorEl.hidden = true;
+      hiddenPromptsOverlay.hidden = false;
+      renderHiddenPromptsList();
+    }
+
+    function closeHiddenPromptsModal() {
+      hiddenPromptsOverlay.hidden = true;
+    }
+
+    function renderHiddenPromptsList() {
+      hiddenPromptsRestoreAllBtn.disabled = !hiddenPrompts.length;
+      if (!hiddenPrompts.length) {
+        hiddenPromptsListEl.innerHTML = '<div class="insights-empty">没有已隐藏的 prompt</div>';
+        return;
+      }
+      hiddenPromptsListEl.innerHTML = hiddenPrompts.map(h => `
+        <div class="hidden-prompt-row">
+          <span class="history-date">${escapeHtml(h.hiddenAt ? new Date(h.hiddenAt).toLocaleDateString() : '—')}</span>
+          <span class="preview" title="${escapeHtml(h.preview || '')}">${escapeHtml(h.preview || '')}</span>
+          <button class="hidden-restore-btn" data-hash="${escapeHtml(h.hash)}">恢复</button>
+        </div>`).join('');
+      hiddenPromptsListEl.querySelectorAll('.hidden-restore-btn').forEach(btn => {
+        btn.addEventListener('click', () => restoreHiddenPrompts([btn.dataset.hash], btn));
+      });
+    }
+
+    async function restoreHiddenPrompts(hashes, btn) {
+      if (!hashes.length || (btn && btn.disabled)) return;
+      const orig = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = '恢复中…'; }
+      hiddenPromptsErrorEl.hidden = true;
+      try {
+        for (const hash of hashes) {
+          const resp = await fetch('/api/prompts/hidden/' + encodeURIComponent(hash), { method: 'DELETE' });
+          if (!resp.ok) throw new Error((await resp.json().catch(() => null))?.error || resp.statusText);
+        }
+        hiddenPrompts = hiddenPrompts.filter(h => !hashes.includes(h.hash));
+        if (currentView === 'prompts') loadPrompts();
+      } catch (error) {
+        hiddenPromptsErrorEl.textContent = '恢复失败: ' + error.message;
+        hiddenPromptsErrorEl.hidden = false;
+      } finally {
+        if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = orig; }
+        renderHiddenPromptsList();
+      }
+    }
+
+    hiddenPromptsRestoreAllBtn.addEventListener('click', () => restoreHiddenPrompts(hiddenPrompts.map(h => h.hash), hiddenPromptsRestoreAllBtn));
+
+    document.getElementById('hiddenPromptsClose').addEventListener('click', closeHiddenPromptsModal);
+
+    hiddenPromptsOverlay.addEventListener('click', (e) => {
+      if (e.target === hiddenPromptsOverlay) closeHiddenPromptsModal();
+    });
 
     function filterSessions() {
       const term = sessionSearch.value.trim().toLowerCase();

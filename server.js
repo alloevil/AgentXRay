@@ -838,6 +838,38 @@ function getPromptsCacheKey(platform, agent, dir) {
   return `${platform}|${agent || ''}|${dir || ''}`;
 }
 
+// Hidden prompts: non-destructive delete for the Prompts view.
+// Storage: ~/.agentxray/hidden-prompts.json — array of { hash, preview, hiddenAt }.
+// hash = first 16 hex chars of sha256 over the whitespace-normalized prompt text,
+// so hiding one prompt hides every identical occurrence across sessions/platforms.
+const HIDDEN_PROMPTS_FILE = path.join(HOME, '.agentxray', 'hidden-prompts.json');
+const HIDDEN_HASH_RE = /^[0-9a-f]{16}$/;
+
+function normalizePromptText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+function hashPromptText(normalized) {
+  return crypto.createHash('sha256').update(normalized, 'utf8').digest('hex').slice(0, 16);
+}
+
+async function loadHiddenPrompts() {
+  try {
+    const parsed = JSON.parse(await fsp.readFile(HIDDEN_PROMPTS_FILE, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Atomic write: tmp file + rename so a crash never truncates the store.
+async function saveHiddenPrompts(entries) {
+  await fsp.mkdir(path.dirname(HIDDEN_PROMPTS_FILE), { recursive: true });
+  const tmpPath = `${HIDDEN_PROMPTS_FILE}.tmp`;
+  await fsp.writeFile(tmpPath, `${JSON.stringify(entries, null, 2)}\n`, 'utf8');
+  await fsp.rename(tmpPath, HIDDEN_PROMPTS_FILE);
+}
+
 async function extractOpenClawPrompts(filePath) {
   const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
@@ -1045,6 +1077,20 @@ async function computePrompts(platform, agentName, dirOverride) {
     groups = Array.from(groupMap.entries()).map(([directory, sessions]) => ({ directory, sessions }));
   }
 
+  // Exclude hidden prompts, then drop sessions/directories left empty.
+  const hidden = await loadHiddenPrompts();
+  if (hidden.length > 0) {
+    const hiddenHashes = new Set(hidden.map((entry) => entry.hash));
+    for (const g of groups) {
+      for (const s of g.sessions) {
+        s.prompts = s.prompts.filter((p) => !hiddenHashes.has(hashPromptText(normalizePromptText(p.text))));
+        s.promptCount = s.prompts.length;
+      }
+      g.sessions = g.sessions.filter((s) => s.promptCount > 0);
+    }
+    groups = groups.filter((g) => g.sessions.length > 0);
+  }
+
   let totalSessions = 0;
   let totalPrompts = 0;
   for (const g of groups) {
@@ -1218,6 +1264,32 @@ suggestions 数组按模板顺序,每个模板一项。用中文回答。`;
   return { suggestions: parsed.suggestions, overall: Array.isArray(parsed.overall) ? parsed.overall : [] };
 }
 
+// Persisted analysis results: ~/.agentxray/analysis/<key>.json where key is
+// platform (+ '-agentName') sanitized to [a-z0-9-]. Survives server restarts.
+const ANALYSIS_DIR = path.join(HOME, '.agentxray', 'analysis');
+
+function analysisFilePath(platform, agentName) {
+  const key = `${platform}${agentName ? `-${agentName}` : ''}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  return path.join(ANALYSIS_DIR, `${key}.json`);
+}
+
+async function loadPersistedAnalysis(platform, agentName) {
+  try {
+    return JSON.parse(await fsp.readFile(analysisFilePath(platform, agentName), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// Atomic write: tmp file + rename so a crash never truncates the store.
+async function savePersistedAnalysis(platform, agentName, result) {
+  await fsp.mkdir(ANALYSIS_DIR, { recursive: true });
+  const filePath = analysisFilePath(platform, agentName);
+  const tmpPath = `${filePath}.tmp`;
+  await fsp.writeFile(tmpPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  await fsp.rename(tmpPath, filePath);
+}
+
 async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) {
   const promptsData = await computePrompts(platform, agentName, dirOverride);
   const clusters = clusterPrompts(promptsData);
@@ -1251,6 +1323,7 @@ async function computePromptAnalysis(platform, agentName, dirOverride, skipLlm) 
     }
   }
 
+  await savePersistedAnalysis(platform, agentName, result).catch(() => {});
   return result;
 }
 
@@ -1314,8 +1387,20 @@ app.get('/api/prompts/analyze', async (req, res) => {
     const skipLlm = req.query.skipLlm === '1';
     const cacheKey = getPromptsCacheKey(platform, agent, dir);
 
-    if (!refresh && analyzeCache.has(cacheKey)) {
-      return res.json(analyzeCache.get(cacheKey));
+    // cached=1: return the persisted result if present, never compute
+    if (req.query.cached === '1') {
+      const persisted = await loadPersistedAnalysis(platform, agent);
+      if (!persisted) return res.status(204).end();
+      return res.json({ ...persisted, persisted: true });
+    }
+
+    if (!refresh) {
+      if (analyzeCache.has(cacheKey)) {
+        return res.json(analyzeCache.get(cacheKey));
+      }
+      // Fall back to the persisted result before recomputing
+      const persisted = await loadPersistedAnalysis(platform, agent);
+      if (persisted) return res.json({ ...persisted, persisted: true });
     }
     // Coalesce concurrent identical requests into one computation
     if (analyzeInFlight.has(cacheKey)) {
@@ -1359,6 +1444,50 @@ ${text}
       return res.json({ rewrite: raw.trim().slice(0, 8000), rationale: null, raw: true });
     }
     res.json({ rewrite: parsed.rewrite, rationale: parsed.rationale || null });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Hidden prompts: list, hide (by text), unhide (by hash)
+app.get('/api/prompts/hidden', async (req, res) => {
+  try {
+    res.json({ hidden: await loadHiddenPrompts() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/prompts/hidden', async (req, res) => {
+  try {
+    const normalized = normalizePromptText(req.body && req.body.text);
+    if (!normalized) return res.status(400).json({ error: 'text is required' });
+    const hash = hashPromptText(normalized);
+    const entries = await loadHiddenPrompts();
+    if (!entries.some((entry) => entry.hash === hash)) {
+      entries.push({ hash, preview: normalized.slice(0, 120), hiddenAt: new Date().toISOString() });
+      await saveHiddenPrompts(entries);
+      promptsCache.clear();
+      analyzeCache.clear();
+    }
+    res.json({ hash, hidden: entries.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/prompts/hidden/:hash', async (req, res) => {
+  try {
+    const hash = req.params.hash;
+    if (!HIDDEN_HASH_RE.test(hash)) return res.status(400).json({ error: 'invalid hash' });
+    const entries = await loadHiddenPrompts();
+    const next = entries.filter((entry) => entry.hash !== hash);
+    if (next.length !== entries.length) {
+      await saveHiddenPrompts(next);
+      promptsCache.clear();
+      analyzeCache.clear();
+    }
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
