@@ -814,6 +814,13 @@ function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, tot
   };
 }
 
+// Frontend staleness detection: the SPA polls this and prompts a reload
+// when the serving process (and thus possibly the code) has changed.
+const SERVER_BOOT_ID = `${Date.now().toString(36)}-${process.pid}`;
+app.get('/api/version', (req, res) => {
+  res.json({ bootId: SERVER_BOOT_ID });
+});
+
 app.use(express.static(PUBLIC_DIR, { maxAge: 0, etag: false, lastModified: false }));
 app.use(express.json({ limit: '256kb' }));
 

@@ -7987,6 +7987,31 @@
     }
     initialLoad();
 
+    // --- Stale-page detection: prompt a reload when the server was updated ---
+    (() => {
+      let bootId = null;
+      let notified = false;
+      const check = async () => {
+        try {
+          const res = await fetch('/api/version');
+          if (!res.ok) return; // old server without the endpoint
+          const data = await res.json();
+          if (bootId === null) { bootId = data.bootId; return; }
+          if (data.bootId !== bootId && !notified) {
+            notified = true;
+            const bar = document.createElement('div');
+            bar.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:300;background:#1f6feb;color:#fff;padding:8px 18px;border-radius:0 0 8px 8px;font-size:0.85rem;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.4)';
+            bar.textContent = '🔄 AgentXRay 已更新 — 点击刷新加载新版本';
+            bar.addEventListener('click', () => location.reload());
+            document.body.appendChild(bar);
+          }
+        } catch { /* server briefly down during restart — keep polling */ }
+      };
+      check();
+      setInterval(check, 15_000);
+      window.addEventListener('focus', check);
+    })();
+
     // ========== Subagents (omp / claude-code spawned children) ==========
     async function loadChildAgents() {
       const section = document.getElementById('agentChildrenSection');
