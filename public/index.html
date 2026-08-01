@@ -5221,18 +5221,28 @@
     // Scroll to a message by ID, expanding pagination if needed
     function scrollToMessage(msgId) {
       if (!msgId) return;
-      let el = document.getElementById('message-' + CSS.escape(msgId))
+      // The target lives in the messages list — leave Trace view if active
+      if (sessionView !== 'messages') {
+        sessionView = 'messages';
+        applySessionView();
+      }
+      const findEl = () => document.getElementById('message-' + CSS.escape(msgId))
         || document.getElementById('tool-result-' + CSS.escape(msgId))
         || document.getElementById('row-' + CSS.escape(msgId))
         || document.querySelector(`[id*="${CSS.escape(msgId)}"]`);
+      let el = findEl();
       if (!el) {
         // Message not in DOM — expand all units and re-render
         state.visibleUnitCount = Infinity;
         renderMessages();
-        el = document.getElementById('message-' + CSS.escape(msgId))
-          || document.getElementById('tool-result-' + CSS.escape(msgId))
-          || document.getElementById('row-' + CSS.escape(msgId))
-          || document.querySelector(`[id*="${CSS.escape(msgId)}"]`);
+        el = findEl();
+      }
+      if (!el && state.msgFilter) {
+        // Still missing: an active role filter is hiding it — clear and retry
+        state.msgFilter = null;
+        renderSummary();
+        renderMessages();
+        el = findEl();
       }
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
