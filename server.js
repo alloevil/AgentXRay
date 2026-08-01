@@ -3929,6 +3929,144 @@ function parseInstallTargets(body) {
   return [...new Set(targets)];
 }
 
+// --- Library git versioning ---
+// LIBRARY_DIR is kept as a local git repo so every mutation is recoverable.
+// Git being missing or broken is tolerated silently: versioning turns off,
+// the library keeps working, and history endpoints reply with empty lists.
+
+let libraryGitReady = false;
+let libraryGitQueue;
+
+function gitLibrary(args) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, { cwd: LIBRARY_DIR, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err) return reject(err);
+      resolve(stdout);
+    });
+  });
+}
+
+async function ensureLibraryRepo() {
+  try {
+    await fsp.mkdir(LIBRARY_DIR, { recursive: true });
+    const hasRepo = await fsp.access(path.join(LIBRARY_DIR, '.git')).then(() => true, () => false);
+    if (!hasRepo) await gitLibrary(['init']);
+    // Identity fallback so commits never fail on machines without git config
+    await gitLibrary(['config', 'user.name']).catch(() => gitLibrary(['config', 'user.name', 'agentxray']));
+    await gitLibrary(['config', 'user.email']).catch(() => gitLibrary(['config', 'user.email', 'agentxray@localhost']));
+    if ((await gitLibrary(['status', '--porcelain'])).trim()) {
+      await gitLibrary(['add', '-A']);
+      await gitLibrary(['commit', '-m', 'snapshot: existing library']);
+    }
+    libraryGitReady = true;
+  } catch (error) {
+    console.warn(`Library git versioning disabled: ${error.message}`);
+  }
+}
+
+// Fire-and-forget commit after a mutating library op. Commits are serialized
+// through a promise chain so concurrent requests never race the git index.
+function commitLibrary(message) {
+  libraryGitQueue = libraryGitQueue
+    .then(async () => {
+      if (!libraryGitReady) return;
+      if (!(await gitLibrary(['status', '--porcelain'])).trim()) return;
+      await gitLibrary(['add', '-A']);
+      await gitLibrary(['commit', '-m', message]);
+    })
+    .catch((error) => {
+      console.warn(`Library git commit failed: ${error.message}`);
+    });
+}
+
+libraryGitQueue = ensureLibraryRepo();
+
+// --- Fabric patterns import (github.com/danielmiessler/fabric) ---
+
+const FABRIC_PATTERNS_API = 'https://api.github.com/repos/danielmiessler/fabric/contents/data/patterns';
+const FABRIC_RAW_BASE = 'https://raw.githubusercontent.com/danielmiessler/fabric/main/data/patterns';
+const FABRIC_CACHE_FILE = path.join(HOME, '.agentxray', 'cache', 'fabric-patterns.json');
+const FABRIC_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function readFabricCache() {
+  try {
+    const cached = JSON.parse(await fsp.readFile(FABRIC_CACHE_FILE, 'utf8'));
+    if (Array.isArray(cached.names)) return cached;
+  } catch {}
+  return null;
+}
+
+async function fetchFabricFile(url, headers) {
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+  if (!response.ok) throw new Error(`GitHub responded ${response.status}`);
+  return response;
+}
+
+// One pattern's system.md. raw.githubusercontent.com is unreachable on some
+// networks while api.github.com works, so a non-404 raw failure falls back to
+// the contents API raw media type (rate-limited, hence not the primary path).
+async function fetchFabricPattern(rawName) {
+  const encoded = encodeURIComponent(rawName);
+  try {
+    return await (await fetchFabricFile(`${FABRIC_RAW_BASE}/${encoded}/system.md`, { 'User-Agent': 'agentxray' })).text();
+  } catch (error) {
+    if (/responded 404/.test(String(error && error.message))) throw error;
+    return (await fetchFabricFile(`${FABRIC_PATTERNS_API}/${encoded}/system.md`, { 'User-Agent': 'agentxray', Accept: 'application/vnd.github.raw' })).text();
+  }
+}
+
+// Pattern directory names from the fabric repo, disk-cached for 24h. A stale
+// cache is still served when GitHub is unreachable; with no cache the fetch
+// error propagates (surfaced as 502 by the route).
+async function listFabricPatternNames() {
+  const cached = await readFabricCache();
+  if (cached && Date.now() - cached.fetchedAt < FABRIC_CACHE_TTL_MS) return cached.names;
+  let names;
+  try {
+    const response = await fetchFabricFile(FABRIC_PATTERNS_API, { 'User-Agent': 'agentxray' });
+    const entries = await response.json();
+    names = entries.filter((entry) => entry.type === 'dir').map((entry) => entry.name).sort();
+  } catch (error) {
+    if (cached) return cached.names;
+    throw error;
+  }
+  await fsp.mkdir(path.dirname(FABRIC_CACHE_FILE), { recursive: true });
+  await fsp.writeFile(FABRIC_CACHE_FILE, JSON.stringify({ fetchedAt: Date.now(), names }), 'utf8');
+  return names;
+}
+
+// Fabric names use underscores (extract_wisdom); map to a valid library name.
+function fabricLibraryName(name) {
+  if (typeof name !== 'string') return null;
+  if (LIBRARY_NAME_RE.test(name)) return name;
+  const cleaned = name
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .replace(/[^a-z0-9-]+/g, '')
+    .replace(/^-+/, '')
+    .slice(0, 64);
+  return sanitizeLibraryName(cleaned);
+}
+
+// First non-empty line of the pattern, stripped of markdown decoration
+function fabricDescription(content) {
+  for (const line of content.split('\n')) {
+    const text = line.replace(/^[#>*\s-]+/, '').trim();
+    if (text) return text.slice(0, 140);
+  }
+  return '';
+}
+
+async function listLibraryNames() {
+  try {
+    const entries = await fsp.readdir(LIBRARY_DIR);
+    return new Set(entries.filter((entry) => entry.endsWith('.md')).map((entry) => entry.slice(0, -3)));
+  } catch (error) {
+    if (error.code === 'ENOENT') return new Set();
+    throw error;
+  }
+}
+
 app.get('/api/library', async (req, res) => {
   try {
     let entries;
@@ -3974,7 +4112,188 @@ app.post('/api/library', async (req, res) => {
       if (error.code === 'EEXIST') return res.status(409).json({ error: `Prompt "${name}" already exists` });
       throw error;
     }
+    commitLibrary(`create: ${name}`);
     res.status(201).json({ prompt: await readLibraryPrompt(name) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Library usage stats: how often each library prompt is invoked as a slash
+// command across codex/claude-code/omp sessions plus ~/.claude/history.jsonl.
+// A hit is a user message starting with /<name> (word boundary) or containing
+// the claude-style <command-name>/<name></command-name> marker. For in-session
+// hits, the records until the next user message form a "turn": its size feeds
+// avgMessages and a turn with any tool error feeds errorRate
+// (turns-with-errors / turns). History hits only bump uses/lastUsed.
+let libraryUsageCache = null; // { expires, data } — recomputed every 5 minutes
+const LIBRARY_USAGE_CACHE_MS = 5 * 60 * 1000;
+
+// Which library prompt (if any) a piece of user text invokes
+function libraryUsageHit(text, names) {
+  const t = text.trimStart();
+  if (t.startsWith('/')) {
+    const token = (t.slice(1).match(/^[a-z0-9][a-z0-9-]*/) || [])[0];
+    const after = token ? t[1 + token.length] : undefined;
+    if (token && names.has(token) && (after === undefined || /\s/.test(after))) return token;
+  }
+  const m = text.match(/<command-name>\/([a-z0-9][a-z0-9-]*)<\/command-name>/);
+  return m && names.has(m[1]) ? m[1] : null;
+}
+
+// Classify one session JSONL record for usage scanning. Reuses the /api/search
+// extraction (message/payload envelope, text/input_text parts) and the insights
+// error detection (toolResult isError, claude tool_result is_error blocks).
+function classifyUsageRecord(rec) {
+  const msg = rec.message || rec.payload || {};
+  const role = msg.role || rec.type || '';
+  const content = Array.isArray(msg.content) ? msg.content : (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : []);
+  const text = content.filter((c) => c.type === 'text' || c.type === 'input_text').map((c) => c.text || '').join(' ');
+  const isToolResult = role === 'toolResult'
+    || content.some((c) => c.type === 'tool_result')
+    || msg.type === 'function_call_output' || msg.type === 'custom_tool_call_output';
+  return {
+    // A genuine user prompt: user role with text and no tool_result payload
+    isUserText: role === 'user' && !isToolResult && Boolean(text.trim()),
+    // Message-like records advance the turn size; session/meta records don't
+    isMessage: isToolResult || role === 'user' || role === 'assistant' || role === 'toolCall'
+      || msg.type === 'function_call' || msg.type === 'custom_tool_call' || msg.type === 'local_shell_call',
+    hasToolError: Boolean(msg.isError) || content.some((c) => c.type === 'tool_result' && c.is_error),
+    text,
+    timestamp: typeof rec.timestamp === 'string' ? rec.timestamp : null,
+  };
+}
+
+// Stream one session file, folding invocation hits and their turns into `stats`
+async function scanFileForLibraryUsage(filePath, names, stats) {
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let turn = null; // { name, messages, hadError } — open invocation turn
+  const closeTurn = () => {
+    if (!turn) return;
+    const s = stats.get(turn.name);
+    s.turns++;
+    s.turnMessages += turn.messages;
+    if (turn.hadError) s.turnErrors++;
+    turn = null;
+  };
+  try {
+    for await (const line of rl) {
+      let rec;
+      try { rec = JSON.parse(line); } catch { continue; }
+      const info = classifyUsageRecord(rec);
+      if (info.isUserText) {
+        closeTurn();
+        const name = libraryUsageHit(info.text, names);
+        if (name) {
+          const s = stats.get(name);
+          s.uses++;
+          if (info.timestamp && (!s.lastUsed || info.timestamp > s.lastUsed)) s.lastUsed = info.timestamp;
+          turn = { name, messages: 0, hadError: false };
+        }
+      } else if (turn && info.isMessage) {
+        turn.messages++;
+        if (info.hasToolError) turn.hadError = true;
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+    closeTurn();
+  }
+}
+
+async function computeLibraryUsage(names) {
+  const nameSet = new Set(names);
+  const stats = new Map(names.map((n) => [n, { uses: 0, turns: 0, turnMessages: 0, turnErrors: 0, lastUsed: null }]));
+
+  // Session file collection mirrors /api/search: codex recursive rollout files,
+  // claude-code and omp <slug>/*.jsonl dirs.
+  const files = [];
+  await Promise.all([
+    (async () => {
+      try {
+        const entries = await fsp.readdir(CODEX_DIR, { recursive: true });
+        for (const rel of entries) {
+          if (typeof rel === 'string' && rel.endsWith('.jsonl')) files.push(path.join(CODEX_DIR, rel));
+        }
+      } catch {}
+    })(),
+    ...[CLAUDE_CODE_DIR, OMP_DIR].map((dir) => (async () => {
+      try {
+        const slugs = await fsp.readdir(dir, { withFileTypes: true });
+        for (const s of slugs) {
+          if (!s.isDirectory()) continue;
+          const slugDir = path.join(dir, s.name);
+          const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
+          for (const f of entries) {
+            if (f.isFile() && f.name.endsWith('.jsonl')) files.push(path.join(slugDir, f.name));
+          }
+        }
+      } catch {}
+    })()),
+  ]);
+
+  for (const filePath of files) {
+    await scanFileForLibraryUsage(filePath, nameSet, stats).catch(() => {});
+  }
+
+  // Claude prompt history: uses + lastUsed only (no turn context available)
+  try {
+    const historyPath = path.join(path.dirname(CLAUDE_CODE_DIR), 'history.jsonl');
+    const stream = fs.createReadStream(historyPath, { encoding: 'utf8' });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    try {
+      for await (const line of rl) {
+        let rec;
+        try { rec = JSON.parse(line); } catch { continue; }
+        const text = typeof rec.display === 'string' ? rec.display : '';
+        const name = text ? libraryUsageHit(text, nameSet) : null;
+        if (!name) continue;
+        const s = stats.get(name);
+        s.uses++;
+        // History timestamps are epoch numbers (ms, sometimes s); normalize to ISO
+        const ts = typeof rec.timestamp === 'number'
+          ? new Date(rec.timestamp > 1e12 ? rec.timestamp : rec.timestamp * 1000).toISOString()
+          : (typeof rec.timestamp === 'string' ? rec.timestamp : null);
+        if (ts && (!s.lastUsed || ts > s.lastUsed)) s.lastUsed = ts;
+      }
+    } finally {
+      rl.close();
+      stream.destroy();
+    }
+  } catch { /* no history file */ }
+
+  const usage = {};
+  for (const [name, s] of stats) {
+    usage[name] = {
+      uses: s.uses,
+      avgMessages: s.turns > 0 ? Math.round((s.turnMessages / s.turns) * 10) / 10 : null,
+      errorRate: s.turns > 0 ? Math.round((s.turnErrors / s.turns) * 1000) / 1000 : null,
+      lastUsed: s.lastUsed,
+    };
+  }
+  return usage;
+}
+
+app.get('/api/library/usage', async (req, res) => {
+  try {
+    if (libraryUsageCache && libraryUsageCache.expires > Date.now()) {
+      return res.json(libraryUsageCache.data);
+    }
+    let entries = [];
+    try {
+      entries = await fsp.readdir(LIBRARY_DIR);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    const names = entries
+      .filter((entry) => entry.endsWith('.md'))
+      .map((entry) => entry.slice(0, -3))
+      .filter((name) => LIBRARY_NAME_RE.test(name));
+    const data = { usage: names.length ? await computeLibraryUsage(names) : {} };
+    libraryUsageCache = { expires: Date.now() + LIBRARY_USAGE_CACHE_MS, data };
+    res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -4027,6 +4346,8 @@ app.put('/api/library/:name', async (req, res) => {
       await installLibraryPrompt({ name: newName, description: meta.description, content: nextContent }, [target]);
     }
 
+    commitLibrary(newName !== name ? `rename: ${name} -> ${newName}` : `update: ${newName}`);
+
     res.json({ prompt: await readLibraryPrompt(newName) });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4047,6 +4368,7 @@ app.delete('/api/library/:name', async (req, res) => {
       throw error;
     }
     await uninstallLibraryPrompt(name, Object.keys(INSTALL_TARGETS));
+    commitLibrary(`delete: ${name}`);
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4126,6 +4448,107 @@ app.post('/api/library/suggest-name', async (req, res) => {
     res.json({ name: sanitizeLibraryName(name) });
   } catch {
     res.json({ name: null });
+  }
+});
+
+// Available fabric pattern names, flagged with whether each is already in the
+// library (checked against the sanitized name the import would use).
+app.get('/api/library/fabric-patterns', async (req, res) => {
+  try {
+    let names;
+    try {
+      names = await listFabricPatternNames();
+    } catch (error) {
+      return res.status(502).json({ error: `Could not fetch fabric patterns: ${error.message}` });
+    }
+    const existing = await listLibraryNames();
+    res.json({ patterns: names.map((name) => ({ name, imported: existing.has(fabricLibraryName(name)) })) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Import fabric patterns by name: downloads each pattern's system.md and
+// creates a library entry. Result arrays echo the requested (raw) names.
+app.post('/api/library/import-fabric', async (req, res) => {
+  try {
+    const names = Array.isArray((req.body || {}).names) ? req.body.names : null;
+    if (!names || names.length < 1 || names.length > 300 || !names.every((name) => typeof name === 'string' && name)) {
+      return res.status(400).json({ error: 'names must be an array of 1-300 pattern names' });
+    }
+    await fsp.mkdir(LIBRARY_DIR, { recursive: true });
+    const existing = await listLibraryNames();
+    const imported = [];
+    const skipped = [];
+    const failed = [];
+    for (let i = 0; i < names.length; i += 8) {
+      await Promise.all(names.slice(i, i + 8).map(async (rawName) => {
+        const name = fabricLibraryName(rawName);
+        if (!name) return failed.push(rawName);
+        if (existing.has(name)) return skipped.push(rawName);
+        try {
+          const content = await fetchFabricPattern(rawName);
+          if (!content.trim()) throw new Error('empty pattern');
+          const meta = {
+            description: fabricDescription(content),
+            tags: ['fabric'],
+            source: 'fabric',
+            createdAt: new Date().toISOString(),
+          };
+          await fsp.writeFile(libraryFilePath(name), serializeLibraryFile(meta, content), { encoding: 'utf8', flag: 'wx' });
+          existing.add(name);
+          imported.push(rawName);
+        } catch (error) {
+          if (error.code === 'EEXIST') skipped.push(rawName);
+          else failed.push(rawName);
+        }
+      }));
+    }
+    if (imported.length) {
+      commitLibrary(`import: ${imported.length === 1 ? fabricLibraryName(imported[0]) : `${imported.length} fabric patterns`}`);
+    }
+    res.json({ imported, skipped, failed });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Commit history for one prompt. No repo / never committed → { commits: [] }.
+app.get('/api/library/:name/history', async (req, res) => {
+  const name = sanitizeLibraryName(req.params.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+  try {
+    const log = await gitLibrary(['log', '--follow', '--format=%H%x09%cI%x09%s', '--', `${name}.md`]);
+    const commits = log
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [hash, date, ...message] = line.split('\t');
+        return { hash, date, message: message.join('\t') };
+      });
+    res.json({ commits });
+  } catch {
+    res.json({ commits: [] });
+  }
+});
+
+// The prompt as of a given commit
+app.get('/api/library/:name/history/:hash', async (req, res) => {
+  const name = sanitizeLibraryName(req.params.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Invalid name' });
+  }
+  if (!/^[0-9a-f]{7,40}$/.test(req.params.hash)) {
+    return res.status(400).json({ error: 'Invalid hash' });
+  }
+  try {
+    const raw = await gitLibrary(['show', `${req.params.hash}:${name}.md`]);
+    const { meta, content } = parseLibraryFile(raw);
+    res.json({ content, description: meta.description, tags: meta.tags });
+  } catch {
+    res.status(404).json({ error: 'Revision not found' });
   }
 });
 

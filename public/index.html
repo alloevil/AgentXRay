@@ -2525,6 +2525,114 @@
       margin-top: 10px;
     }
 
+    .library-usage {
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-top: 8px;
+    }
+
+    .library-sort-select {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 8px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .fabric-panel, .history-panel {
+      width: min(560px, 92vw);
+      display: flex;
+      flex-direction: column;
+      max-height: 82vh;
+    }
+
+    .fabric-select-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .fabric-count {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-left: auto;
+    }
+
+    .fabric-list {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 10px;
+      min-height: 120px;
+      max-height: 45vh;
+    }
+
+    .fabric-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .fabric-item:hover { background: rgba(88, 166, 255, 0.06); }
+
+    .fabric-item.imported { color: var(--muted); cursor: default; }
+
+    .fabric-imported-mark {
+      color: #3fb950;
+      font-size: 0.72rem;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    .history-list {
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 30vh;
+    }
+
+    .history-commit {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.8rem;
+    }
+
+    .history-commit:last-child { border-bottom: none; }
+
+    .history-commit:hover { background: rgba(88, 166, 255, 0.06); }
+
+    .history-commit.active { background: rgba(88, 166, 255, 0.12); }
+
+    .history-date {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+
+    .history-detail {
+      margin-top: 12px;
+      overflow-y: auto;
+    }
+
     .settings-field textarea {
       width: 100%;
       background: var(--bg);
@@ -2742,6 +2850,35 @@
       <div class="settings-actions">
         <button class="btn-reset" id="libraryFormCancel">取消</button>
         <button class="btn-save" id="libraryFormSave">保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="settings-overlay" id="fabricOverlay" hidden>
+    <div class="settings-panel fabric-panel">
+      <h2>导入 Fabric Patterns</h2>
+      <input id="fabricFilterInput" type="search" placeholder="筛选 pattern 名称…" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font:inherit;font-size:13px">
+      <div class="fabric-select-row">
+        <button class="export-btn" id="fabricSelectAll">全选</button>
+        <button class="export-btn" id="fabricSelectNone">清空</button>
+        <span class="fabric-count" id="fabricCount"></span>
+      </div>
+      <div class="fabric-list" id="fabricList"></div>
+      <div class="analysis-error" id="fabricError" hidden style="margin-top:10px"></div>
+      <div id="fabricResultLine" style="font-size:0.82rem;color:var(--muted);margin-top:10px"></div>
+      <div class="settings-actions">
+        <button class="btn-reset" id="fabricCancel">关闭</button>
+        <button class="btn-save" id="fabricImportBtn" disabled>导入 0 个</button>
+      </div>
+    </div>
+  </div>
+  <div class="settings-overlay" id="libraryHistoryOverlay" hidden>
+    <div class="settings-panel history-panel">
+      <h2 id="libraryHistoryTitle">🕒 历史</h2>
+      <div class="history-list" id="libraryHistoryList"></div>
+      <div class="history-detail" id="libraryHistoryDetail" hidden></div>
+      <div class="analysis-error" id="libraryHistoryError" hidden style="margin-top:10px"></div>
+      <div class="settings-actions">
+        <button class="btn-reset" id="libraryHistoryClose">关闭</button>
       </div>
     </div>
   </div>
@@ -3258,6 +3395,8 @@
     let promptAnalysisLoading = false;
     let libraryData = null;
     let librarySearch = '';
+    let libraryUsage = null;
+    let librarySort = localStorage.getItem('axr-lib-sort') || 'recent';
 
     viewToggleBar.querySelectorAll('.view-toggle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -4116,12 +4255,20 @@
 
     async function loadLibrary() {
       libraryPanel.innerHTML = '<div class="insights-loading">Loading library…</div>';
+      const usagePromise = fetchJson('/api/library/usage').catch(() => null); // tolerate failure → no badges
       try {
         libraryData = await fetchJson('/api/library');
-        renderLibrary();
       } catch (error) {
         libraryPanel.innerHTML = `<div class="insights-empty">Failed to load library: ${escapeHtml(error.message)}</div>`;
+        return;
       }
+      const usageData = await usagePromise;
+      libraryUsage = (usageData && usageData.usage) || null;
+      renderLibrary();
+    }
+
+    function libraryUsageOf(name) {
+      return (libraryUsage && libraryUsage[name]) || {};
     }
 
     function libraryMatchesSearch(p, q) {
@@ -4144,6 +4291,11 @@
       const all = (libraryData && libraryData.prompts) || [];
       const q = librarySearch.trim().toLowerCase();
       const prompts = all.filter(p => libraryMatchesSearch(p, q));
+      if (librarySort === 'uses') {
+        prompts.sort((a, b) => (libraryUsageOf(b.name).uses || 0) - (libraryUsageOf(a.name).uses || 0));
+      } else {
+        prompts.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      }
 
       const targetLabels = { claude: 'Claude', codex: 'Codex', omp: 'OMP' };
       const cardsHtml = prompts.map((p, pi) => {
@@ -4154,6 +4306,15 @@
         const tagsHtml = (p.tags || []).map(t => `<span class="library-tag">${escapeHtml(t)}</span>`).join('');
         const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleString() : '—';
         const content = p.content || '';
+        const u = libraryUsageOf(p.name);
+        let usageHtml = '';
+        if (u.uses > 0) {
+          const parts = [`📈 用过 ${u.uses} 次`];
+          if (u.avgMessages != null) parts.push(`平均 ${Number(u.avgMessages.toFixed(1))} 条消息/轮`);
+          if (u.errorRate != null) parts.push(`错误率 ${Math.round(u.errorRate * 100)}%`);
+          if (u.lastUsed) parts.push(`最近 ${new Date(u.lastUsed).toLocaleDateString()}`);
+          usageHtml = `<div class="library-usage">${parts.join(' · ')}</div>`;
+        }
         return `
         <div class="insight-section library-card">
           <div class="library-card-head">
@@ -4164,12 +4325,14 @@
           </div>
           ${p.description ? `<div class="library-desc">${escapeHtml(p.description)}</div>` : ''}
           ${tagsHtml ? `<div class="library-tags">${tagsHtml}</div>` : ''}
+          ${usageHtml}
           <div class="prompt-text${content.length > 500 ? ' clamped' : ''}">${renderMarkdown(content)}</div>
           ${content.length > 500 ? '<span class="show-more">Show more</span>' : ''}
           <div class="library-card-actions">
             <button class="export-btn library-copy-btn" data-pi="${pi}">Copy</button>
             <button class="export-btn library-edit-btn" data-pi="${pi}">编辑</button>
             <button class="export-btn library-delete-btn" data-pi="${pi}">删除</button>
+            <button class="export-btn library-history-btn" data-pi="${pi}">🕒 历史</button>
           </div>
         </div>`;
       }).join('');
@@ -4177,6 +4340,11 @@
       libraryPanel.innerHTML = `
         <div class="prompts-toolbar">
           <input type="search" id="librarySearchInput" placeholder="Filter by name / tags / description / content" value="${escapeHtml(librarySearch)}">
+          <select class="library-sort-select" id="librarySortSelect" title="排序">
+            <option value="recent"${librarySort === 'uses' ? '' : ' selected'}>最新</option>
+            <option value="uses"${librarySort === 'uses' ? ' selected' : ''}>使用次数</option>
+          </select>
+          <button class="export-btn" id="libraryFabricBtn">导入 Fabric Patterns</button>
           <button class="export-btn" id="libraryNewBtn">新建 Prompt</button>
         </div>
         <div class="prompts-summary">Prompt 资产库（~/.agentxray/library）— 点亮 Claude / Codex / OMP 开关即安装为该工具的 slash command，工具内 <code>/名字</code> 调用 · ${all.length} prompt${all.length === 1 ? '' : 's'}${q ? ` — showing ${prompts.length}` : ''}</div>
@@ -4198,6 +4366,14 @@
       });
 
       document.getElementById('libraryNewBtn').addEventListener('click', () => openLibraryForm(null, false));
+
+      document.getElementById('libraryFabricBtn').addEventListener('click', openFabricModal);
+
+      document.getElementById('librarySortSelect').addEventListener('change', (e) => {
+        librarySort = e.target.value;
+        localStorage.setItem('axr-lib-sort', librarySort);
+        renderLibrary();
+      });
 
       // Show more toggles
       libraryPanel.querySelectorAll('.show-more').forEach(btn => {
@@ -4225,6 +4401,14 @@
         btn.addEventListener('click', () => {
           const p = prompts[Number(btn.dataset.pi)];
           if (p) openLibraryForm(p, true);
+        });
+      });
+
+      // History buttons
+      libraryPanel.querySelectorAll('.library-history-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const p = prompts[Number(btn.dataset.pi)];
+          if (p) openLibraryHistory(p.name);
         });
       });
 
@@ -4365,6 +4549,239 @@
         showLibraryFormError(error.message);
       }
     });
+
+    // --- Fabric patterns import modal ---
+    const fabricOverlay = document.getElementById('fabricOverlay');
+    const fabricFilterInput = document.getElementById('fabricFilterInput');
+    const fabricList = document.getElementById('fabricList');
+    const fabricCount = document.getElementById('fabricCount');
+    const fabricError = document.getElementById('fabricError');
+    const fabricResultLine = document.getElementById('fabricResultLine');
+    const fabricImportBtn = document.getElementById('fabricImportBtn');
+    let fabricPatterns = [];
+    let fabricSelected = new Set();
+    let fabricImporting = false;
+
+    function showFabricError(message) {
+      fabricError.textContent = message;
+      fabricError.hidden = false;
+    }
+
+    function updateFabricFooter() {
+      const total = fabricPatterns.length;
+      const imported = fabricPatterns.filter(p => p.imported).length;
+      fabricCount.textContent = total ? `已选 ${fabricSelected.size} / 共 ${total}（已导入 ${imported}）` : '';
+      fabricImportBtn.textContent = fabricImporting ? '导入中…' : `导入 ${fabricSelected.size} 个`;
+      fabricImportBtn.disabled = fabricImporting || fabricSelected.size === 0;
+    }
+
+    function fabricVisiblePatterns() {
+      const q = fabricFilterInput.value.trim().toLowerCase();
+      return q ? fabricPatterns.filter(p => p.name.toLowerCase().includes(q)) : fabricPatterns;
+    }
+
+    function renderFabricList() {
+      const visible = fabricVisiblePatterns();
+      if (!visible.length) {
+        fabricList.innerHTML = `<div class="insights-empty">${fabricPatterns.length ? 'No matches.' : '没有可导入的 pattern。'}</div>`;
+        updateFabricFooter();
+        return;
+      }
+      fabricList.innerHTML = visible.map(p => `
+        <label class="fabric-item${p.imported ? ' imported' : ''}">
+          <input type="checkbox" data-name="${escapeHtml(p.name)}"${p.imported ? ' disabled' : ''}${fabricSelected.has(p.name) ? ' checked' : ''}>
+          <span>${escapeHtml(p.name)}</span>
+          ${p.imported ? '<span class="fabric-imported-mark">✓ 已导入</span>' : ''}
+        </label>`).join('');
+      fabricList.querySelectorAll('input[type="checkbox"]').forEach(box => {
+        box.addEventListener('change', () => {
+          if (box.checked) fabricSelected.add(box.dataset.name);
+          else fabricSelected.delete(box.dataset.name);
+          updateFabricFooter();
+        });
+      });
+      updateFabricFooter();
+    }
+
+    function openFabricModal() {
+      fabricSelected = new Set();
+      fabricImporting = false;
+      fabricPatterns = [];
+      fabricFilterInput.value = '';
+      fabricError.hidden = true;
+      fabricError.textContent = '';
+      fabricResultLine.textContent = '';
+      fabricList.innerHTML = '<div class="insights-loading">加载 Fabric pattern 列表…</div>';
+      fabricOverlay.hidden = false;
+      updateFabricFooter();
+      fetchJson('/api/library/fabric-patterns')
+        .then(data => {
+          if (fabricOverlay.hidden) return;
+          fabricPatterns = (data && data.patterns) || [];
+          renderFabricList();
+        })
+        .catch(error => {
+          if (fabricOverlay.hidden) return;
+          fabricList.innerHTML = '';
+          showFabricError('获取 Fabric patterns 失败: ' + error.message);
+        });
+    }
+
+    function closeFabricModal() {
+      fabricOverlay.hidden = true;
+    }
+
+    fabricOverlay.addEventListener('click', (e) => {
+      if (e.target === fabricOverlay) closeFabricModal();
+    });
+
+    document.getElementById('fabricCancel').addEventListener('click', closeFabricModal);
+
+    fabricFilterInput.addEventListener('input', () => renderFabricList());
+
+    document.getElementById('fabricSelectAll').addEventListener('click', () => {
+      fabricVisiblePatterns().forEach(p => { if (!p.imported) fabricSelected.add(p.name); });
+      renderFabricList();
+    });
+
+    document.getElementById('fabricSelectNone').addEventListener('click', () => {
+      fabricSelected.clear();
+      renderFabricList();
+    });
+
+    fabricImportBtn.addEventListener('click', async () => {
+      const names = [...fabricSelected];
+      if (!names.length || fabricImporting) return;
+      if (names.length > 300) {
+        showFabricError('一次最多导入 300 个 pattern');
+        return;
+      }
+      fabricImporting = true;
+      fabricError.hidden = true;
+      fabricResultLine.textContent = '';
+      updateFabricFooter();
+      try {
+        const result = await libraryRequest('/api/library/import-fabric', 'POST', { names });
+        const imported = new Set(result.imported || []);
+        const skipped = result.skipped || [];
+        const failed = result.failed || [];
+        fabricResultLine.textContent = `成功 ${imported.size} · 跳过 ${skipped.length} · 失败 ${failed.length}${failed.length ? '：' + failed.join(', ') : ''}`;
+        fabricPatterns.forEach(p => {
+          if (imported.has(p.name) || skipped.includes(p.name)) p.imported = true;
+        });
+        fabricSelected.clear();
+        fabricImporting = false;
+        renderFabricList();
+        libraryData = null;
+        if (currentView === 'library') await loadLibrary();
+      } catch (error) {
+        fabricImporting = false;
+        updateFabricFooter();
+        showFabricError('导入失败: ' + error.message);
+      }
+    });
+
+    // --- Library version history modal ---
+    const libraryHistoryOverlay = document.getElementById('libraryHistoryOverlay');
+    const libraryHistoryTitle = document.getElementById('libraryHistoryTitle');
+    const libraryHistoryList = document.getElementById('libraryHistoryList');
+    const libraryHistoryDetail = document.getElementById('libraryHistoryDetail');
+    const libraryHistoryError = document.getElementById('libraryHistoryError');
+    let libraryHistoryName = null;
+
+    function showLibraryHistoryError(message) {
+      libraryHistoryError.textContent = message;
+      libraryHistoryError.hidden = false;
+    }
+
+    async function openLibraryHistory(name) {
+      libraryHistoryName = name;
+      libraryHistoryTitle.textContent = `🕒 /${name} 历史`;
+      libraryHistoryDetail.hidden = true;
+      libraryHistoryDetail.innerHTML = '';
+      libraryHistoryError.hidden = true;
+      libraryHistoryError.textContent = '';
+      libraryHistoryList.innerHTML = '<div class="insights-loading">加载历史…</div>';
+      libraryHistoryOverlay.hidden = false;
+      let commits = [];
+      try {
+        const data = await fetchJson(`/api/library/${encodeURIComponent(name)}/history`);
+        commits = (data && data.commits) || [];
+      } catch (error) {
+        libraryHistoryList.innerHTML = '';
+        showLibraryHistoryError('获取历史失败: ' + error.message);
+        return;
+      }
+      if (libraryHistoryOverlay.hidden || libraryHistoryName !== name) return;
+      if (!commits.length) {
+        libraryHistoryList.innerHTML = '<div class="insights-empty">暂无历史</div>';
+        return;
+      }
+      libraryHistoryList.innerHTML = commits.map(c => `
+        <button class="history-commit" data-hash="${escapeHtml(c.hash)}">
+          <span class="history-date">${escapeHtml(c.date ? new Date(c.date).toLocaleString() : '—')}</span>
+          <span class="history-msg">${escapeHtml(c.message || '')}</span>
+        </button>`).join('');
+      libraryHistoryList.querySelectorAll('.history-commit').forEach(btn => {
+        btn.addEventListener('click', () => {
+          libraryHistoryList.querySelectorAll('.history-commit.active').forEach(el => el.classList.remove('active'));
+          btn.classList.add('active');
+          showLibraryHistoryVersion(btn.dataset.hash);
+        });
+      });
+    }
+
+    async function showLibraryHistoryVersion(hash) {
+      const name = libraryHistoryName;
+      libraryHistoryError.hidden = true;
+      libraryHistoryDetail.hidden = false;
+      libraryHistoryDetail.innerHTML = '<div class="insights-loading">加载版本内容…</div>';
+      let data;
+      try {
+        data = await fetchJson(`/api/library/${encodeURIComponent(name)}/history/${encodeURIComponent(hash)}`);
+      } catch (error) {
+        libraryHistoryDetail.innerHTML = '';
+        showLibraryHistoryError('获取版本内容失败: ' + error.message);
+        return;
+      }
+      if (libraryHistoryOverlay.hidden || libraryHistoryName !== name) return;
+      const content = (data && data.content) || '';
+      libraryHistoryDetail.innerHTML = `
+        <div class="prompt-text clamped">${renderMarkdown(content)}</div>
+        ${content.length > 500 ? '<span class="show-more">Show more</span>' : ''}
+        <div class="settings-actions" style="margin-top:12px">
+          <button class="btn-save" id="libraryHistoryRestore">恢复此版本</button>
+        </div>`;
+      const showMore = libraryHistoryDetail.querySelector('.show-more');
+      if (showMore) showMore.addEventListener('click', () => {
+        const textEl = showMore.previousElementSibling;
+        const clamped = textEl.classList.toggle('clamped');
+        showMore.textContent = clamped ? 'Show more' : 'Show less';
+      });
+      document.getElementById('libraryHistoryRestore').addEventListener('click', async () => {
+        const restoreBtn = document.getElementById('libraryHistoryRestore');
+        restoreBtn.disabled = true;
+        try {
+          await libraryRequest('/api/library/' + encodeURIComponent(name), 'PUT', { content });
+          closeLibraryHistory();
+          libraryData = null;
+          if (currentView === 'library') await loadLibrary();
+        } catch (error) {
+          restoreBtn.disabled = false;
+          showLibraryHistoryError('恢复失败: ' + error.message);
+        }
+      });
+    }
+
+    function closeLibraryHistory() {
+      libraryHistoryOverlay.hidden = true;
+    }
+
+    libraryHistoryOverlay.addEventListener('click', (e) => {
+      if (e.target === libraryHistoryOverlay) closeLibraryHistory();
+    });
+
+    document.getElementById('libraryHistoryClose').addEventListener('click', closeLibraryHistory);
 
     function filterSessions() {
       const term = sessionSearch.value.trim().toLowerCase();
