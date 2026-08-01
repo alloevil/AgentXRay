@@ -406,18 +406,25 @@ async function collectSessionFiles(platform, agentName, dirOverride) {
 
 // Extract first non-empty text line from content array
 function extractErrorSnippet(content) {
-  if (!Array.isArray(content)) return '';
-  for (const c of content) {
-    if (c.type === 'text' && c.text) {
-      const line = c.text.trim().split('\n')[0].trim();
-      if (line) return line.slice(0, 200);
+  const texts = [];
+  if (Array.isArray(content)) {
+    for (const c of content) {
+      if (c && c.type === 'text' && c.text) texts.push(c.text);
+      else if (typeof c === 'string') texts.push(c);
     }
-    if (typeof c === 'string') {
-      const line = c.trim().split('\n')[0].trim();
-      if (line) return line.slice(0, 200);
-    }
+  } else if (typeof content === 'string') {
+    texts.push(content);
   }
-  return '';
+  const joined = texts.join('\n');
+  for (const rawLine of joined.split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    // Skip purely structural lines ({ } [ ] ``` etc.) so JSON-body errors
+    // don't reduce to a single symbol in the clusters view
+    if (/^[{}[\]()`"',;:.\-=|\\/*+\s]+$/.test(line)) continue;
+    return line.slice(0, 200);
+  }
+  return joined.trim().replace(/\s+/g, ' ').slice(0, 200);
 }
 
 // Normalize error pattern: take first line, lowercase, strip variable parts
@@ -496,7 +503,7 @@ async function scanFileForInsights(filePath, sessionId) {
             toolStats[name].errors++;
             const snippet = extractErrorSnippet(msg.content);
             const pattern = normalizeErrorPattern(snippet);
-            errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: rec.timestamp || null });
+            errorExamples.push({ toolName: name, snippet, pattern, sessionId, messageId: rec.id || rec.uuid || null, timestamp: rec.timestamp || null });
           }
 
           if (msg.details && typeof msg.details.durationMs === 'number') {
@@ -554,9 +561,9 @@ async function scanFileForInsights(filePath, sessionId) {
               } else if (Array.isArray(c.content)) {
                 errorText = c.content.filter(b => b.type === 'text').map(b => b.text || '').join(' ');
               }
-              const snippet = errorText.trim().split('\n')[0].trim().slice(0, 200);
+              const snippet = extractErrorSnippet(errorText);
               const pattern = normalizeErrorPattern(snippet);
-              errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: rec.timestamp || null });
+              errorExamples.push({ toolName: name, snippet, pattern, sessionId, messageId: rec.uuid || rec.id || null, timestamp: rec.timestamp || null });
             }
           }
         }
@@ -593,9 +600,9 @@ async function scanFileForInsights(filePath, sessionId) {
           if (isErr) {
             errorCount++;
             toolStats[name].errors++;
-            const snippet = outputText.trim().split('\n')[0].trim().slice(0, 200);
+            const snippet = extractErrorSnippet(outputText);
             const pattern = normalizeErrorPattern(snippet);
-            errorExamples.push({ toolName: name, snippet, pattern, sessionId, timestamp: rec.timestamp || null });
+            errorExamples.push({ toolName: name, snippet, pattern, sessionId, messageId: rec.id || (rec.payload && rec.payload.id) || null, timestamp: rec.timestamp || null });
           }
           if (output && typeof output === 'object' && output.metadata && output.metadata.duration_seconds) {
             toolStats[name].totalDurationMs += Math.round(output.metadata.duration_seconds * 1000);
@@ -784,7 +791,7 @@ function buildInsightsResponse(totalSessions, totalMessages, totalToolCalls, tot
     if (!clusters[key]) clusters[key] = { pattern: err.snippet, count: 0, examples: [] };
     clusters[key].count++;
     if (clusters[key].examples.length < 5) {
-      clusters[key].examples.push({ sessionId: err.sessionId, toolName: err.toolName, snippet: err.snippet, timestamp: err.timestamp });
+      clusters[key].examples.push({ sessionId: err.sessionId, toolName: err.toolName, snippet: err.snippet, messageId: err.messageId || null, timestamp: err.timestamp });
     }
   }
   const errorClusters = Object.values(clusters).sort((a, b) => b.count - a.count).slice(0, 20);

@@ -3777,8 +3777,9 @@
           if (!toolStats[name]) toolStats[name] = { calls: 0, errors: 0, totalDurationMs: 0 };
           if (msg.isError) {
             errorCount++;
+            // (snippet helper defined below keeps JSON-body errors readable)
             toolStats[name].errors++;
-            const snippet = getTextContent(msg.content).trim().split('\n')[0].trim().slice(0, 200);
+            const snippet = firstInformativeLine(getTextContent(msg.content));
             errors.push({ toolName: name, snippet, timestamp: msg.timestamp, index: i });
             if (!turnToolErrors[name]) turnToolErrors[name] = { errorIndex: i, snippet, attempts: 0 };
             turnToolErrors[name].attempts++;
@@ -4074,7 +4075,7 @@
       const errClustersHtml = data.errorClusters.length > 0 ? data.errorClusters.map(c => {
         const examplesHtml = c.examples.map(e => `
           <div class="error-cluster-example">
-            <span class="session-link" data-session-id="${escapeHtml(e.sessionId)}">${escapeHtml(e.sessionId.slice(0, 12))}…</span>
+            <span class="session-link" data-session-id="${escapeHtml(e.sessionId)}" data-msg-id="${escapeHtml(e.messageId || '')}">${escapeHtml(e.sessionId.slice(0, 12))}…</span>
             <span>${escapeHtml(e.toolName)}</span>
           </div>
         `).join('');
@@ -4171,6 +4172,9 @@
             renderSessions();
             scrollSessionIntoView(match.id);
             await loadSession();
+            // Land directly on the failing message (also leaves Trace view / clears filters)
+            const msgId = link.getAttribute('data-msg-id');
+            if (msgId) scrollToMessage(msgId);
           }
         });
       });
@@ -5818,6 +5822,19 @@
         return renderMarkdownBlock(segment);
       }).join('');
       return `<div class="markdown">${html}</div>`;
+    }
+
+    // First line that carries information — skips structural-only lines
+    // ({ } [ ] ``` etc.) so JSON-body errors don't render as a lone symbol
+    function firstInformativeLine(text) {
+      const joined = String(text || '');
+      for (const rawLine of joined.split('\n')) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (/^[{}[\]()`"',;:.\-=|\\/*+\s]+$/.test(line)) continue;
+        return line.slice(0, 200);
+      }
+      return joined.trim().replace(/\s+/g, ' ').slice(0, 200);
     }
 
     function getTextContent(content) {
