@@ -6,6 +6,8 @@ const readline = require('readline');
 const Database = require('better-sqlite3');
 const { execFile } = require('child_process');
 const crypto = require('crypto');
+const { normalizePromptText, hashPromptText, extractErrorSnippet, normalizeErrorPattern } = require('./lib/text-utils');
+const { parseLlmJson } = require('./lib/llm-json');
 
 const app = express();
 const PORT = process.env.PORT || 3800;
@@ -404,39 +406,6 @@ async function collectSessionFiles(platform, agentName, dirOverride) {
   }
 
   return files;
-}
-
-// Extract first non-empty text line from content array
-function extractErrorSnippet(content) {
-  const texts = [];
-  if (Array.isArray(content)) {
-    for (const c of content) {
-      if (c && c.type === 'text' && c.text) texts.push(c.text);
-      else if (typeof c === 'string') texts.push(c);
-    }
-  } else if (typeof content === 'string') {
-    texts.push(content);
-  }
-  const joined = texts.join('\n');
-  for (const rawLine of joined.split('\n')) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    // Skip purely structural lines ({ } [ ] ``` etc.) so JSON-body errors
-    // don't reduce to a single symbol in the clusters view
-    if (/^[{}[\]()`"',;:.\-=|\\/*+\s]+$/.test(line)) continue;
-    return line.slice(0, 200);
-  }
-  return joined.trim().replace(/\s+/g, ' ').slice(0, 200);
-}
-
-// Normalize error pattern: take first line, lowercase, strip variable parts
-function normalizeErrorPattern(snippet) {
-  if (!snippet) return '(empty)';
-  const line = snippet.split('\n')[0].trim().toLowerCase();
-  // Strip file paths
-  const stripped = line.replace(/\/[^\s]+/g, '/…');
-  // Strip hex ids
-  return stripped.replace(/[0-9a-f]{8,}/g, '…').slice(0, 120);
 }
 
 // Scan a single JSONL file for insights data
@@ -861,14 +830,6 @@ function getPromptsCacheKey(platform, agent, dir) {
 const HIDDEN_PROMPTS_FILE = path.join(HOME, '.agentxray', 'hidden-prompts.json');
 const HIDDEN_HASH_RE = /^[0-9a-f]{16}$/;
 
-function normalizePromptText(text) {
-  return String(text || '').replace(/\s+/g, ' ').trim();
-}
-
-function hashPromptText(normalized) {
-  return crypto.createHash('sha256').update(normalized, 'utf8').digest('hex').slice(0, 16);
-}
-
 async function loadHiddenPrompts() {
   try {
     const parsed = JSON.parse(await fsp.readFile(HIDDEN_PROMPTS_FILE, 'utf8'));
@@ -1241,61 +1202,6 @@ function runClaudeCli(input, timeoutMs) {
     child.stdin.write(input);
     child.stdin.end();
   });
-}
-
-function parseLlmJson(raw) {
-  const text = String(raw || '').trim();
-  const candidates = [text];
-  // Anchored fence: whole reply wrapped in one ```json ... ``` block
-  // (fences INSIDE the JSON strings would truncate a non-greedy match)
-  const anchored = text.match(/^```(?:json)?\s*\n([\s\S]*)\n```\s*$/);
-  if (anchored) candidates.push(anchored[1]);
-  // First fenced block (legacy behavior)
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) candidates.push(fence[1]);
-  // Outermost braces/brackets span
-  const start = text.search(/[[{]/);
-  const end = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
-  if (start !== -1 && end > start) candidates.push(text.slice(start, end + 1));
-  for (const candidate of candidates) {
-    try { return JSON.parse(candidate.trim()); } catch { /* try next strategy */ }
-  }
-  // Last resort: repair unescaped double quotes inside string values
-  // (LLMs often quote 中文 with literal " — a " inside a string is treated
-  // as content unless the next non-space char is structural).
-  for (const candidate of candidates.slice().reverse()) {
-    try { return JSON.parse(repairLlmJsonQuotes(candidate.trim())); } catch { /* try next */ }
-  }
-  return null;
-}
-
-function repairLlmJsonQuotes(text) {
-  let out = '';
-  let inString = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (!inString) {
-      if (ch === '"') inString = true;
-      out += ch;
-      continue;
-    }
-    if (ch === '\\') { out += ch + (text[i + 1] || ''); i++; continue; }
-    if (ch === '"') {
-      // Real terminator only when followed by a structural char
-      let j = i + 1;
-      while (j < text.length && (text[j] === ' ' || text[j] === '\t')) j++;
-      const next = text[j];
-      if (next === undefined || next === ',' || next === '}' || next === ']' || next === ':' || next === '\n' || next === '\r') {
-        inString = false;
-        out += ch;
-      } else {
-        out += '\\"'; // content quote — escape it
-      }
-      continue;
-    }
-    out += ch;
-  }
-  return out;
 }
 
 async function runClaudeAnalysis(clusters) {

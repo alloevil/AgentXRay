@@ -9,12 +9,14 @@
   },
   "files": [
     "server.js",
+    "lib",
     "public",
     "bin",
     "README.md"
   ],
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "agent",

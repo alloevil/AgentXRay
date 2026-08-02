@@ -1,0 +1,8 @@
+{"timestamp": "2026-01-15T10:00:00.000Z", "type": "session_meta", "payload": {"id": "01900000-0000-7000-8000-000000000001", "timestamp": "2026-01-15T10:00:00.000Z", "cwd": "/fixtures/project-alpha", "originator": "fixture", "cli_version": "0.1.0", "source": "exec", "model_provider": "fixture-provider"}}
+{"timestamp": "2026-01-15T10:00:01.000Z", "type": "event_msg", "payload": {"type": "user_message", "message": "fixture: search-needle-alpha please inspect the fixture repo"}}
+{"timestamp": "2026-01-15T10:00:01.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "fixture: search-needle-alpha please inspect the fixture repo with zebra-token"}]}}
+{"timestamp": "2026-01-15T10:00:05.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "fixture: acknowledged, listing files now."}]}}
+{"timestamp": "2026-01-15T10:00:06.000Z", "type": "response_item", "payload": {"type": "function_call", "name": "shell", "call_id": "call-fx-1", "arguments": "{\"command\":[\"ls\"]}"}}
+{"timestamp": "2026-01-15T10:00:08.000Z", "type": "response_item", "payload": {"type": "function_call_output", "call_id": "call-fx-1", "output": {"output": "fixture-file.txt", "metadata": {"exit_code": 0, "duration_seconds": 0.4}}}}
+{"timestamp": "2026-01-15T10:00:10.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "fixture: duplicate-prompt-omega"}]}}
+{"timestamp": "2026-01-15T10:00:12.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "fixture: duplicate handled."}]}}

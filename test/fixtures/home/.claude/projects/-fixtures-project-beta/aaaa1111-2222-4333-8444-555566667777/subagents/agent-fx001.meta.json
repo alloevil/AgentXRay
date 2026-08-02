@@ -1,0 +1,6 @@
+{
+  "agentType": "general-purpose",
+  "description": "Scout the fixture",
+  "toolUseId": "toolu-fx-1",
+  "spawnDepth": 1
+}

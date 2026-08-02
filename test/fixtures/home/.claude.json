@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "fixture-unused-server": {
+      "command": "echo",
+      "args": [
+        "noop"
+      ]
+    }
+  },
+  "projects": {}
+}

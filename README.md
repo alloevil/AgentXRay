@@ -236,6 +236,12 @@ Archived sessions (`.jsonl.reset.*`, `.jsonl.deleted.*`) are also supported when
 
 ---
 
+## Development
+
+Tests live in `test/` and use Node's built-in test runner — no extra dependencies. Run `npm ci` once, then `npm test` (`node --test test/*.test.js`). The tests start their own server on a random port with `HOME` and every platform directory pointed at a throwaway copy of `test/fixtures/home`, so your real session logs are never read or modified. CI runs the same two commands on Node 22 for every push and pull request to `master` (see `.github/workflows/test.yml`).
+
+---
+
 ## License
 
 [MIT](LICENSE)
