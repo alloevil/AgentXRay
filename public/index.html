@@ -2294,7 +2294,7 @@
       cursor: pointer;
       font-size: 0.72rem;
       padding: 2px 7px;
-      opacity: 0;
+      opacity: 0.45;
       transition: opacity 0.15s;
     }
 
@@ -2302,7 +2302,8 @@
       opacity: 1;
     }
 
-    .prompt-copy-btn:hover {
+    .prompt-copy-btn:hover, .prompt-copy-btn:focus-visible {
+      opacity: 1;
       color: var(--text);
       border-color: #58a6ff;
     }
@@ -2563,12 +2564,12 @@
       cursor: pointer;
       font-size: 0.72rem;
       padding: 2px 7px;
-      opacity: 0;
+      opacity: 0.45;
       transition: opacity 0.15s;
     }
 
     .prompt-item:hover .prompt-optimize-btn { opacity: 1; }
-    .prompt-optimize-btn:hover { border-color: #58a6ff; }
+    .prompt-optimize-btn:hover, .prompt-optimize-btn:focus-visible { opacity: 1; border-color: #58a6ff; }
     .prompt-optimize-btn:disabled { opacity: 0.5; cursor: default; }
 
     .prompt-star-btn {
@@ -2582,12 +2583,12 @@
       cursor: pointer;
       font-size: 0.72rem;
       padding: 2px 7px;
-      opacity: 0;
+      opacity: 0.45;
       transition: opacity 0.15s;
     }
 
     .prompt-item:hover .prompt-star-btn { opacity: 1; }
-    .prompt-star-btn:hover { border-color: #d29922; }
+    .prompt-star-btn:hover, .prompt-star-btn:focus-visible { opacity: 1; border-color: #d29922; }
 
     .prompt-hide-btn {
       position: absolute;
@@ -2600,12 +2601,12 @@
       cursor: pointer;
       font-size: 0.72rem;
       padding: 2px 7px;
-      opacity: 0;
+      opacity: 0.45;
       transition: opacity 0.15s;
     }
 
     .prompt-item:hover .prompt-hide-btn { opacity: 1; }
-    .prompt-hide-btn:hover { border-color: #f85149; }
+    .prompt-hide-btn:hover, .prompt-hide-btn:focus-visible { opacity: 1; border-color: #f85149; }
     .prompt-hide-btn:disabled { opacity: 0.5; cursor: default; }
 
     /* --- Prompts batch selection --- */
@@ -2632,13 +2633,13 @@
       font-size: 0.72rem;
       padding: 2px 7px;
       cursor: pointer;
-      opacity: 0;
+      opacity: 0.45;
       transition: opacity 0.15s;
       flex-shrink: 0;
     }
 
     .prompt-session-header:hover .session-hide-btn { opacity: 1; }
-    .session-hide-btn:hover { border-color: #f85149; }
+    .session-hide-btn:hover, .session-hide-btn:focus-visible { opacity: 1; border-color: #f85149; }
     .session-hide-btn:disabled { opacity: 0.5; cursor: default; }
 
     .prompt-select-bar {
@@ -2660,18 +2661,75 @@
 
     .prompt-select-bar .danger { border-color: #f85149; color: #f85149; }
 
-    .prompts-notice {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #1f6feb;
-      color: #fff;
+    /* --- Scope chips (口径标识) --- */
+    .scope-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 1px 10px;
+      font-size: 0.75rem;
+      font-weight: normal;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted);
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    /* --- Insights scope segmented control --- */
+    .insights-scope-seg {
+      display: inline-flex;
+      border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 8px 18px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .insights-scope-seg .seg-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .insights-scope-seg .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+    .insights-scope-seg .seg-btn:hover:not(:disabled) { color: var(--text); }
+    .insights-scope-seg .seg-btn.active { background: rgba(88,166,255,0.15); color: #58a6ff; }
+    .insights-scope-seg .seg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .platform-tab.more-tab { color: var(--muted); opacity: 0.7; }
+
+    /* --- Unified toast (top-right, auto-dismiss, stacks) --- */
+    #toastHolder {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: #161b22;
+      border: 1px solid var(--border);
+      border-left: 3px solid #1f6feb;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 16px;
       font-size: 0.85rem;
-      z-index: 70;
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+      animation: toast-in 0.18s ease-out;
+    }
+    .toast.toast-error { border-left-color: #f85149; color: #ff7b72; }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: none; }
     }
 
     .hidden-manage-link {
@@ -3025,10 +3083,10 @@
       </aside>
       <main class="main">
         <div class="view-toggle-bar" id="viewToggleBar">
-          <button class="view-toggle-btn active" data-view="sessions" title="浏览与回放会话：消息、工具调用、耗时与 token">Sessions</button>
-          <button class="view-toggle-btn" data-view="insights" title="聚合统计：工具调用、错误聚类、token 消耗、按日趋势">Insights</button>
+          <button class="view-toggle-btn active" data-view="sessions" title="浏览与回放会话：消息、工具调用、耗时与 token">会话</button>
+          <button class="view-toggle-btn" data-view="insights" title="聚合统计：工具调用、错误聚类、token 消耗、按日趋势">分析</button>
           <button class="view-toggle-btn" data-view="prompts" title="自动提取历史里所有真人 prompt：搜索、收藏、聚类分析与改写">Prompts</button>
-          <button class="view-toggle-btn" data-view="library" title="Prompt 资产库：标签管理，一键安装为各工具的 slash command">Library</button>
+          <button class="view-toggle-btn" data-view="library" title="Prompt 资产库：标签管理，一键安装为各工具的 slash command">资产库</button>
         </div>
         <div id="mainContent">
         <div id="breadcrumb" class="breadcrumb" hidden></div>
@@ -3051,10 +3109,10 @@
         <section id="messages" class="messages">
           <div class="empty feature-guide">
             <h3>AgentXRay 能做什么</h3>
-            <div class="fg-item"><b>Sessions</b> — 跨工具浏览与回放 AI agent 会话：每条消息、每次工具调用的参数与结果、耗时拆分、token 成本。左侧搜索框<b>直接输入</b>过滤列表，<b>按回车</b>全文搜索会话内容（含已被 Claude 清理的历史输入）。</div>
-            <div class="fg-item"><b>Insights</b> — 聚合分析：哪些工具用得最多、哪里报错、token 花在哪、每天用量趋势。选中某个会话后变为单会话分析。</div>
+            <div class="fg-item"><b>会话</b> — 跨工具浏览与回放 AI agent 会话：每条消息、每次工具调用的参数与结果、耗时拆分、token 成本。左侧搜索框<b>直接输入</b>过滤列表，<b>按回车</b>全文搜索会话内容（含已被 Claude 清理的历史输入）。</div>
+            <div class="fg-item"><b>分析</b> — 聚合分析：哪些工具用得最多、哪里报错、token 花在哪、每天用量趋势。顶部可在「全局分析 / 本会话分析」之间切换（本会话分析需先选中会话）。</div>
             <div class="fg-item"><b>Prompts</b> — 自动提取你在所有会话里输入过的真人 prompt（滤掉工具输出和系统注入），按目录分组。每条可 <b>⭐ 收藏</b>入库、<b>优化</b>（Claude 改写）、<b>🗑 隐藏</b>（可恢复）；「🧮 聚类分析」把相似 prompt 聚成模板并统计效果。</div>
-            <div class="fg-item"><b>Library</b> — prompt 资产库：标签分类、编辑、搜索。每条有 <b>Claude / Codex / OMP</b> 三个开关，点亮即安装为该工具的 slash command——之后在工具里输 <code>/名字</code> 直接调用，<code>$ARGUMENTS</code> 传参。</div>
+            <div class="fg-item"><b>资产库</b> — prompt 资产库：标签分类、编辑、搜索。每条有 <b>Claude / Codex / OMP</b> 三个开关，点亮即安装为该工具的 slash command——之后在工具里输 <code>/名字</code> 直接调用，<code>$ARGUMENTS</code> 传参。</div>
             <div class="fg-item"><b>⚙ 设置</b> — 自定义各平台的日志目录（默认已指向本机标准路径）。</div>
           </div>
         </section>
@@ -3106,7 +3164,7 @@
   </div>
   <div class="settings-overlay" id="libraryFormOverlay" hidden>
     <div class="settings-panel">
-      <h2 id="libraryFormTitle">新建 Prompt</h2>
+      <h2 id="libraryFormTitle" style="display:flex;align-items:center;gap:8px"><span id="libraryFormTitleText">新建 Prompt</span><span id="libraryFormSourceChip" class="library-source" style="font-size:0.7rem;font-weight:400;padding:1px 8px" hidden>来自历史收藏</span></h2>
       <div class="settings-field">
         <label>Name（slash command 名，小写字母/数字/连字符）</label>
         <input id="libraryFormName" type="text" placeholder="my-prompt">
@@ -3172,6 +3230,7 @@
   </div>
   <div class="settings-overlay" id="cmdkOverlay" hidden>
     <div class="settings-panel cmdk-panel">
+      <div style="margin-bottom:8px"><span class="scope-chip">🌐 全平台</span></div>
       <input id="cmdkInput" class="control" type="search" placeholder="全平台全文搜索（空格分隔多关键词，全部命中才返回）…">
       <div id="cmdkResults" class="search-results cmdk-results"></div>
     </div>
@@ -3594,6 +3653,32 @@
       return response.json();
     }
 
+    // --- Platform bar collapse: probe every platform's session count once per page load ---
+    const PLATFORM_LABELS = { openclaw: 'OpenClaw', codex: 'Codex', 'claude-code': 'Claude Code', hermes: 'Hermes', omp: 'OMP' };
+    function platformScopeChip() {
+      return `<span class="scope-chip">📍 当前平台：${PLATFORM_LABELS[state.platform] || state.platform}</span>`;
+    }
+    const platformSessionCounts = {}; // platform id → count (0 = known empty; missing = unknown/probing)
+    let platformBarExpanded = false;
+    let platformProbeStarted = false;
+    function probePlatformSessionCounts() {
+      if (platformProbeStarted) return;
+      platformProbeStarted = true;
+      const dirQ = (dir) => (dir ? '?dir=' + encodeURIComponent(dir) : '');
+      const probes = [
+        ['openclaw', '/api/agents' + dirQ(state.settings.openclawDir)],
+        ['codex', '/api/codex/sessions' + dirQ(state.settings.codexDir)],
+        ['claude-code', '/api/claude-code/sessions' + dirQ(state.settings.claudeCodeDir)],
+        ['hermes', '/api/hermes/sessions' + dirQ(state.settings.hermesDir)],
+        ['omp', '/api/omp/sessions' + dirQ(state.settings.ompDir)]
+      ];
+      Promise.all(probes.map(([id, url]) =>
+        fetchJson(url)
+          .then((list) => { platformSessionCounts[id] = Array.isArray(list) ? list.length : 0; })
+          .catch(() => { platformSessionCounts[id] = 0; }) // unreachable = treat as empty
+      )).then(() => renderAgents());
+    }
+
     function renderAgents() {
       // Update subtitle
       const subtitle = document.getElementById('sidebarSubtitle');
@@ -3608,15 +3693,24 @@
         { id: 'hermes', label: 'Hermes' },
         { id: 'omp', label: 'OMP' }
       ];
-      platformBar.innerHTML = platforms
+      const isCollapsedTab = (p) => p.id !== state.platform && !platformBarExpanded && platformSessionCounts[p.id] === 0;
+      const shownPlatforms = platforms.filter((p) => !isCollapsedTab(p));
+      const collapsedPlatforms = platforms.filter((p) => isCollapsedTab(p));
+      const tips = { openclaw: 'OpenClaw 会话（~/.openclaw/agents）', codex: 'Codex 会话（~/.codex/sessions）', 'claude-code': 'Claude Code 会话（~/.claude/projects）', hermes: 'Hermes 会话（~/.hermes）', omp: 'oh-my-pi 会话（~/.omp/agent/sessions）' };
+      platformBar.innerHTML = shownPlatforms
         .map((p) => {
           const activeClass = p.id === state.platform ? 'active' : '';
-          const tips = { openclaw: 'OpenClaw 会话（~/.openclaw/agents）', codex: 'Codex 会话（~/.codex/sessions）', 'claude-code': 'Claude Code 会话（~/.claude/projects）', hermes: 'Hermes 会话（~/.hermes）', omp: 'oh-my-pi 会话（~/.omp/agent/sessions）' };
           return `<button class="platform-tab ${activeClass}" data-platform="${p.id}" title="${tips[p.id] || ''}">${p.label}</button>`;
         })
-        .join('');
+        .join('')
+        + (collapsedPlatforms.length ? `<button class="platform-tab more-tab" id="platformMoreTab" title="暂无会话的平台：${collapsedPlatforms.map((p) => p.label).join('、')} — 点击展开">+${collapsedPlatforms.length}</button>` : '');
 
-      platformBar.querySelectorAll('.platform-tab').forEach((tab) => {
+      document.getElementById('platformMoreTab')?.addEventListener('click', () => {
+        platformBarExpanded = true;
+        renderAgents();
+      });
+
+      platformBar.querySelectorAll('.platform-tab[data-platform]').forEach((tab) => {
         tab.addEventListener('click', async () => {
           const platform = tab.getAttribute('data-platform');
           if (platform === state.platform) return;
@@ -3666,6 +3760,8 @@
         agentNav.hidden = true;
         agentNav.innerHTML = '';
       }
+
+      probePlatformSessionCounts();
     }
 
     // --- Insights View ---
@@ -3676,11 +3772,13 @@
     const libraryPanel = document.getElementById('libraryPanel');
     let currentView = 'sessions';
     let insightsData = null;
+    let insightsScope = null; // 'global' | 'session' — auto-picked on first entry into 分析, then sticky
     let promptsData = null;
     let promptsSearch = '';
     let promptsHideTrivial = (() => { try { return localStorage.getItem('axr-hide-trivial') !== '0'; } catch { return true; } })();
     let promptAnalysis = null;
     let promptAnalysisLoading = false;
+    let promptAnalysisStartedAt = 0;
     let hiddenPrompts = [];
     let promptSelectMode = false;
     const promptSelection = new Set(); // "gi:si:pi" keys, cleared on every re-render
@@ -3715,15 +3813,17 @@
     });
 
     async function loadInsights() {
-      insightsPanel.innerHTML = '<div class="insights-loading">Loading insights…</div>';
+      const hasSession = !!(state.sessionData && state.sessionData.messages && state.sessionData.messages.length > 0);
+      // Auto-pick only on first entry; afterwards the user's explicit choice sticks —
+      // selecting a session while in 分析 view never implicitly morphs the scope.
+      if (insightsScope === null) insightsScope = hasSession ? 'session' : 'global';
 
-      // If a session is selected and loaded, show session-level insights
-      if (state.sessionData && state.sessionData.messages && state.sessionData.messages.length > 0) {
+      if (insightsScope === 'session' && hasSession) {
         renderSessionInsights(state.sessionData);
         return;
       }
 
-      // Otherwise show global insights
+      insightsPanel.innerHTML = '<div class="insights-loading">Loading insights…</div>';
       const params = new URLSearchParams({ platform: state.platform });
       if (state.platform === 'openclaw' && state.selectedAgent) {
         params.set('agent', state.selectedAgent);
@@ -3736,8 +3836,31 @@
         insightsData = data;
         renderInsights(data);
       } catch (e) {
-        insightsPanel.innerHTML = `<div class="insights-empty">Failed to load insights: ${escapeHtml(e.message)}</div>`;
+        insightsPanel.innerHTML = insightsScopeSegHtml('global') + `<div class="insights-empty">Failed to load insights: ${escapeHtml(e.message)}</div>`;
+        bindInsightsScopeSeg();
       }
+    }
+
+    function insightsScopeSegHtml(active) {
+      const hasSession = !!(state.sessionData && state.sessionData.messages && state.sessionData.messages.length > 0);
+      const sessTitle = hasSession ? '仅分析当前选中的会话' : '需先选中会话';
+      return `<div class="insights-scope-seg" id="insightsScopeSeg">
+        <button class="seg-btn${active === 'global' ? ' active' : ''}" data-scope="global" title="聚合当前平台所有会话的统计">全局分析</button>
+        <button class="seg-btn${active === 'session' ? ' active' : ''}" data-scope="session"${hasSession ? '' : ' disabled'} title="${sessTitle}">本会话分析</button>
+      </div>`;
+    }
+
+    function bindInsightsScopeSeg() {
+      const seg = document.getElementById('insightsScopeSeg');
+      if (!seg) return;
+      seg.querySelectorAll('.seg-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const scope = btn.dataset.scope;
+          if (btn.disabled || scope === insightsScope) return;
+          insightsScope = scope;
+          loadInsights();
+        });
+      });
     }
 
     function renderSessionInsights(sessionData) {
@@ -3956,7 +4079,8 @@
       const sid = session.id || state.selectedSessionId || '?';
 
       insightsPanel.innerHTML = `
-        <h2>Session Insights</h2>
+        ${insightsScopeSegHtml('session')}
+        <h2>本会话分析 <span class="scope-chip">📍 仅当前会话</span></h2>
         <div class="insight-session-meta">
           <span class="badge">${escapeHtml(sid.slice(0, 20))}</span>
           ${session.cwd ? `<span class="badge">${escapeHtml(session.cwd)}</span>` : ''}
@@ -3980,6 +4104,8 @@
         </div>
         ${timelineHtml}
       `;
+
+      bindInsightsScopeSeg();
 
       // Bind: click error → scroll to that message
       insightsPanel.querySelectorAll('[data-msg-index]').forEach(el => {
@@ -4011,7 +4137,8 @@
 
     function renderInsights(data) {
       if (!data || data.totalSessions === 0) {
-        insightsPanel.innerHTML = '<div class="insights-empty">No session data available for the current selection.</div>';
+        insightsPanel.innerHTML = insightsScopeSegHtml('global') + '<div class="insights-empty">No session data available for the current selection.</div>';
+        bindInsightsScopeSeg();
         return;
       }
 
@@ -4124,7 +4251,8 @@
       }
 
       insightsPanel.innerHTML = `
-        <h2>Insights${state.platform === 'openclaw' && state.selectedAgent ? ' — ' + escapeHtml(state.selectedAgent) : ''}</h2>
+        ${insightsScopeSegHtml('global')}
+        <h2>全局分析${state.platform === 'openclaw' && state.selectedAgent ? ' — ' + escapeHtml(state.selectedAgent) : ''} ${platformScopeChip()}</h2>
         ${cardsHtml}
         <div class="insight-sections">
           <div class="insight-section">
@@ -4139,6 +4267,7 @@
         ${trendHtml}
         <div class="insight-section" id="toolsAuditSection"></div>
       `;
+      bindInsightsScopeSeg();
 
       // Bind error cluster expand/collapse
       insightsPanel.querySelectorAll('[data-cluster]').forEach(el => {
@@ -4287,7 +4416,7 @@
       }
 
       section.innerHTML = `
-        <div class="tools-audit-head"><h3 style="margin:0">🔧 工具体检${metaHtml}</h3>${btnHtml}</div>
+        <div class="tools-audit-head"><h3 style="margin:0">🔧 工具体检 <span class="scope-chip">🌐 全平台</span>${metaHtml}</h3>${btnHtml}</div>
         ${bodyHtml}
       `;
 
@@ -4346,12 +4475,19 @@
       }
     }
 
-    function showPromptsNotice(text) {
-      const note = document.createElement('div');
-      note.className = 'prompts-notice';
-      note.textContent = text;
-      document.body.appendChild(note);
-      setTimeout(() => note.remove(), 4000);
+    // Unified toast: top-right, auto-dismiss (3s), stacks; kind = 'info' | 'error'
+    function showToast(message, kind = 'info') {
+      let holder = document.getElementById('toastHolder');
+      if (!holder) {
+        holder = document.createElement('div');
+        holder.id = 'toastHolder';
+        document.body.appendChild(holder);
+      }
+      const el = document.createElement('div');
+      el.className = 'toast' + (kind === 'error' ? ' toast-error' : '');
+      el.textContent = message;
+      holder.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
     }
 
     // Restore the last persisted clustering analysis (never computes; 204 = none)
@@ -4371,6 +4507,11 @@
     async function loadPromptAnalysis(refresh) {
       if (promptAnalysisLoading) return;
       promptAnalysisLoading = true;
+      promptAnalysisStartedAt = Date.now();
+      const elapsedTicker = setInterval(() => {
+        const el = document.getElementById('analysisElapsed');
+        if (el) el.textContent = Math.floor((Date.now() - promptAnalysisStartedAt) / 1000) + 's';
+      }, 1000);
       renderPrompts();
       try {
         const params = promptsQueryParams();
@@ -4379,8 +4520,10 @@
       } catch (error) {
         promptAnalysis = { platform: state.platform, clusters: [], overall: [], llmError: error.message };
       } finally {
+        clearInterval(elapsedTicker);
         promptAnalysisLoading = false;
         renderPrompts();
+        if (typeof showToast === 'function') showToast('画像分析完成');
       }
     }
 
@@ -4404,7 +4547,8 @@
 
     function renderAnalysisHtml() {
       if (promptAnalysisLoading) {
-        return '<div class="insight-section analysis-section"><h3>📊 Prompt 画像</h3><div class="analysis-loading">Claude 分析中… 约 1-2 分钟(聚类 → 归因 → 主题标注 → LLM 建议)</div></div>';
+        const elapsedSec = promptAnalysisStartedAt ? Math.floor((Date.now() - promptAnalysisStartedAt) / 1000) : 0;
+        return `<div class="insight-section analysis-section"><h3>📊 Prompt 画像</h3><div class="analysis-loading">Claude 分析中… 已耗时 <span id="analysisElapsed">${elapsedSec}s</span> · 约 1-2 分钟(聚类 → 归因 → 主题标注 → LLM 建议)<br><span style="color:var(--muted);font-size:0.78rem">结果会自动保存，可离开此页稍后回来看</span></div></div>`;
       }
       if (!promptAnalysis || promptAnalysis.platform !== state.platform) return '';
 
@@ -4605,7 +4749,7 @@
                     <button class="prompt-hide-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="隐藏此 prompt（同文重复项一并隐藏，可恢复）">🗑</button>
                     <button class="prompt-optimize-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="用 Claude 改写这条 prompt">优化</button>
                     <button class="prompt-copy-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="Copy prompt">Copy</button>
-                    <button class="prompt-star-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="收藏到 Prompt Library">⭐ 收藏</button>
+                    <button class="prompt-star-btn" data-gi="${gi}" data-si="${si}" data-pi="${pi}" title="收藏到资产库">⭐ 收藏</button>
                   </div>
                 `).join('')}
               </div>
@@ -4621,9 +4765,9 @@
           <label class="toggle" title="隐藏折叠后不足 12 字符的琐碎 prompt（搜索时自动停用）"><span>隐藏琐碎 prompt</span><input id="promptsHideTrivial" type="checkbox" ${promptsHideTrivial ? 'checked' : ''}></label>
           ${hiddenPrompts.length ? `<button class="hidden-manage-link" id="promptsHiddenManageBtn">已隐藏 ${hiddenPrompts.length} · 管理</button>` : ''}
           <button class="export-btn${promptSelectMode ? ' mode-active' : ''}" id="promptsSelectModeBtn" title="批量选择 prompt 后一键隐藏（可恢复）">☑ 批量选择</button>
-          <button class="export-btn" id="promptsExportBtn">Export JSON</button>
+          <button class="export-btn" id="promptsExportBtn">导出 JSON</button>
         </div>
-        <div class="prompts-summary">从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}${trivialActive && hiddenTrivial ? ` · 已隐藏 ${hiddenTrivial} 条琐碎 prompt` : ''}</div>
+        <div class="prompts-summary">${platformScopeChip()} 从会话历史自动提取的真人 prompt（已过滤工具输出与系统注入），按目录分组 — 每条可 ⭐ 收藏入库、「优化」用 Claude 改写 · ${promptsData.totalPrompts} prompts / ${promptsData.totalSessions} sessions / ${promptsData.groups.length} directories${q ? ` — showing ${shownPrompts} prompts / ${shownSessions} sessions` : ''}${trivialActive && hiddenTrivial ? ` <span class="scope-chip">已滤琐碎 ${hiddenTrivial}</span>` : ''}${hiddenPrompts.length ? ` <span class="scope-chip">已隐藏 ${hiddenPrompts.length}</span>` : ''}</div>
         ${renderAnalysisHtml()}
         ${groupsHtml || '<div class="insights-empty">No matches.</div>'}
         ${promptSelectMode ? `
@@ -4782,11 +4926,11 @@
             promptSelectMode = false;
             promptSelection.clear();
             await loadPrompts();
-            showPromptsNotice(`已隐藏 ${n} 条`);
+            showToast(`已隐藏 ${n} 条`);
           } catch (error) {
             selHideBtn.disabled = false;
             selHideBtn.textContent = '🗑 隐藏选中';
-            showPromptsNotice('隐藏失败: ' + error.message);
+            showToast('隐藏失败: ' + error.message, 'error');
           }
         });
       }
@@ -4804,10 +4948,10 @@
           try {
             await hidePromptTexts(s.prompts.map(p => p.text));
             await loadPrompts();
-            showPromptsNotice(`已隐藏 ${n} 条`);
+            showToast(`已隐藏 ${n} 条`);
           } catch (error) {
             btn.disabled = false;
-            showPromptsNotice('隐藏失败: ' + error.message);
+            showToast('隐藏失败: ' + error.message, 'error');
           }
         });
       });
@@ -4952,6 +5096,7 @@
             const data = await resp.json();
             if (!resp.ok) throw new Error(data.error || resp.statusText);
             await loadPrompts();
+            showToast('已隐藏');
           } catch (error) {
             btn.disabled = false;
             const item = btn.closest('.prompt-item');
@@ -5041,6 +5186,7 @@
     }
 
     function libraryActionError(message) {
+      if (typeof showToast === 'function') { showToast(message, 'error'); return; }
       const err = document.createElement('div');
       err.className = 'analysis-error';
       err.textContent = message;
@@ -5108,8 +5254,8 @@
           <button class="export-btn" id="libraryFabricBtn">导入 Fabric Patterns</button>
           <button class="export-btn" id="libraryNewBtn">新建 Prompt</button>
         </div>
-        <div class="prompts-summary">Prompt 资产库（~/.agentxray/library）— 点亮 Claude / Codex / OMP 开关即安装为该工具的 slash command，工具内 <code>/名字</code> 调用 · ${all.length} prompt${all.length === 1 ? '' : 's'}${q ? ` — showing ${prompts.length}` : ''}</div>
-        ${cardsHtml || `<div class="insights-empty">${all.length ? 'No matches.' : 'Library 为空。在 Prompts 视图点 ⭐ 收藏，或点击「新建 Prompt」。'}</div>`}
+        <div class="prompts-summary"><span class="scope-chip">🌐 全平台</span> Prompt 资产库（~/.agentxray/library）— 点亮 Claude / Codex / OMP 开关即安装为该工具的 slash command，工具内 <code>/名字</code> 调用 · ${all.length} prompt${all.length === 1 ? '' : 's'}${q ? ` — showing ${prompts.length}` : ''}</div>
+        ${cardsHtml || `<div class="insights-empty">${all.length ? 'No matches.' : '资产库为空。在 Prompts 视图点 ⭐ 收藏，或点击「新建 Prompt」。'}</div>`}
       `;
 
       // Search input (debounced re-render, keep focus)
@@ -5208,7 +5354,6 @@
 
     // --- Library create/edit form ---
     const libraryFormOverlay = document.getElementById('libraryFormOverlay');
-    const libraryFormTitle = document.getElementById('libraryFormTitle');
     const libraryFormName = document.getElementById('libraryFormName');
     const libraryFormDescription = document.getElementById('libraryFormDescription');
     const libraryFormTags = document.getElementById('libraryFormTags');
@@ -5251,8 +5396,10 @@
       libraryNameSuggestSeq++; // invalidate any in-flight suggestion
       libraryFormEditingName = isEdit && prefill ? prefill.name : null;
       libraryFormSource = (prefill && prefill.source) || 'manual';
+      const sourceChip = document.getElementById('libraryFormSourceChip');
+      if (sourceChip) sourceChip.hidden = libraryFormSource !== 'history';
       libraryFormOnSaved = (!isEdit && prefill && prefill.onSaved) || null;
-      libraryFormTitle.textContent = isEdit ? '编辑 Prompt' : '新建 Prompt';
+      document.getElementById('libraryFormTitleText').textContent = isEdit ? '编辑 Prompt' : '新建 Prompt';
       libraryFormName.placeholder = 'my-prompt';
       const prefillName = (prefill && prefill.name) || '';
       libraryFormName.value = prefillName;
@@ -5306,6 +5453,7 @@
           await libraryRequest('/api/library', 'POST', { name, description, tags, content, source: libraryFormSource });
         }
         closeLibraryForm();
+        if (typeof showToast === 'function') showToast(libraryFormEditingName ? '已保存修改' : '已保存到资产库');
         if (libraryFormOnSaved) {
           try { libraryFormOnSaved(); } catch {}
           libraryFormOnSaved = null;
@@ -5433,6 +5581,7 @@
         const skipped = result.skipped || [];
         const failed = result.failed || [];
         fabricResultLine.textContent = `成功 ${imported.size} · 跳过 ${skipped.length} · 失败 ${failed.length}${failed.length ? '：' + failed.join(', ') : ''}`;
+        if (typeof showToast === 'function' && imported.size) showToast(`已导入 ${imported.size} 个 Fabric pattern`);
         fabricPatterns.forEach(p => {
           if (imported.has(p.name) || skipped.includes(p.name)) p.imported = true;
         });
@@ -5531,6 +5680,7 @@
         try {
           await libraryRequest('/api/library/' + encodeURIComponent(name), 'PUT', { content });
           closeLibraryHistory();
+          if (typeof showToast === 'function') showToast('已恢复此版本');
           libraryData = null;
           if (currentView === 'library') await loadLibrary();
         } catch (error) {
@@ -6157,17 +6307,18 @@
               ${(() => { const sm = state.sessions.find(s => s.id === state.selectedSessionId); return sm?.model ? `<span class="badge">🧠 ${escapeHtml(sm.model)}</span>` : ''; })()}
               ${renderTimeSplit(timing)}
               ${timing.slowestStep ? `<span class="slowest-step-link" title="Click to jump — total agent work time for this turn (user msg → last agent response)" data-target-id="${escapeHtml(timing.slowestStep.messageId || '')}">🐌 Slowest turn: +${escapeHtml(formatDurationCompact(timing.slowestStep.deltaMs))} (${escapeHtml(timing.slowestStep.label)})</span>` : ''}
+              <span style="color:var(--muted)">耗时分析看 Trace 视图</span>
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:flex-start">
             <button class="export-btn" id="summaryToggleBtn" title="折叠/展开会话统计详情">${summaryCollapsed ? '▸ 详情' : '▾ 收起'}</button>
             ${['codex', 'claude-code', 'omp'].includes(state.platform) ? '<button class="export-btn" id="resumeCmdBtn" title="复制在终端恢复此会话的命令">📋 复制恢复命令</button>' : ''}
             <div class="export-dropdown" id="exportDropdown">
-              <button class="export-btn" id="exportBtn">📥 Export</button>
+              <button class="export-btn" id="exportBtn">📥 导出</button>
               <div class="export-menu" id="exportMenu">
                 <button data-export="markdown">📝 Markdown (.md)</button>
                 <button data-export="json">📦 JSON (.json)</button>
-                <button data-export="clipboard">📋 Copy to clipboard</button>
+                <button data-export="clipboard">📋 复制到剪贴板</button>
                 ${['codex', 'claude-code', 'omp'].includes(state.platform) ? '<button data-export="otlp">🔭 OTLP JSON</button>' : ''}
               </div>
             </div>
@@ -6200,16 +6351,6 @@
           <div class="summary-section">
             <div class="summary-section-title">Tokens</div>
             <div class="token-grid">${tokenBadges}</div>
-          </div>
-        </div>
-        <div class="timeline-section">
-          <h3>📊 Timeline</h3>
-          <div class="timeline-bar" id="timelineBar"></div>
-          <div class="timeline-legend">
-            <span class="tl-leg-user">User</span>
-            <span class="tl-leg-assistant">Assistant</span>
-            <span class="tl-leg-tool">Tool</span>
-            <span class="tl-leg-gap">Gap &gt;30s</span>
           </div>
         </div>
         ${state.platform === 'openclaw' ? `
@@ -6321,9 +6462,6 @@
           }
         });
       }
-
-      // Render overview timeline
-      renderTimeline(msgs);
     }
 
     // ========= Export Functions =========
@@ -6509,119 +6647,6 @@
         void el.offsetWidth;
         el.classList.add('flash-highlight');
       }
-    }
-
-    function renderTimeline(msgs) {
-      const bar = document.getElementById('timelineBar');
-      if (!bar || !msgs.length) return;
-
-      // Collect timestamps
-      const points = [];
-      for (const m of msgs) {
-        const ts = m.timestamp ? new Date(m.timestamp).getTime() : null;
-        if (!ts || isNaN(ts)) continue;
-        let cls = 'tool';
-        if (m.role === 'user') cls = 'user';
-        else if (m.role === 'assistant') {
-          const hasToolCalls = Array.isArray(m.content) && m.content.some(c => c.type === 'tool_use');
-          const isSpawn = hasToolCalls && m.content.some(c => c.type === 'tool_use' && (c.name === 'sessions_spawn' || (c.name === 'exec' && /codex|claude/.test(JSON.stringify(c.input || {})))));
-          cls = isSpawn ? 'spawn' : 'assistant';
-        }
-        points.push({ ts, cls, id: m.id || '' });
-      }
-      if (points.length < 2) { bar.innerHTML = ''; return; }
-
-      const tMin = points[0].ts;
-      const tMax = points[points.length - 1].ts;
-      const totalSpan = tMax - tMin;
-      if (totalSpan <= 0) { bar.innerHTML = ''; return; }
-
-      // Build intervals for sqrt-compression scaling
-      // Long gaps get compressed so active periods get more visual space
-      const intervals = [];
-      for (let i = 0; i < points.length - 1; i++) {
-        intervals.push(points[i + 1].ts - points[i].ts);
-      }
-      const compressed = intervals.map(d => Math.sqrt(Math.max(d, 1)));
-      const compressedTotal = compressed.reduce((a, b) => a + b, 0) || 1;
-
-      // Build cumulative position array (0..1)
-      const pos = [0];
-      let cum = 0;
-      for (let i = 0; i < compressed.length; i++) {
-        cum += compressed[i];
-        pos.push(cum / compressedTotal);
-      }
-
-      let html = '';
-      const GAP_THRESHOLD = 120000; // 2 minutes
-
-      // Render message segments
-      for (let i = 0; i < points.length; i++) {
-        const p = points[i];
-        const left = pos[i] * 100;
-        const nextLeft = (i < points.length - 1) ? pos[i + 1] * 100 : 100;
-        const w = Math.max(0.15, nextLeft - left);
-        html += `<div class="tl-segment ${p.cls}" style="left:${left.toFixed(3)}%;width:${Math.min(w, 100 - left).toFixed(3)}%" data-msg-id="${escapeHtml(p.id)}" title="${p.cls} · ${escapeHtml(formatDate(p.ts))}"></div>`;
-      }
-
-      // Render gap markers (>2min intervals)
-      for (let i = 1; i < points.length; i++) {
-        const gap = points[i].ts - points[i - 1].ts;
-        if (gap >= GAP_THRESHOLD) {
-          const left = pos[i - 1] * 100;
-          const label = formatDurationCompact(gap);
-          html += `<div class="tl-gap" style="left:${left.toFixed(3)}%"></div>`;
-          if (gap >= 300000) {
-            html += `<div class="tl-gap-label" style="left:${left.toFixed(3)}%">${escapeHtml(label)}</div>`;
-          }
-        }
-      }
-
-      // Viewport indicator (synced with message scroll)
-      html += `<div class="tl-viewport" id="timelineViewport"></div>`;
-      bar.innerHTML = html;
-
-      // Bind segment clicks -> jump to message
-      bar.querySelectorAll('.tl-segment').forEach(seg => {
-        seg.addEventListener('click', () => {
-          scrollToMessage(seg.dataset.msgId);
-        });
-      });
-
-      // Bind click on bar background -> jump to rough position
-      bar.addEventListener('click', (e) => {
-        if (e.target !== bar) return; // only background clicks
-        const rect = bar.getBoundingClientRect();
-        const pct = (e.clientX - rect.left) / rect.width;
-        const msgEl = document.getElementById('messages');
-        if (msgEl) {
-          msgEl.scrollTop = pct * msgEl.scrollHeight;
-        }
-      });
-
-      // Sync viewport indicator with messages scroll
-      syncTimelineViewport();
-    }
-
-    function syncTimelineViewport() {
-      const msgEl = document.getElementById('messages');
-      const vp = document.getElementById('timelineViewport');
-      if (!msgEl || !vp) return;
-
-      function updateVP() {
-        const total = msgEl.scrollHeight;
-        if (total <= 0) return;
-        const top = msgEl.scrollTop / total;
-        const h = msgEl.clientHeight / total;
-        vp.style.left = (top * 100).toFixed(2) + '%';
-        vp.style.width = (h * 100).toFixed(2) + '%';
-      }
-
-      msgEl.removeEventListener('scroll', msgEl._tlScrollHandler);
-      msgEl._tlScrollHandler = updateVP;
-      msgEl.addEventListener('scroll', updateVP, { passive: true });
-      updateVP();
     }
 
     // Analyze retry chains within a turn.
@@ -7200,6 +7225,7 @@
       } else if (state.platform === 'omp') {
         state.sessions = await fetchJson('/api/omp/sessions' + dp);
       }
+      if (state.platform !== 'openclaw' && Array.isArray(state.sessions)) platformSessionCounts[state.platform] = state.sessions.length;
       if (!preserveSelection || !state.sessions.some((session) => session.id === state.selectedSessionId)) {
         state.selectedSessionId = state.sessions[0]?.id || '';
       }
@@ -7525,7 +7551,7 @@
           <button class="ss-close" title="关闭 (Esc)">✕</button>
         </div>
         <div class="span-sidebar-body">${bodyHtml}</div>
-        ${span.msgId ? '<div class="span-sidebar-foot"><button class="export-btn ss-jump-btn">↪ 跳到消息</button></div>' : ''}`;
+        <div class="span-sidebar-foot">${span.msgId ? '<button class="export-btn ss-jump-btn">↪ 跳到消息</button>' : ''}<div style="color:var(--muted);font-size:0.75rem;margin-top:${span.msgId ? '8' : '0'}px">提示：复制恢复命令可在终端接管此会话</div></div>`;
       el.hidden = false;
 
       el.querySelector('.ss-close').addEventListener('click', closeSpanSidebar);

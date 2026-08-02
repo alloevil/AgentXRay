@@ -9,7 +9,9 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3800;
-const HOST = process.env.HOST || '0.0.0.0';
+// Bind to localhost by default: the dashboard exposes full AI session
+// history (and ?dir= reads) with zero auth — opt into LAN via HOST=0.0.0.0
+const HOST = process.env.HOST || '127.0.0.1';
 const HOME = process.env.HOME || '/root';
 const DATA_DIR = process.env.OPENCLAW_DIR || path.join(HOME, '.openclaw', 'agents');
 
