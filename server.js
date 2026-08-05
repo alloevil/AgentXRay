@@ -6,51 +6,109 @@ const readline = require('readline');
 const { normalizePromptText, hashPromptText } = require('./lib/text-utils');
 const { parseLlmJson } = require('./lib/llm-json');
 const {
-  DATA_DIR, CODEX_DIR, CLAUDE_CODE_DIR, HERMES_DIR, OMP_DIR,
-  LIBRARY_DIR, ARCHIVE_DIR,
+  DATA_DIR,
+  CODEX_DIR,
+  CLAUDE_CODE_DIR,
+  HERMES_DIR,
+  OMP_DIR,
+  LIBRARY_DIR,
+  ARCHIVE_DIR,
   sessionMetaCache,
-  resolveDir, isArchivedFile,
-  sanitizeAgentName, sanitizeSessionId, readAgents,
+  resolveDir,
+  isArchivedFile,
+  sanitizeAgentName,
+  sanitizeSessionId,
+  readAgents,
 } = require('./lib/config');
 const {
-  getHermesDbPath, openHermesDbForWatch,
-  listHermesSessions, getHermesSession, normalizeHermesMessage, searchHermesSessions,
+  getHermesDbPath,
+  openHermesDbForWatch,
+  listHermesSessions,
+  getHermesSession,
+  normalizeHermesMessage,
+  searchHermesSessions,
 } = require('./lib/platforms/hermes');
 const {
-  codexSessionIdFromFile, findCodexSessionFile,
-  listCodexSessions, normalizeCodexRecord, parseCodexSessionFile,
+  codexSessionIdFromFile,
+  findCodexSessionFile,
+  listCodexSessions,
+  normalizeCodexRecord,
+  parseCodexSessionFile,
 } = require('./lib/platforms/codex');
 const {
-  ompSessionIdFromFile, findOmpSessionFile,
-  parseOmpSessionMetadata, listOmpSessions, normalizeOmpRecord, parseOmpSessionFile, findOmpSpawnDir,
+  ompSessionIdFromFile,
+  findOmpSessionFile,
+  parseOmpSessionMetadata,
+  listOmpSessions,
+  normalizeOmpRecord,
+  parseOmpSessionFile,
+  findOmpSpawnDir,
 } = require('./lib/platforms/omp');
 const {
-  findClaudeCodeSessionFile, parseClaudeCodeSessionMetadata, listClaudeCodeSessions,
-  normalizeClaudeCodeRecord, parseClaudeCodeSessionFile, findClaudeSpawnDir,
+  findClaudeCodeSessionFile,
+  parseClaudeCodeSessionMetadata,
+  listClaudeCodeSessions,
+  normalizeClaudeCodeRecord,
+  parseClaudeCodeSessionFile,
+  findClaudeSpawnDir,
 } = require('./lib/platforms/claude');
 const {
-  listSessionsForAgent, resolveSessionFile,
-  normalizeMessage, parseSessionFile, buildSpawnMap, buildSpawnTree,
+  listSessionsForAgent,
+  resolveSessionFile,
+  normalizeMessage,
+  parseSessionFile,
+  buildSpawnMap,
+  buildSpawnTree,
 } = require('./lib/platforms/openclaw');
+const { insightsCache, INSIGHTS_TTL_MS, getInsightsCacheKey, computeInsights } = require('./lib/insights');
 const {
-  insightsCache, INSIGHTS_TTL_MS, getInsightsCacheKey, computeInsights,
-} = require('./lib/insights');
-const {
-  promptsCache, PROMPTS_TTL_MS, getPromptsCacheKey, HIDDEN_HASH_RE,
-  loadHiddenPrompts, saveHiddenPrompts, computePrompts,
-  analyzeCache, analyzeInFlight, runClaudeCli, loadPersistedAnalysis, computePromptAnalysis,
+  promptsCache,
+  PROMPTS_TTL_MS,
+  getPromptsCacheKey,
+  HIDDEN_HASH_RE,
+  loadHiddenPrompts,
+  saveHiddenPrompts,
+  computePrompts,
+  analyzeCache,
+  analyzeInFlight,
+  runClaudeCli,
+  loadPersistedAnalysis,
+  computePromptAnalysis,
 } = require('./lib/prompts');
 const {
-  TOOL_AUDIT_PLATFORMS, TOOL_AUDIT_TTL_MS, toolAuditCache,
-  computeToolAudit, loadPersistedToolAudit, savePersistedToolAudit,
+  TOOL_AUDIT_PLATFORMS,
+  TOOL_AUDIT_TTL_MS,
+  toolAuditCache,
+  computeToolAudit,
+  loadPersistedToolAudit,
+  savePersistedToolAudit,
 } = require('./lib/tool-audit');
 const { OTLP_PLATFORMS, buildOtlpPayload } = require('./lib/otlp');
 const {
-  LIBRARY_NAME_RE, INSTALL_TARGETS, sanitizeLibraryName, libraryFilePath, installedFilePath,
-  normalizeLibraryTags, parseLibraryFile, serializeLibraryFile, detectInstalled, readLibraryPrompt,
-  installLibraryPrompt, uninstallLibraryPrompt, parseInstallTargets, gitLibrary, startLibraryGit,
-  commitLibrary, fetchFabricPattern, listFabricPatternNames, fabricLibraryName, fabricDescription,
-  listLibraryNames, getLibraryUsageCache, setLibraryUsageCache, computeLibraryUsage,
+  LIBRARY_NAME_RE,
+  INSTALL_TARGETS,
+  sanitizeLibraryName,
+  libraryFilePath,
+  installedFilePath,
+  normalizeLibraryTags,
+  parseLibraryFile,
+  serializeLibraryFile,
+  detectInstalled,
+  readLibraryPrompt,
+  installLibraryPrompt,
+  uninstallLibraryPrompt,
+  parseInstallTargets,
+  gitLibrary,
+  startLibraryGit,
+  commitLibrary,
+  fetchFabricPattern,
+  listFabricPatternNames,
+  fabricLibraryName,
+  fabricDescription,
+  listLibraryNames,
+  getLibraryUsageCache,
+  setLibraryUsageCache,
+  computeLibraryUsage,
 } = require('./lib/library');
 const { runFullBackup, AUTO_BACKUP_INTERVAL_MS, runAutoBackup } = require('./lib/backup');
 
@@ -105,7 +163,16 @@ app.get('/api/insights', async (req, res) => {
 
     const data = await computeInsights(platform, agent, dir);
     if (!data) {
-      return res.json({ totalSessions: 0, totalMessages: 0, totalToolCalls: 0, errorRate: 0, tokenUsage: { input: 0, output: 0, cacheRead: 0 }, toolStats: [], errorClusters: [], trend: [] });
+      return res.json({
+        totalSessions: 0,
+        totalMessages: 0,
+        totalToolCalls: 0,
+        errorRate: 0,
+        tokenUsage: { input: 0, output: 0, cacheRead: 0 },
+        toolStats: [],
+        errorClusters: [],
+        trend: [],
+      });
     }
 
     insightsCache.set(cacheKey, { data, expires: Date.now() + INSIGHTS_TTL_MS });
@@ -199,10 +266,10 @@ app.get('/api/tools/audit', async (req, res) => {
     // selected platform; in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirOmp.
     const all = platform === 'all';
     const dirs = {
-      'openclaw': (all ? req.query.dirOpenclaw : req.query.dir) || '',
-      'codex': (all ? req.query.dirCodex : req.query.dir) || '',
+      openclaw: (all ? req.query.dirOpenclaw : req.query.dir) || '',
+      codex: (all ? req.query.dirCodex : req.query.dir) || '',
       'claude-code': (all ? req.query.dirClaude : req.query.dir) || '',
-      'omp': (all ? req.query.dirOmp : req.query.dir) || ''
+      omp: (all ? req.query.dirOmp : req.query.dir) || '',
     };
 
     // cached=1: return the persisted result if present, never compute
@@ -267,7 +334,7 @@ app.post('/api/prompts/hidden', async (req, res) => {
   try {
     // Accept a single {text} or a batch {texts: [...]} (up to 500)
     const body = req.body || {};
-    const rawTexts = Array.isArray(body.texts) ? body.texts : (body.text !== undefined ? [body.text] : []);
+    const rawTexts = Array.isArray(body.texts) ? body.texts : body.text !== undefined ? [body.text] : [];
     if (rawTexts.length > 500) return res.status(400).json({ error: 'too many texts (max 500)' });
     const normalized = rawTexts.map((t) => normalizePromptText(t)).filter(Boolean);
     if (!normalized.length) return res.status(400).json({ error: 'text or texts is required' });
@@ -356,7 +423,9 @@ app.get('/api/search', async (req, res) => {
                 openclawFiles.push({ path: path.join(agentDir, f), file: f, agent: a, platform: 'openclaw' });
               }
             }
-          } catch { /* no sessions */ }
+          } catch {
+            /* no sessions */
+          }
         }
       })(),
       (async () => {
@@ -370,7 +439,12 @@ app.get('/api/search', async (req, res) => {
               const file = path.basename(rel);
               // Session list ids are the trailing UUID, not the full rollout-* stem
               const uuid = file.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
-              codexFiles.push({ path: path.join(dir, rel), file, sessionId: uuid ? uuid[1] : codexSessionIdFromFile(file), platform: 'codex' });
+              codexFiles.push({
+                path: path.join(dir, rel),
+                file,
+                sessionId: uuid ? uuid[1] : codexSessionIdFromFile(file),
+                platform: 'codex',
+              });
             }
           }
         } catch {}
@@ -404,7 +478,12 @@ app.get('/api/search', async (req, res) => {
             const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
             for (const f of entries) {
               if (f.isFile() && f.name.endsWith('.jsonl')) {
-                ompFiles.push({ path: path.join(slugDir, f.name), file: f.name, sessionId: ompSessionIdFromFile(f.name), platform: 'omp' });
+                ompFiles.push({
+                  path: path.join(slugDir, f.name),
+                  file: f.name,
+                  sessionId: ompSessionIdFromFile(f.name),
+                  platform: 'omp',
+                });
               }
             }
           }
@@ -428,9 +507,13 @@ app.get('/api/search', async (req, res) => {
         for await (const line of rl) {
           if (matches.length >= 3 && seen.size === keywords.length) break; // max 3 matches per session
           const lower = line.toLowerCase();
-          if (!keywords.some(kw => lower.includes(kw))) continue;
+          if (!keywords.some((kw) => lower.includes(kw))) continue;
           let rec;
-          try { rec = JSON.parse(line); } catch { continue; }
+          try {
+            rec = JSON.parse(line);
+          } catch {
+            continue;
+          }
 
           // Extract session id
           if (rec.type === 'session' && rec.id) sessionId = rec.id;
@@ -442,10 +525,14 @@ app.get('/api/search', async (req, res) => {
           let role = '';
           const msg = rec.message || rec.payload || {};
           role = msg.role || rec.type || '';
-          const content = Array.isArray(msg.content) ? msg.content : (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : []);
+          const content = Array.isArray(msg.content)
+            ? msg.content
+            : typeof msg.content === 'string'
+              ? [{ type: 'text', text: msg.content }]
+              : [];
           text = content
-            .filter(c => c.type === 'text' || c.type === 'input_text')
-            .map(c => c.text || '')
+            .filter((c) => c.type === 'text' || c.type === 'input_text')
+            .map((c) => c.text || '')
             .join(' ');
 
           const textLower = text.toLowerCase();
@@ -467,7 +554,13 @@ app.get('/api/search', async (req, res) => {
       }
 
       if (matches.length > 0 && seen.size === keywords.length) {
-        results.push({ sessionId, file: sf.file, platform: sf.platform, ...(sf.agent ? { agent: sf.agent } : {}), matches });
+        results.push({
+          sessionId,
+          file: sf.file,
+          platform: sf.platform,
+          ...(sf.agent ? { agent: sf.agent } : {}),
+          matches,
+        });
       }
     }
 
@@ -476,7 +569,7 @@ app.get('/api/search', async (req, res) => {
     if (platform === 'claude-code' || all) {
       const dir = dirFor('dirClaude', CLAUDE_CODE_DIR);
       const historyPath = path.join(path.dirname(dir), 'history.jsonl');
-      const liveSnippets = new Set(results.flatMap(r => r.matches.map(m => m.snippet)));
+      const liveSnippets = new Set(results.flatMap((r) => r.matches.map((m) => m.snippet)));
       const byProject = new Map(); // project → matches[]
       try {
         const stream = fs.createReadStream(historyPath, { encoding: 'utf8' });
@@ -484,12 +577,16 @@ app.get('/api/search', async (req, res) => {
         try {
           for await (const line of rl) {
             const lower = line.toLowerCase();
-            if (!keywords.every(kw => lower.includes(kw))) continue;
+            if (!keywords.every((kw) => lower.includes(kw))) continue;
             let rec;
-            try { rec = JSON.parse(line); } catch { continue; }
+            try {
+              rec = JSON.parse(line);
+            } catch {
+              continue;
+            }
             const text = typeof rec.display === 'string' ? rec.display : '';
             const textLower = text.toLowerCase();
-            if (!keywords.every(kw => textLower.includes(kw))) continue;
+            if (!keywords.every((kw) => textLower.includes(kw))) continue;
             const idx = textLower.indexOf(keywords[0]);
             const start = Math.max(0, idx - 40);
             const end = Math.min(text.length, idx + keywords[0].length + 60);
@@ -506,9 +603,18 @@ app.get('/api/search', async (req, res) => {
         }
         for (const [project, matches] of byProject) {
           if (results.length >= maxResults) break;
-          results.push({ sessionId: null, file: 'history.jsonl', platform: 'claude-code', project, history: true, matches });
+          results.push({
+            sessionId: null,
+            file: 'history.jsonl',
+            platform: 'claude-code',
+            project,
+            history: true,
+            matches,
+          });
         }
-      } catch { /* no history file */ }
+      } catch {
+        /* no history file */
+      }
     }
 
     // Hermes stores sessions in SQLite; merge its hits in all-platform mode
@@ -518,7 +624,9 @@ app.get('/api/search', async (req, res) => {
         if (remaining > 0) {
           results.push(...searchHermesSessions(dirFor('dirHermes', HERMES_DIR), q, remaining));
         }
-      } catch { /* no hermes db */ }
+      } catch {
+        /* no hermes db */
+      }
     }
 
     res.json(results);
@@ -613,7 +721,13 @@ app.get('/api/spawn-tree/:sessionId', async (req, res) => {
     }
     const node = findNode(full.trees, sid);
     const parent = findParent(full.trees, sid, null);
-    res.json({ node: node || null, parent: parent || null, totalSessions: full.totalSessions, totalSpawnCalls: full.totalSpawnCalls, matchedLinks: full.matchedLinks });
+    res.json({
+      node: node || null,
+      parent: parent || null,
+      totalSessions: full.totalSessions,
+      totalSpawnCalls: full.totalSpawnCalls,
+      matchedLinks: full.matchedLinks,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -706,7 +820,7 @@ app.get('/api/omp/sessions/:sessionId/children', async (req, res) => {
         timestamp: meta?.timestamp || null,
         lastActivity: meta?.lastActivity || null,
         messageCount: meta?.messageCount || 0,
-        toolCallCount: meta?.toolCallCount || 0
+        toolCallCount: meta?.toolCallCount || 0,
       });
     }
     children.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
@@ -812,7 +926,9 @@ app.get('/api/claude-code/sessions/:sessionId/children', async (req, res) => {
       let agentMeta = null;
       try {
         agentMeta = JSON.parse(await fsp.readFile(path.join(spawnDir, stem + '.meta.json'), 'utf8'));
-      } catch { /* absent or corrupt meta.json */ }
+      } catch {
+        /* absent or corrupt meta.json */
+      }
       children.push({
         name: stem,
         file: e.name,
@@ -822,7 +938,7 @@ app.get('/api/claude-code/sessions/:sessionId/children', async (req, res) => {
         messageCount: meta?.messageCount || 0,
         toolCallCount: meta?.toolCallCount || 0,
         agentType: agentMeta?.agentType || null,
-        description: agentMeta?.description || null
+        description: agentMeta?.description || null,
       });
     }
     children.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
@@ -977,7 +1093,10 @@ app.put('/api/library/:name', async (req, res) => {
       if (!newName) {
         return res.status(400).json({ error: 'Invalid newName: must match /^[a-z0-9][a-z0-9-]{0,63}$/' });
       }
-      const exists = await fsp.access(libraryFilePath(newName)).then(() => true, () => false);
+      const exists = await fsp.access(libraryFilePath(newName)).then(
+        () => true,
+        () => false
+      );
       if (exists) return res.status(409).json({ error: `Prompt "${newName}" already exists` });
     }
 
@@ -995,7 +1114,10 @@ app.put('/api/library/:name', async (req, res) => {
 
     // Refresh installed copies; a rename also renames them
     for (const target of Object.keys(INSTALL_TARGETS)) {
-      const wasInstalled = await fsp.access(installedFilePath(target, name)).then(() => true, () => false);
+      const wasInstalled = await fsp.access(installedFilePath(target, name)).then(
+        () => true,
+        () => false
+      );
       if (!wasInstalled) continue;
       if (newName !== name) await uninstallLibraryPrompt(name, [target]);
       await installLibraryPrompt({ name: newName, description: meta.description, content: nextContent }, [target]);
@@ -1137,30 +1259,37 @@ app.post('/api/library/import-fabric', async (req, res) => {
     const skipped = [];
     const failed = [];
     for (let i = 0; i < names.length; i += 8) {
-      await Promise.all(names.slice(i, i + 8).map(async (rawName) => {
-        const name = fabricLibraryName(rawName);
-        if (!name) return failed.push(rawName);
-        if (existing.has(name)) return skipped.push(rawName);
-        try {
-          const content = await fetchFabricPattern(rawName);
-          if (!content.trim()) throw new Error('empty pattern');
-          const meta = {
-            description: fabricDescription(content),
-            tags: ['fabric'],
-            source: 'fabric',
-            createdAt: new Date().toISOString(),
-          };
-          await fsp.writeFile(libraryFilePath(name), serializeLibraryFile(meta, content), { encoding: 'utf8', flag: 'wx' });
-          existing.add(name);
-          imported.push(rawName);
-        } catch (error) {
-          if (error.code === 'EEXIST') skipped.push(rawName);
-          else failed.push(rawName);
-        }
-      }));
+      await Promise.all(
+        names.slice(i, i + 8).map(async (rawName) => {
+          const name = fabricLibraryName(rawName);
+          if (!name) return failed.push(rawName);
+          if (existing.has(name)) return skipped.push(rawName);
+          try {
+            const content = await fetchFabricPattern(rawName);
+            if (!content.trim()) throw new Error('empty pattern');
+            const meta = {
+              description: fabricDescription(content),
+              tags: ['fabric'],
+              source: 'fabric',
+              createdAt: new Date().toISOString(),
+            };
+            await fsp.writeFile(libraryFilePath(name), serializeLibraryFile(meta, content), {
+              encoding: 'utf8',
+              flag: 'wx',
+            });
+            existing.add(name);
+            imported.push(rawName);
+          } catch (error) {
+            if (error.code === 'EEXIST') skipped.push(rawName);
+            else failed.push(rawName);
+          }
+        })
+      );
     }
     if (imported.length) {
-      commitLibrary(`import: ${imported.length === 1 ? fabricLibraryName(imported[0]) : `${imported.length} fabric patterns`}`);
+      commitLibrary(
+        `import: ${imported.length === 1 ? fabricLibraryName(imported[0]) : `${imported.length} fabric patterns`}`
+      );
     }
     res.json({ imported, skipped, failed });
   } catch (error) {
@@ -1235,7 +1364,9 @@ app.get('/api/backup/status', async (req, res) => {
         bytes += st.size;
         if (st.mtimeMs > newest) newest = st.mtimeMs;
       }
-    } catch { /* no archive yet */ }
+    } catch {
+      /* no archive yet */
+    }
     res.json({ archiveDir: ARCHIVE_DIR, files, bytes, lastBackup: newest ? new Date(newest).toISOString() : null });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1254,7 +1385,7 @@ app.get('/api/backup/status', async (req, res) => {
 //   event: error         data: {"error": "..."}
 
 app.get('/api/watch', async (req, res) => {
-  const platform  = req.query.platform || 'openclaw';
+  const platform = req.query.platform || 'openclaw';
   const agentName = sanitizeAgentName(req.query.agent || '');
   const sessionId = sanitizeSessionId(req.query.sessionId || '');
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
@@ -1318,7 +1449,9 @@ app.get('/api/watch', async (req, res) => {
       sendHermes('error', { error: e.message });
     }
 
-    const newMsgStmt = db ? db.prepare('SELECT * FROM messages WHERE session_id = ? AND timestamp > ? ORDER BY timestamp ASC') : null;
+    const newMsgStmt = db
+      ? db.prepare('SELECT * FROM messages WHERE session_id = ? AND timestamp > ? ORDER BY timestamp ASC')
+      : null;
 
     function checkNewMessages() {
       if (!db || !newMsgStmt) return;
@@ -1367,8 +1500,16 @@ app.get('/api/watch', async (req, res) => {
       closed = true;
       clearTimeout(debounceTimer);
       clearInterval(pingTimer);
-      if (watcher) try { watcher.close(); } catch {}
-      if (db) { try { db.close(); } catch {} db = null; }
+      if (watcher)
+        try {
+          watcher.close();
+        } catch {}
+      if (db) {
+        try {
+          db.close();
+        } catch {}
+        db = null;
+      }
     });
     return;
   }
@@ -1385,7 +1526,7 @@ app.get('/api/watch', async (req, res) => {
       await fd.close();
     }
     const text = buf.toString('utf8');
-    const lines = text.split('\n').filter(l => l.trim());
+    const lines = text.split('\n').filter((l) => l.trim());
     return { lines, newOffset: stat.size };
   }
 
@@ -1395,7 +1536,11 @@ app.get('/api/watch', async (req, res) => {
     let sessionMeta = null;
     for (const line of lines) {
       let rec;
-      try { rec = JSON.parse(line); } catch { continue; }
+      try {
+        rec = JSON.parse(line);
+      } catch {
+        continue;
+      }
       if (platform === 'openclaw') {
         if (rec.type === 'session') {
           sessionMeta = { id: rec.id, cwd: rec.cwd, timestamp: rec.timestamp };
@@ -1440,7 +1585,7 @@ app.get('/api/watch', async (req, res) => {
     // Count existing messages without sending them (client already has them)
     const { lines } = await readNewLines(0).then(async () => {
       const all = await fsp.readFile(filePath, 'utf8');
-      const ls = all.split('\n').filter(l => l.trim());
+      const ls = all.split('\n').filter((l) => l.trim());
       return { lines: ls };
     });
     const { messages: existingMsgs } = parseLines(lines);

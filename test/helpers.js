@@ -1,5 +1,3 @@
-'use strict';
-
 // Test harness: boots an isolated AgentXRay server against a throwaway copy of
 // test/fixtures/home. Every data dir (and HOME itself, for the ~/.agentxray and
 // ~/.claude.json reads) points into the copy, so tests never touch real user
@@ -52,9 +50,13 @@ async function spawnOnce(home, port) {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let stderr = '';
-  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
   let exited = false;
-  child.once('exit', () => { exited = true; });
+  child.once('exit', () => {
+    exited = true;
+  });
 
   const deadline = Date.now() + 15000;
   while (Date.now() < deadline) {
@@ -65,7 +67,9 @@ async function spawnOnce(home, port) {
         await res.json();
         return child;
       }
-    } catch { /* not listening yet */ }
+    } catch {
+      /* not listening yet */
+    }
     await sleep(60);
   }
   child.kill('SIGKILL');

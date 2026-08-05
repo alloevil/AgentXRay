@@ -1,5 +1,3 @@
-'use strict';
-
 // Integration tests: each describe block gets a hermetic server whose HOME is
 // a temp copy of test/fixtures/home. The read-only groups share one server;
 // groups that mutate global stores (library installs, backup archive) start
@@ -19,13 +17,20 @@ const OMP1 = '019a0000-0000-7000-8000-00000000aaaa';
 const OMP2 = '019a0000-0000-7000-8000-00000000bbbb';
 
 async function exists(p) {
-  return fsp.access(p).then(() => true, () => false);
+  return fsp.access(p).then(
+    () => true,
+    () => false
+  );
 }
 
 describe('AgentXRay API', () => {
   let srv;
-  before(async () => { srv = await startServer(); });
-  after(async () => { await srv.stop(); });
+  before(async () => {
+    srv = await startServer();
+  });
+  after(async () => {
+    await srv.stop();
+  });
 
   it('GET /api/version returns a boot id', async () => {
     const body = await getJson(srv.base, '/api/version');
@@ -37,7 +42,10 @@ describe('AgentXRay API', () => {
     it('lists sessions newest-first with metadata', async () => {
       const sessions = await getJson(srv.base, '/api/codex/sessions');
       assert.equal(sessions.length, 2);
-      assert.deepEqual(sessions.map((s) => s.id), [CODEX2, CODEX1]);
+      assert.deepEqual(
+        sessions.map((s) => s.id),
+        [CODEX2, CODEX1]
+      );
       const s1 = sessions[1];
       assert.equal(s1.timestamp, '2026-01-15T10:00:00.000Z');
       assert.equal(s1.cwd, '/fixtures/project-alpha');
@@ -70,7 +78,10 @@ describe('AgentXRay API', () => {
     it('lists sessions without leaking subagent transcripts', async () => {
       const sessions = await getJson(srv.base, '/api/claude-code/sessions');
       assert.equal(sessions.length, 2);
-      assert.deepEqual(sessions.map((s) => s.id), [CLAUDE_B, CLAUDE_A]);
+      assert.deepEqual(
+        sessions.map((s) => s.id),
+        [CLAUDE_B, CLAUDE_A]
+      );
       const a = sessions[1];
       assert.equal(a.toolCallCount, 1);
       assert.equal(a.toolResultCount, 1);
@@ -105,7 +116,10 @@ describe('AgentXRay API', () => {
       assert.equal(child.messageCount, 2);
 
       const detail = await getJson(srv.base, `/api/claude-code/sessions/${CLAUDE_A}/children/agent-fx001`);
-      assert.deepEqual(detail.messages.map((m) => m.role), ['user', 'assistant']);
+      assert.deepEqual(
+        detail.messages.map((m) => m.role),
+        ['user', 'assistant']
+      );
       assert.equal(detail.messages[1].content[0].text, 'hello');
     });
 
@@ -119,7 +133,10 @@ describe('AgentXRay API', () => {
     it('lists sessions with title, cost-bearing usage and tool counts', async () => {
       const sessions = await getJson(srv.base, '/api/omp/sessions');
       assert.equal(sessions.length, 2);
-      assert.deepEqual(sessions.map((s) => s.id), [OMP2, OMP1]);
+      assert.deepEqual(
+        sessions.map((s) => s.id),
+        [OMP2, OMP1]
+      );
       const s1 = sessions[1];
       assert.equal(s1.title, 'Fixture OMP Session');
       assert.equal(s1.toolCallCount, 1);
@@ -207,7 +224,9 @@ describe('AgentXRay API', () => {
       assert.equal(beforeData.groups[0].directory, '/fixtures/project-alpha');
 
       // The duplicate text lives in both codex sessions: one hide removes both
-      const hideRes = await sendJson(srv.base, 'POST', '/api/prompts/hidden', { text: 'fixture: duplicate-prompt-omega' });
+      const hideRes = await sendJson(srv.base, 'POST', '/api/prompts/hidden', {
+        text: 'fixture: duplicate-prompt-omega',
+      });
       assert.equal(hideRes.added, 1);
       assert.match(hideRes.hash, /^[0-9a-f]{16}$/);
 
@@ -272,7 +291,9 @@ describe('AgentXRay API', () => {
       const chats = spans.filter((s) => s.name.startsWith('chat '));
       assert.equal(chats.length, 2);
       for (const c of chats) assert.equal(c.parentSpanId, roots[0].spanId);
-      const chatAttrs = Object.fromEntries(chats[0].attributes.map((a) => [a.key, a.value.stringValue ?? a.value.intValue]));
+      const chatAttrs = Object.fromEntries(
+        chats[0].attributes.map((a) => [a.key, a.value.stringValue ?? a.value.intValue])
+      );
       assert.equal(chatAttrs['gen_ai.request.model'], 'fixture/model-x');
       assert.equal(chatAttrs['gen_ai.usage.input_tokens'], '100');
 
@@ -288,27 +309,44 @@ describe('AgentXRay API', () => {
 
 describe('library', () => {
   let srv;
-  before(async () => { srv = await startServer(); });
-  after(async () => { await srv.stop(); });
+  before(async () => {
+    srv = await startServer();
+  });
+  after(async () => {
+    await srv.stop();
+  });
 
   it('supports CRUD, install into platform command dirs, and usage stats', async () => {
     const empty = await getJson(srv.base, '/api/library');
     assert.deepEqual(empty.prompts, []);
 
-    const created = await sendJson(srv.base, 'POST', '/api/library', {
-      name: 'fixture-prompt',
-      description: 'Fixture prompt for tests',
-      tags: ['fixture', 'test'],
-      content: 'Run the fixture checks and report.',
-    }, 201);
+    const created = await sendJson(
+      srv.base,
+      'POST',
+      '/api/library',
+      {
+        name: 'fixture-prompt',
+        description: 'Fixture prompt for tests',
+        tags: ['fixture', 'test'],
+        content: 'Run the fixture checks and report.',
+      },
+      201
+    );
     assert.equal(created.prompt.name, 'fixture-prompt');
     assert.deepEqual(created.prompt.tags, ['fixture', 'test']);
     assert.deepEqual(created.prompt.installed, { claude: false, codex: false, omp: false });
 
     // Duplicate create is rejected
-    await sendJson(srv.base, 'POST', '/api/library', {
-      name: 'fixture-prompt', content: 'x',
-    }, 409);
+    await sendJson(
+      srv.base,
+      'POST',
+      '/api/library',
+      {
+        name: 'fixture-prompt',
+        content: 'x',
+      },
+      409
+    );
 
     const listed = await getJson(srv.base, '/api/library');
     assert.equal(listed.prompts.length, 1);
@@ -320,7 +358,9 @@ describe('library', () => {
     assert.equal(updated.prompt.content.trim(), 'Run the fixture checks and report.');
 
     // Install lands real files inside the temp HOME copy — never the real ~
-    const installed = await sendJson(srv.base, 'POST', '/api/library/fixture-prompt/install', { targets: ['claude', 'codex'] });
+    const installed = await sendJson(srv.base, 'POST', '/api/library/fixture-prompt/install', {
+      targets: ['claude', 'codex'],
+    });
     assert.deepEqual(installed.installed, { claude: true, codex: true, omp: false });
     const claudeCmd = path.join(srv.home, '.claude', 'commands', 'fixture-prompt.md');
     const codexCmd = path.join(srv.home, '.codex', 'prompts', 'fixture-prompt.md');
@@ -349,8 +389,12 @@ describe('library', () => {
 
 describe('backup', () => {
   let srv;
-  before(async () => { srv = await startServer(); });
-  after(async () => { await srv.stop(); });
+  before(async () => {
+    srv = await startServer();
+  });
+  after(async () => {
+    await srv.stop();
+  });
 
   it('copies every session log once, then skips everything on the second run', async () => {
     const first = await sendJson(srv.base, 'POST', '/api/backup', undefined);

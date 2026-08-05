@@ -1,4 +1,3 @@
-'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -29,9 +28,7 @@ test('hashPromptText is stable and normalization-insensitive', () => {
 
 test('extractErrorSnippet skips trivial structural lines including lone {', () => {
   // Historical case: JSON-body error whose first line is a lone brace
-  const snippet = textUtils.extractErrorSnippet([
-    { type: 'text', text: '{\n  "error": "rate limit exceeded"\n}' },
-  ]);
+  const snippet = textUtils.extractErrorSnippet([{ type: 'text', text: '{\n  "error": "rate limit exceeded"\n}' }]);
   assert.equal(snippet, '"error": "rate limit exceeded"');
 });
 
@@ -104,8 +101,16 @@ test('repairLlmJsonQuotes escapes content quotes, keeps terminators', () => {
 // --- public/js/pure.js ---
 
 test('pure.js exports the moved helpers via require', () => {
-  for (const name of ['firstInformativeLine', 'formatDurationCompact', 'formatBytes', 'formatCost',
-    'buildTraceTurns', 'parseTimestampMs', 'getTextContent', 'clusterPrefillContent']) {
+  for (const name of [
+    'firstInformativeLine',
+    'formatDurationCompact',
+    'formatBytes',
+    'formatCost',
+    'buildTraceTurns',
+    'parseTimestampMs',
+    'getTextContent',
+    'clusterPrefillContent',
+  ]) {
     assert.equal(typeof pure[name], 'function', `${name} missing`);
   }
 });
@@ -123,8 +128,8 @@ test('formatDurationCompact edge cases', () => {
   assert.equal(pure.formatDurationCompact(-5), '0s');
   assert.equal(pure.formatDurationCompact(NaN), '0s');
   assert.equal(pure.formatDurationCompact(Infinity), '0s');
-  assert.equal(pure.formatDurationCompact(1234), '1.2s');   // sub-10s: one decimal
-  assert.equal(pure.formatDurationCompact(9990), '10s');    // rounds to 10 at the boundary
+  assert.equal(pure.formatDurationCompact(1234), '1.2s'); // sub-10s: one decimal
+  assert.equal(pure.formatDurationCompact(9990), '10s'); // rounds to 10 at the boundary
   assert.equal(pure.formatDurationCompact(45000), '45s');
   assert.equal(pure.formatDurationCompact(60000), '1m');
   assert.equal(pure.formatDurationCompact(90000), '1m30s');
@@ -150,11 +155,14 @@ test('parseTimestampMs', () => {
 });
 
 test('getTextContent joins text parts only', () => {
-  assert.equal(pure.getTextContent([
-    { type: 'text', text: 'a' },
-    { type: 'toolCall', id: 'x' },
-    { type: 'text', text: 'b' },
-  ]), 'a\n\nb');
+  assert.equal(
+    pure.getTextContent([
+      { type: 'text', text: 'a' },
+      { type: 'toolCall', id: 'x' },
+      { type: 'text', text: 'b' },
+    ]),
+    'a\n\nb'
+  );
   assert.equal(pure.getTextContent(null), '');
 });
 
@@ -179,20 +187,34 @@ function syntheticMessages() {
     // Reasoning between user and assistant must NOT advance the clock:
     // the chat span still starts at the user message.
     { id: 'r1', role: 'reasoning', timestamp: iso(2000), content: [{ type: 'text', text: 'thinking' }] },
-    { id: 'a1', role: 'assistant', timestamp: iso(5000), model: 'vendor/model-x', content: [{ type: 'text', text: 'answer' }] },
+    {
+      id: 'a1',
+      role: 'assistant',
+      timestamp: iso(5000),
+      model: 'vendor/model-x',
+      content: [{ type: 'text', text: 'answer' }],
+    },
     // Standalone toolCall→toolResult pair (error)
     { id: 'tc1', role: 'toolCall', timestamp: iso(6000), toolCallId: 'call-1', toolName: 'bash' },
     { id: 'tr1', role: 'toolResult', timestamp: iso(8000), toolCallId: 'call-1', isError: true },
     // Second turn
     { id: 'u2', role: 'user', timestamp: iso(20000), content: [{ type: 'text', text: 'second question' }] },
     // Content-part tool_use / tool_result pairing (claude-code shape)
-    { id: 'a2', role: 'assistant', timestamp: iso(23000), content: [
-      { type: 'text', text: 'using a tool' },
-      { type: 'tool_use', id: 'call-2', name: 'Read' },
-    ] },
-    { id: 'u3', role: 'user', timestamp: iso(25000), content: [
-      { type: 'tool_result', tool_use_id: 'call-2', is_error: false },
-    ] },
+    {
+      id: 'a2',
+      role: 'assistant',
+      timestamp: iso(23000),
+      content: [
+        { type: 'text', text: 'using a tool' },
+        { type: 'tool_use', id: 'call-2', name: 'Read' },
+      ],
+    },
+    {
+      id: 'u3',
+      role: 'user',
+      timestamp: iso(25000),
+      content: [{ type: 'tool_result', tool_use_id: 'call-2', is_error: false }],
+    },
   ];
 }
 
@@ -266,14 +288,18 @@ test('buildTraceTurns attaches agentSpans to the turn they started in', () => {
 
 test('buildTraceTurns drops turns without spans and sorts spans by start', () => {
   // A lone user message with no activity yields no turns
-  assert.deepEqual(pure.buildTraceTurns([
-    { id: 'u', role: 'user', timestamp: iso(0), content: [{ type: 'text', text: 'hi' }] },
-  ]), []);
+  assert.deepEqual(
+    pure.buildTraceTurns([{ id: 'u', role: 'user', timestamp: iso(0), content: [{ type: 'text', text: 'hi' }] }]),
+    []
+  );
   // Messages without timestamps are ignored entirely
   assert.deepEqual(pure.buildTraceTurns([{ id: 'x', role: 'user', content: [] }]), []);
   const turns = pure.buildTraceTurns(syntheticMessages());
   for (const tn of turns) {
     const starts = tn.spans.map((s) => s.start);
-    assert.deepEqual(starts, [...starts].sort((a, b) => a - b));
+    assert.deepEqual(
+      starts,
+      [...starts].sort((a, b) => a - b)
+    );
   }
 });

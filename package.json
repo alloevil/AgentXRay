@@ -16,7 +16,9 @@
   ],
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "lint": "biome check .",
+    "format": "biome check --write ."
   },
   "keywords": [
     "agent",
@@ -36,5 +38,8 @@
   },
   "engines": {
     "node": ">=18.17"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.7"
   }
 }
