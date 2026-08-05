@@ -12,13 +12,16 @@
     "lib",
     "public",
     "bin",
-    "README.md"
+    "README.md",
+    "frontend/dist"
   ],
   "scripts": {
     "start": "node server.js",
+    "build:ui": "cd frontend && npm run build",
     "test": "node --test test/*.test.js",
     "lint": "biome check .",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "prepublishOnly": "npm run build:ui"
   },
   "keywords": [
     "agent",

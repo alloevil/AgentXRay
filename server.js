@@ -118,6 +118,9 @@ const PORT = process.env.PORT || 3800;
 // history (and ?dir= reads) with zero auth — opt into LAN via HOST=0.0.0.0
 const HOST = process.env.HOST || '127.0.0.1';
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const DIST_DIR = path.join(__dirname, 'frontend', 'dist');
+// Serve the built React UI when present; the legacy vanilla UI stays at /legacy.
+const HAS_DIST = fs.existsSync(path.join(DIST_DIR, 'index.html'));
 
 // Frontend staleness detection: the SPA polls this and prompts a reload
 // when the serving process (and thus possibly the code) has changed.
@@ -126,7 +129,12 @@ app.get('/api/version', (req, res) => {
   res.json({ bootId: SERVER_BOOT_ID });
 });
 
-app.use(express.static(PUBLIC_DIR, { maxAge: 0, etag: false, lastModified: false }));
+if (HAS_DIST) {
+  app.use(express.static(DIST_DIR, { maxAge: 0, etag: false, lastModified: false }));
+  app.use('/legacy', express.static(PUBLIC_DIR, { maxAge: 0, etag: false, lastModified: false }));
+} else {
+  app.use(express.static(PUBLIC_DIR, { maxAge: 0, etag: false, lastModified: false }));
+}
 app.use(express.json({ limit: '256kb' }));
 
 // Disable all caching
@@ -1649,7 +1657,10 @@ app.get('/api/watch', async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  if (HAS_DIST && req.path.startsWith('/legacy')) {
+    return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  }
+  res.sendFile(path.join(HAS_DIST ? DIST_DIR : PUBLIC_DIR, 'index.html'));
 });
 
 app.listen(PORT, HOST, () => {

@@ -15,5 +15,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
+      - run: cd frontend && npm ci && cd ..
+      - run: npm run build:ui
       - run: npx biome check .
       - run: npm test
