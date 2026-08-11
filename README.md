@@ -4,6 +4,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Node.js-18+-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js" />
+  <a href="https://github.com/alloevil/AgentXRay/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/alloevil/AgentXRay/test.yml?style=flat&logo=githubactions&logoColor=white&label=tests" alt="Tests" /></a>
+  <a href="https://github.com/alloevil/AgentXRay/releases/latest"><img src="https://img.shields.io/github/v/release/alloevil/AgentXRay?style=flat&logo=github&color=blue" alt="Release" /></a>
   <img src="https://img.shields.io/badge/license-MIT-00ccff?style=flat" alt="License" />
   <img src="https://img.shields.io/github/stars/alloevil/AgentXRay?style=flat&logo=github&color=yellow" alt="Stars" />
   <img src="https://img.shields.io/badge/framework-None-6e7681?style=flat" alt="No framework" />
