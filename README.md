@@ -92,8 +92,8 @@ Configure platform directories from the UI. Changes are saved to localStorage â€
 **Option 1 â€” npx from npm** (once the package is published to npm)
 
 ```bash
-npx agent-xray            # default http://localhost:3800
-npx agent-xray --port 3900 --host 127.0.0.1
+npx @alloevil/agent-xray            # default http://localhost:3800
+npx @alloevil/agent-xray --port 3900 --host 127.0.0.1
 ```
 
 A global install (`npm i -g agent-xray`) exposes the same launcher as `agentxray`.

@@ -1,6 +1,6 @@
 {
-  "name": "agent-xray",
-  "version": "1.12.0",
+  "name": "@alloevil/agent-xray",
+  "version": "1.12.1",
   "description": "Web dashboard for viewing AI agent session logs — supports OpenClaw, Codex, Claude Code, and Hermes",
   "main": "server.js",
   "bin": {

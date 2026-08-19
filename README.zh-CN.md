@@ -66,8 +66,8 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude C
 **方式一 — 通过 npm 使用 npx**（包发布到 npm 后可用）
 
 ```bash
-npx agent-xray            # 默认 http://localhost:3800
-npx agent-xray --port 3900 --host 127.0.0.1
+npx @alloevil/agent-xray            # 默认 http://localhost:3800
+npx @alloevil/agent-xray --port 3900 --host 127.0.0.1
 ```
 
 全局安装（`npm i -g agent-xray`）后可直接使用 `agentxray` 命令。
