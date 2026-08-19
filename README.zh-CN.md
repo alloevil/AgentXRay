@@ -61,7 +61,7 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude C
 
 ## 快速开始
 
-**方式一 — npx**（无需克隆；发布到 npm 后可用）
+**方式一 — 通过 npm 使用 npx**（包发布到 npm 后可用）
 
 ```bash
 npx agent-xray            # 默认 http://localhost:3800
@@ -70,12 +70,20 @@ npx agent-xray --port 3900 --host 127.0.0.1
 
 全局安装（`npm i -g agent-xray`）后可直接使用 `agentxray` 命令。
 
-**方式二 — 源码运行**
+**方式二 — 直接从 GitHub 运行 npx**（现在即可用，无需克隆）
 
 ```bash
-git clone https://github.com/alloevil/agent-xray.git
-cd agent-xray
-npm install
+npx github:alloevil/AgentXRay
+```
+
+首次运行会在本地构建 Web UI（约一分钟），之后会复用缓存。
+
+**方式三 — 源码运行**
+
+```bash
+git clone https://github.com/alloevil/AgentXRay.git
+cd AgentXRay
+npm install               # 首次安装会自动构建 Web UI
 npm start
 ```
 

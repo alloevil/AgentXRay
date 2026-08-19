@@ -14,8 +14,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
-      - run: cd frontend && npm ci && cd ..
-      - run: npm run build:ui
+      - run: npm ci  # prepare script builds the web UI
       - run: npx biome check .
       - run: npm test

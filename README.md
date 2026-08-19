@@ -85,7 +85,7 @@ Configure platform directories from the UI. Changes are saved to localStorage �
 
 ## Quick Start
 
-**Option 1 — npx** (no clone; available once the package is published to npm)
+**Option 1 — npx from npm** (once the package is published to npm)
 
 ```bash
 npx agent-xray            # default http://localhost:3800
@@ -94,12 +94,20 @@ npx agent-xray --port 3900 --host 127.0.0.1
 
 A global install (`npm i -g agent-xray`) exposes the same launcher as `agentxray`.
 
-**Option 2 — from source**
+**Option 2 — npx straight from GitHub** (works today, no clone)
+
+```bash
+npx github:alloevil/AgentXRay
+```
+
+The first run builds the web UI locally (takes a minute); later runs reuse the cached install.
+
+**Option 3 — from source**
 
 ```bash
 git clone https://github.com/alloevil/AgentXRay.git
 cd AgentXRay
-npm install
+npm install               # also builds the web UI on first install
 npm start
 ```
 
