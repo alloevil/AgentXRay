@@ -1,6 +1,6 @@
 # AgentXRay
 
-AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code**、**Hermes** 和 **OMP** —— 一个界面全搞定。
+AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code**、**Hermes**、**OMP** 和 **DeepSeek Harness** —— 一个界面全搞定。
 
 [English](README.md) | 中文
 
@@ -10,14 +10,14 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude C
 
 ## 功能特性
 
-- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes、OMP 的会话日志
+- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes、OMP、DeepSeek Harness 的会话日志（dsh 的多帧 zstd 压缩日志透明解压）
 - **会话浏览** — 浏览 Agent 列表，搜索/过滤会话，查看消息历史
 - **工具调用检查** — 可展开的工具调用详情，包含参数和返回结果
 - **Trace 视图** — 每轮对话的耗时瀑布图：模型推理（蓝）与工具执行（绿，出错为红）一目了然，点击色条跳转到对应消息
 - **Prompt 提取** — 按 session 提取全部真人 prompt（自动过滤工具结果、斜杠命令、系统注入等噪音），按工作目录分组，支持搜索 / JSON 导出 / 复制
 - **Prompt 优化** — 相似 prompt 自动聚类成模板，结合 session 效果归因（轮次、工具调用、错误率），通过本机 `claude` CLI 生成改写建议
 - **Prompt 资产库** — 把值得复用的 prompt 收进 `~/.agentxray/library`，支持标签 / 编辑 / 搜索，一键安装为 Claude Code、Codex、OMP 的原生 slash command（`$ARGUMENTS` 原样保留，在目标 CLI 里 `/名字 参数` 直接可用）
-- **全局搜索** — 一个搜索框同时搜五个平台，多关键词 AND 匹配，每条结果带平台色标 —— 包含从被 Claude Code 清理掉的会话里恢复出来的 prompt
+- **全局搜索** — 一个搜索框同时搜六个平台，多关键词 AND 匹配，每条结果带平台色标 —— 包含从被 Claude Code 清理掉的会话里恢复出来的 prompt
 - **会话洞察** — 聚合分析面板：工具统计、错误聚类、每日趋势
 - **Spawn 追踪** — 检测并导航父子 Agent 之间的调用关系
 - **OMP 子 Agent** — OMP 会话派生的子 Agent 会在摘要区以标签列出，点击即可查看子 Agent 的完整对话
@@ -51,7 +51,7 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude C
 
 ### 多平台支持
 
-一键切换 OpenClaw、Codex、Claude Code、Hermes。每个平台的会话均从其原生日志格式解析。
+一键切换 OpenClaw、Codex、Claude Code、Hermes、OMP、DeepSeek Harness。每个平台的会话均从其原生日志格式解析。
 
 ![Codex View](screenshots/codex-view.png)
 
@@ -95,7 +95,7 @@ npm start
 
 ### 基本流程
 
-1. **选择平台** — 点击顶部 `OpenClaw`、`Codex`、`Claude Code` 或 `Hermes`
+1. **选择平台** — 点击顶部 `OpenClaw`、`Codex`、`Claude Code`、`Hermes`、`OMP` 或 `DeepSeek Harness`
 2. **选择 Agent** — OpenClaw 平台下，从下拉菜单选择 Agent（如 `xiaot`、`mimo`）
 3. **浏览会话** — 会话按时间倒序排列，每张卡片显示：
    - 时间戳和状态（`active` / `archived`）
@@ -140,6 +140,7 @@ npm start
 | Claude Code | `~/.claude/projects`          |
 | Hermes      | `~/.hermes`                   |
 | OMP         | `~/.omp/agent/sessions`       |
+| DeepSeek Harness | `~/.dsh/sessions`（同时识别 `DSH_HOME`） |
 
 ### 自定义目录
 
@@ -153,6 +154,7 @@ CODEX_DIR=/custom/path/codex \
 CLAUDE_CODE_DIR=/custom/path/claude \
 HERMES_DIR=/custom/path/hermes \
 OMP_DIR=/custom/path/omp \
+DSH_DIR=/custom/path/dsh/sessions \
 npm start
 ```
 
@@ -173,6 +175,8 @@ npm start
 | `GET /api/hermes/sessions/:id` | 获取 Hermes 会话消息详情 |
 | `GET /api/omp/sessions` | 获取 OMP（oh-my-pi）会话列表 |
 | `GET /api/omp/sessions/:id` | 获取 OMP 会话消息详情 |
+| `GET /api/dsh/sessions` | 获取 DeepSeek Harness 会话列表 |
+| `GET /api/dsh/sessions/:id` | 获取 DeepSeek Harness 会话消息详情 |
 | `GET /api/spawn-map` | 获取 Agent spawn 关系图 |
 | `GET /api/insights` | 聚合分析（工具统计、错误聚类、趋势） |
 | `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
@@ -209,6 +213,9 @@ npm start
 | Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
 | Hermes | SQLite | `~/.hermes/state.db` |
 | OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
+| DeepSeek Harness | JSONL / zstd 压缩 JSONL | `~/.dsh/sessions/{project}/{id}/session.jsonl[.zstd]` |
+
+dsh 的 `.jsonl.zstd` 日志是多个独立 Zstandard 帧的串联（每个持久化批次一帧）；AgentXRay 会扫描帧边界并逐帧解压，崩溃残留的尾部不完整帧会被容忍丢弃。读取压缩日志需要 Node.js ≥ 22.15（内置 zstd）；未压缩的 `session.jsonl` 在任何受支持的 Node 上都能读。
 
 启用「包含已归档」后，还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话。
 

@@ -37,6 +37,7 @@ export const EMPTY_SETTINGS: DirSettings = {
   claudeCodeDir: '',
   hermesDir: '',
   ompDir: '',
+  dshDir: '',
 };
 
 export function dirForPlatform(settings: DirSettings, platform: Platform): string {
@@ -51,6 +52,8 @@ export function dirForPlatform(settings: DirSettings, platform: Platform): strin
       return settings.hermesDir;
     case 'omp':
       return settings.ompDir;
+    case 'dsh':
+      return settings.dshDir;
   }
 }
 
@@ -71,6 +74,7 @@ function loadPersisted(): { settings: DirSettings; platform: Platform; hasStored
       result.settings.claudeCodeDir = typeof parsed.claudeCodeDir === 'string' ? parsed.claudeCodeDir : '';
       result.settings.hermesDir = typeof parsed.hermesDir === 'string' ? parsed.hermesDir : '';
       result.settings.ompDir = typeof parsed.ompDir === 'string' ? parsed.ompDir : '';
+      result.settings.dshDir = typeof parsed.dshDir === 'string' ? parsed.dshDir : '';
       if (PLATFORMS.includes(parsed.platform as Platform)) {
         result.platform = parsed.platform as Platform;
         result.hasStoredPlatform = true;

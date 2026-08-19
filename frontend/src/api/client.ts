@@ -39,6 +39,7 @@ export interface DirSettings {
   claudeCodeDir: string;
   hermesDir: string;
   ompDir: string;
+  dshDir: string;
 }
 
 type ParamValue = string | number | boolean | undefined | null;
@@ -218,6 +219,7 @@ export async function getToolsAudit(opts: {
     dirCodex: opts.dirs?.codexDir,
     dirClaude: opts.dirs?.claudeCodeDir,
     dirOmp: opts.dirs?.ompDir,
+    dirDsh: opts.dirs?.dshDir,
     [opts.refresh ? 'refresh' : 'cached']: true,
   });
   if (DEMO) return null; // no persisted audit in demo mode
@@ -243,6 +245,7 @@ export function searchSessions(q: string, dirs?: Partial<DirSettings>): Promise<
       dirClaude: dirs?.claudeCodeDir,
       dirHermes: dirs?.hermesDir,
       dirOmp: dirs?.ompDir,
+      dirDsh: dirs?.dshDir,
     })
   );
 }

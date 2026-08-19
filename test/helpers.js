@@ -36,6 +36,7 @@ function serverEnv(home, port) {
     CLAUDE_CODE_DIR: path.join(home, '.claude', 'projects'),
     OMP_DIR: path.join(home, '.omp', 'agent', 'sessions'),
     HERMES_DIR: path.join(home, '.hermes'),
+    DSH_DIR: path.join(home, '.dsh', 'sessions'),
     AGENTXRAY_LIBRARY_DIR: path.join(home, '.agentxray', 'library'),
     AGENTXRAY_ARCHIVE_DIR: path.join(home, '.agentxray', 'archive'),
   };

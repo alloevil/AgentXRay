@@ -11,6 +11,7 @@ const {
   CLAUDE_CODE_DIR,
   HERMES_DIR,
   OMP_DIR,
+  DSH_DIR,
   LIBRARY_DIR,
   ARCHIVE_DIR,
   sessionMetaCache,
@@ -35,6 +36,15 @@ const {
   normalizeCodexRecord,
   parseCodexSessionFile,
 } = require('./lib/platforms/codex');
+const {
+  findDshSessionFile,
+  listDshSessions,
+  readDshSessionLines,
+  decompressDshLog,
+  scanZstdFrames,
+  normalizeDshEvents,
+  parseDshSessionFile,
+} = require('./lib/platforms/dsh');
 const {
   ompSessionIdFromFile,
   findOmpSessionFile,
@@ -271,13 +281,14 @@ app.get('/api/tools/audit', async (req, res) => {
     }
 
     // Per-platform dir overrides, mirroring /api/search: `dir` applies to the
-    // selected platform; in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirOmp.
+    // selected platform; in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirOmp/dirDsh.
     const all = platform === 'all';
     const dirs = {
       openclaw: (all ? req.query.dirOpenclaw : req.query.dir) || '',
       codex: (all ? req.query.dirCodex : req.query.dir) || '',
       'claude-code': (all ? req.query.dirClaude : req.query.dir) || '',
       omp: (all ? req.query.dirOmp : req.query.dir) || '',
+      dsh: (all ? req.query.dirDsh : req.query.dir) || '',
     };
 
     // cached=1: return the persisted result if present, never compute
@@ -287,7 +298,7 @@ app.get('/api/tools/audit', async (req, res) => {
       return res.json({ ...persisted, persisted: true });
     }
 
-    const cacheKey = `${platform}|${dirs['openclaw']}|${dirs['codex']}|${dirs['claude-code']}|${dirs['omp']}`;
+    const cacheKey = `${platform}|${dirs['openclaw']}|${dirs['codex']}|${dirs['claude-code']}|${dirs['omp']}|${dirs['dsh']}`;
     if (req.query.refresh !== '1') {
       const cached = toolAuditCache.get(cacheKey);
       if (cached && cached.expires > Date.now()) return res.json(cached.data);
@@ -411,11 +422,12 @@ app.get('/api/search', async (req, res) => {
     }
 
     // Collect candidate files per platform in parallel, then merge in a
-    // stable order: openclaw, codex, claude-code, omp.
+    // stable order: openclaw, codex, claude-code, omp, dsh.
     const openclawFiles = [];
     const codexFiles = [];
     const claudeFiles = [];
     const ompFiles = [];
+    const dshFiles = [];
 
     await Promise.all([
       (async () => {
@@ -497,6 +509,35 @@ app.get('/api/search', async (req, res) => {
           }
         } catch {}
       })(),
+      (async () => {
+        if (platform !== 'dsh' && !all) return;
+        const dir = dirFor('dirDsh', DSH_DIR);
+        try {
+          // dsh sessions live at <dir>/<projectKey>/<sessionId>/session.jsonl[.zstd]
+          const projects = await fsp.readdir(dir, { withFileTypes: true });
+          for (const p of projects) {
+            if (!p.isDirectory()) continue;
+            const projDir = path.join(dir, p.name);
+            const sessionDirs = await fsp.readdir(projDir, { withFileTypes: true }).catch(() => []);
+            for (const s of sessionDirs) {
+              if (!s.isDirectory()) continue;
+              const sessionDir = path.join(projDir, s.name);
+              const entries = await fsp.readdir(sessionDir, { withFileTypes: true }).catch(() => []);
+              const logFile = entries.find(
+                (f) => f.isFile() && (f.name === 'session.jsonl.zstd' || f.name === 'session.jsonl')
+              );
+              if (logFile) {
+                dshFiles.push({
+                  path: path.join(sessionDir, logFile.name),
+                  file: logFile.name,
+                  sessionId: s.name,
+                  platform: 'dsh',
+                });
+              }
+            }
+          }
+        } catch {}
+      })(),
     ]);
 
     const sessionFiles = [...openclawFiles, ...codexFiles, ...claudeFiles, ...ompFiles];
@@ -569,6 +610,59 @@ app.get('/api/search', async (req, res) => {
           ...(sf.agent ? { agent: sf.agent } : {}),
           matches,
         });
+      }
+    }
+
+    // dsh logs may be zstd-compressed and nest text under event.data —
+    // search them via the adapter's line reader instead of the raw stream.
+    for (const sf of dshFiles) {
+      if (results.length >= maxResults) break;
+      let lines;
+      try {
+        lines = await readDshSessionLines(sf.path);
+      } catch {
+        continue;
+      }
+      const matches = [];
+      const seen = new Set();
+      let sessionId = sf.sessionId;
+      for (const line of lines) {
+        if (matches.length >= 3 && seen.size === keywords.length) break;
+        const lower = line.toLowerCase();
+        if (!keywords.some((kw) => lower.includes(kw))) continue;
+        let rec;
+        try {
+          rec = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (rec.type === 'session' && rec.id) sessionId = rec.id;
+        const data = rec.data || {};
+        const msg = rec.type === 'user/message' ? data : data.message || {};
+        const role = msg.role || rec.type || '';
+        const content = Array.isArray(msg.content) ? msg.content : [];
+        const text = content
+          .filter((c) => c.type === 'text' || c.type === 'reasoning')
+          .map((c) => c.text || '')
+          .join(' ');
+        const textLower = text.toLowerCase();
+        for (const kw of keywords) {
+          if (textLower.includes(kw)) seen.add(kw);
+        }
+        if (matches.length < 3 && textLower.includes(keywords[0])) {
+          const idx = textLower.indexOf(keywords[0]);
+          const start = Math.max(0, idx - 40);
+          const end = Math.min(text.length, idx + keywords[0].length + 60);
+          const snippet = (start > 0 ? '\u2026' : '') + text.slice(start, end) + (end < text.length ? '\u2026' : '');
+          matches.push({
+            role,
+            snippet,
+            timestamp: typeof rec.time === 'number' ? new Date(rec.time).toISOString() : null,
+          });
+        }
+      }
+      if (matches.length > 0 && seen.size === keywords.length) {
+        results.push({ sessionId, file: sf.file, platform: 'dsh', matches });
       }
     }
 
@@ -766,6 +860,40 @@ app.get('/api/codex/sessions/:sessionId', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
     const payload = await parseCodexSessionFile(filePath);
+    res.json(payload);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- DeepSeek Harness (dsh) platform ---
+
+app.get('/api/dsh/sessions', async (req, res) => {
+  try {
+    const dir = resolveDir(req.query.dir, DSH_DIR);
+    const sessions = await listDshSessions(dir);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/dsh/sessions/:sessionId', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
+  try {
+    const dir = resolveDir(req.query.dir, DSH_DIR);
+    const filePath = await findDshSessionFile(dir, sessionId);
+    if (!filePath) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const payload = await parseDshSessionFile(filePath);
     res.json(payload);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -1408,6 +1536,9 @@ app.get('/api/watch', async (req, res) => {
     } else if (platform === 'codex') {
       const dir = resolveDir(req.query.dir, CODEX_DIR);
       filePath = await findCodexSessionFile(dir, sessionId);
+    } else if (platform === 'dsh') {
+      const dir = resolveDir(req.query.dir, DSH_DIR);
+      filePath = await findDshSessionFile(dir, sessionId);
     } else if (platform === 'claude-code') {
       const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
       filePath = await findClaudeCodeSessionFile(dir, sessionId);
@@ -1522,7 +1653,9 @@ app.get('/api/watch', async (req, res) => {
     return;
   }
 
-  // Helper: read new lines from a byte offset, return {lines, newOffset}
+  // Helper: read new lines from a byte offset, return {lines, newOffset}.
+  // dsh zstd logs append whole zstd frames: decompress every complete new
+  // frame and leave a torn trailing frame for the next read.
   async function readNewLines(byteOffset) {
     const stat = await fsp.stat(filePath);
     if (stat.size <= byteOffset) return { lines: [], newOffset: byteOffset };
@@ -1532,6 +1665,15 @@ app.get('/api/watch', async (req, res) => {
       await fd.read(buf, 0, buf.length, byteOffset);
     } finally {
       await fd.close();
+    }
+    if (platform === 'dsh' && filePath.endsWith('.zstd')) {
+      // Only advance past complete frames — a torn trailing frame is retried
+      // on the next change event once its remaining bytes land.
+      const { frames } = scanZstdFrames(buf);
+      const consumed = frames.length ? frames[frames.length - 1].end : 0;
+      const text = decompressDshLog(buf.subarray(0, consumed));
+      const lines = text.split('\n').filter((l) => l.trim());
+      return { lines, newOffset: byteOffset + consumed };
     }
     const text = buf.toString('utf8');
     const lines = text.split('\n').filter((l) => l.trim());
@@ -1558,6 +1700,17 @@ app.get('/api/watch', async (req, res) => {
       } else if (platform === 'codex') {
         const normalized = normalizeCodexRecord(rec);
         if (normalized) messages.push(normalized);
+      } else if (platform === 'dsh') {
+        if (rec.type === 'session') {
+          sessionMeta = {
+            id: rec.id,
+            cwd: rec.cwd || null,
+            timestamp: typeof rec.createdAt === 'number' ? new Date(rec.createdAt).toISOString() : null,
+          };
+        } else {
+          const normalized = normalizeDshEvents([line]);
+          if (normalized.length) messages.push(...normalized);
+        }
       } else if (platform === 'claude-code') {
         const normalized = normalizeClaudeCodeRecord(rec);
         if (normalized) messages.push(normalized);
@@ -1588,14 +1741,12 @@ app.get('/api/watch', async (req, res) => {
   let byteOffset = 0;
   let initialMessageCount = 0;
   try {
-    const stat = await fsp.stat(filePath);
-    byteOffset = stat.size;
+    // readNewLines(0) is platform-aware (dsh zstd frames vs plain JSONL) and
+    // reports the offset actually consumed — a torn trailing zstd frame stays
+    // pending for the first change event.
+    const { lines, newOffset } = await readNewLines(0);
+    byteOffset = newOffset;
     // Count existing messages without sending them (client already has them)
-    const { lines } = await readNewLines(0).then(async () => {
-      const all = await fsp.readFile(filePath, 'utf8');
-      const ls = all.split('\n').filter((l) => l.trim());
-      return { lines: ls };
-    });
     const { messages: existingMsgs } = parseLines(lines);
     initialMessageCount = existingMsgs.length;
   } catch (e) {
@@ -1669,4 +1820,6 @@ app.listen(PORT, HOST, () => {
   console.log(`  Codex:       ${CODEX_DIR}`);
   console.log(`  Claude Code: ${CLAUDE_CODE_DIR}`);
   console.log(`  Hermes:      ${path.join(HERMES_DIR, 'state.db')}`);
+  console.log(`  OMP:         ${OMP_DIR}`);
+  console.log(`  DeepSeek Harness: ${DSH_DIR}`);
 });

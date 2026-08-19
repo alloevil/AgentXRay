@@ -1,7 +1,7 @@
 {
   "name": "@alloevil/agent-xray",
   "version": "1.12.2",
-  "description": "Web dashboard for viewing AI agent session logs — supports OpenClaw, Codex, Claude Code, and Hermes",
+  "description": "Web dashboard for viewing AI agent session logs — supports OpenClaw, Codex, Claude Code, Hermes, OMP, and DeepSeek Harness",
   "main": "server.js",
   "bin": {
     "agentxray": "bin/agentxray.js",
@@ -33,6 +33,8 @@
     "codex",
     "openclaw",
     "hermes",
+    "deepseek",
+    "deepseek-harness",
     "jsonl",
     "dashboard"
   ],

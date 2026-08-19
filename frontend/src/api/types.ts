@@ -2,9 +2,9 @@
 // Typed from real responses sampled via curl + the legacy UI's field usage
 // (public/js/app.js). Open/evolving shapes carry index signatures.
 
-export type Platform = 'openclaw' | 'codex' | 'claude-code' | 'hermes' | 'omp';
+export type Platform = 'openclaw' | 'codex' | 'claude-code' | 'hermes' | 'omp' | 'dsh';
 
-export const PLATFORMS: Platform[] = ['openclaw', 'codex', 'claude-code', 'hermes', 'omp'];
+export const PLATFORMS: Platform[] = ['openclaw', 'codex', 'claude-code', 'hermes', 'omp', 'dsh'];
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   openclaw: 'OpenClaw',
@@ -12,6 +12,7 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   'claude-code': 'Claude Code',
   hermes: 'Hermes',
   omp: 'OMP',
+  dsh: 'DeepSeek Harness',
 };
 
 // ---------- Sessions ----------

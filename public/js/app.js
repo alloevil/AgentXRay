@@ -1,5 +1,5 @@
 const state = {
-  platform: 'openclaw', // 'openclaw' | 'codex' | 'claude-code' | 'hermes' | 'omp'
+  platform: 'openclaw', // 'openclaw' | 'codex' | 'claude-code' | 'hermes' | 'omp' | 'dsh'
   agents: [],
   sessions: [],
   filteredSessions: [],
@@ -15,7 +15,7 @@ const state = {
   navStack: [],
   msgFilter: null, // null | 'user' | 'assistant' | 'toolCall' | 'toolResult' | 'error' | 'spawn'
   visibleUnitCount: 60, // incremental rendering: show newest N units initially
-  settings: { openclawDir: '', codexDir: '', claudeCodeDir: '', hermesDir: '', ompDir: '' },
+  settings: { openclawDir: '', codexDir: '', claudeCodeDir: '', hermesDir: '', ompDir: '', dshDir: '' },
 };
 
 const MSG_BATCH_SIZE = 60; // how many units to add per "load more" click
@@ -42,6 +42,7 @@ const settingCodex = document.getElementById('settingCodex');
 const settingClaudeCode = document.getElementById('settingClaudeCode');
 const settingHermes = document.getElementById('settingHermes');
 const settingOmp = document.getElementById('settingOmp');
+const settingDsh = document.getElementById('settingDsh');
 const settingsSave = document.getElementById('settingsSave');
 const settingsReset = document.getElementById('settingsReset');
 
@@ -55,7 +56,8 @@ function loadSettings() {
       state.settings.claudeCodeDir = parsed.claudeCodeDir || '';
       state.settings.hermesDir = parsed.hermesDir || '';
       state.settings.ompDir = parsed.ompDir || '';
-      if (['openclaw', 'codex', 'claude-code', 'hermes', 'omp'].includes(parsed.platform)) {
+      state.settings.dshDir = parsed.dshDir || '';
+      if (['openclaw', 'codex', 'claude-code', 'hermes', 'omp', 'dsh'].includes(parsed.platform)) {
         state.platform = parsed.platform;
         hasStoredPlatform = true;
       }
@@ -74,6 +76,7 @@ function dirParam() {
   else if (state.platform === 'claude-code') dir = state.settings.claudeCodeDir;
   else if (state.platform === 'hermes') dir = state.settings.hermesDir;
   else if (state.platform === 'omp') dir = state.settings.ompDir;
+  else if (state.platform === 'dsh') dir = state.settings.dshDir;
   return dir ? '?dir=' + encodeURIComponent(dir) : '';
 }
 
@@ -83,6 +86,7 @@ function openSettings() {
   settingClaudeCode.value = state.settings.claudeCodeDir;
   settingHermes.value = state.settings.hermesDir;
   settingOmp.value = state.settings.ompDir;
+  if (settingDsh) settingDsh.value = state.settings.dshDir;
   settingsOverlay.hidden = false;
   loadBackupStatus();
 }
@@ -102,6 +106,7 @@ settingsSave.addEventListener('click', async () => {
   state.settings.claudeCodeDir = settingClaudeCode.value.trim();
   state.settings.hermesDir = settingHermes.value.trim();
   state.settings.ompDir = settingOmp.value.trim();
+  if (settingDsh) state.settings.dshDir = settingDsh.value.trim();
   saveSettings();
   closeSettings();
   await refreshAll(false);
@@ -113,12 +118,14 @@ settingsReset.addEventListener('click', () => {
   state.settings.claudeCodeDir = '';
   state.settings.hermesDir = '';
   state.settings.ompDir = '';
+  state.settings.dshDir = '';
   saveSettings();
   settingOpenclaw.value = '';
   settingCodex.value = '';
   settingClaudeCode.value = '';
   settingHermes.value = '';
   settingOmp.value = '';
+  if (settingDsh) settingDsh.value = '';
 });
 
 // --- Backup ---
@@ -388,6 +395,7 @@ const PLATFORM_LABELS = {
   'claude-code': 'Claude Code',
   hermes: 'Hermes',
   omp: 'OMP',
+  dsh: 'DeepSeek Harness',
 };
 function platformScopeChip() {
   return `<span class="scope-chip">📍 当前平台：${PLATFORM_LABELS[state.platform] || state.platform}</span>`;
@@ -405,6 +413,7 @@ function probePlatformSessionCounts() {
     ['claude-code', '/api/claude-code/sessions' + dirQ(state.settings.claudeCodeDir)],
     ['hermes', '/api/hermes/sessions' + dirQ(state.settings.hermesDir)],
     ['omp', '/api/omp/sessions' + dirQ(state.settings.ompDir)],
+    ['dsh', '/api/dsh/sessions' + dirQ(state.settings.dshDir)],
   ];
   Promise.all(
     probes.map(
@@ -429,6 +438,7 @@ function renderAgents() {
     'claude-code': 'Claude Code sessions',
     hermes: 'Hermes sessions',
     omp: 'OMP sessions',
+    dsh: 'DeepSeek Harness sessions',
   };
   subtitle.textContent = platformLabels[state.platform] || '';
 
@@ -439,6 +449,7 @@ function renderAgents() {
     { id: 'claude-code', label: 'Claude Code' },
     { id: 'hermes', label: 'Hermes' },
     { id: 'omp', label: 'OMP' },
+    { id: 'dsh', label: 'DeepSeek Harness' },
   ];
   const isCollapsedTab = (p) => p.id !== state.platform && !platformBarExpanded && platformSessionCounts[p.id] === 0;
   const shownPlatforms = platforms.filter((p) => !isCollapsedTab(p));
@@ -449,6 +460,7 @@ function renderAgents() {
     'claude-code': 'Claude Code 会话（~/.claude/projects）',
     hermes: 'Hermes 会话（~/.hermes）',
     omp: 'oh-my-pi 会话（~/.omp/agent/sessions）',
+    dsh: 'DeepSeek Harness 会话（~/.dsh/sessions）',
   };
   platformBar.innerHTML =
     shownPlatforms
@@ -1160,6 +1172,7 @@ function toolsAuditParams() {
   if (state.settings.codexDir) params.set('dirCodex', state.settings.codexDir);
   if (state.settings.claudeCodeDir) params.set('dirClaude', state.settings.claudeCodeDir);
   if (state.settings.ompDir) params.set('dirOmp', state.settings.ompDir);
+  if (state.settings.dshDir) params.set('dirDsh', state.settings.dshDir);
   return params;
 }
 
@@ -1300,6 +1313,7 @@ function promptsQueryParams() {
   else if (state.platform === 'claude-code') rawDir = state.settings.claudeCodeDir;
   else if (state.platform === 'hermes') rawDir = state.settings.hermesDir;
   else if (state.platform === 'omp') rawDir = state.settings.ompDir;
+  else if (state.platform === 'dsh') rawDir = state.settings.dshDir;
   if (rawDir) params.set('dir', rawDir);
   return params;
 }
@@ -4278,6 +4292,8 @@ async function loadSessions(preserveSelection) {
     state.sessions = await fetchJson('/api/hermes/sessions' + dp);
   } else if (state.platform === 'omp') {
     state.sessions = await fetchJson('/api/omp/sessions' + dp);
+  } else if (state.platform === 'dsh') {
+    state.sessions = await fetchJson('/api/dsh/sessions' + dp);
   }
   if (state.platform !== 'openclaw' && Array.isArray(state.sessions))
     platformSessionCounts[state.platform] = state.sessions.length;
@@ -4314,6 +4330,8 @@ async function loadSession() {
     payload = await fetchJson(`/api/hermes/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
   } else if (state.platform === 'omp') {
     payload = await fetchJson(`/api/omp/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
+  } else if (state.platform === 'dsh') {
+    payload = await fetchJson(`/api/dsh/sessions/${encodeURIComponent(state.selectedSessionId)}` + dp);
   }
   state.sessionData = payload;
   // Show all messages if <= 200, otherwise first 60 with load-more
@@ -4740,6 +4758,7 @@ const SEARCH_PLAT_BADGE = {
   'claude-code': ['Claude', '#d2a8ff'],
   hermes: ['Hermes', '#f78166'],
   omp: ['OMP', '#ffd33d'],
+  dsh: ['DeepSeek', '#4d6bfe'],
 };
 
 // Global search across every platform; per-platform dir overrides
@@ -4750,6 +4769,7 @@ function globalSearchParams(q) {
   if (state.settings.claudeCodeDir) params.set('dirClaude', state.settings.claudeCodeDir);
   if (state.settings.hermesDir) params.set('dirHermes', state.settings.hermesDir);
   if (state.settings.ompDir) params.set('dirOmp', state.settings.ompDir);
+  if (state.settings.dshDir) params.set('dirDsh', state.settings.dshDir);
   return params;
 }
 
@@ -4997,6 +5017,7 @@ async function initialLoad() {
       ['claude-code', '/api/claude-code/sessions', state.settings.claudeCodeDir],
       ['codex', '/api/codex/sessions', state.settings.codexDir],
       ['hermes', '/api/hermes/sessions', state.settings.hermesDir],
+      ['dsh', '/api/dsh/sessions', state.settings.dshDir],
     ];
     for (const [platform, endpoint, dir] of candidates) {
       let sessions = [];

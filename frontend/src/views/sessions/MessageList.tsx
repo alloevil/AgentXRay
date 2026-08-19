@@ -166,7 +166,7 @@ export function MessageList({
   visibleUnitCount: number;
   onLoadMore: () => void;
 }) {
-  const isCodex = platform === 'codex' || platform === 'omp';
+  const isCodex = platform === 'codex' || platform === 'omp' || platform === 'dsh';
 
   const units = useMemo<MessageUnit[]>(() => {
     const filtered = applyMsgFilter(timing.visibleMessages, msgFilter);

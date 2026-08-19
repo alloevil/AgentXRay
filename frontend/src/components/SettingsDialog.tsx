@@ -19,6 +19,7 @@ const DIR_FIELDS: { key: keyof DirSettings; label: string; placeholder: string }
   { key: 'claudeCodeDir', label: 'Claude Code Directory', placeholder: '~/.claude/projects' },
   { key: 'hermesDir', label: 'Hermes Directory', placeholder: '~/.hermes' },
   { key: 'ompDir', label: 'OMP Directory', placeholder: '~/.omp/agent/sessions' },
+  { key: 'dshDir', label: 'DeepSeek Harness Directory', placeholder: '~/.dsh/sessions' },
 ];
 
 function BackupSection() {
@@ -91,6 +92,7 @@ export function SettingsDialog({
       claudeCodeDir: draft.claudeCodeDir.trim(),
       hermesDir: draft.hermesDir.trim(),
       ompDir: draft.ompDir.trim(),
+      dshDir: draft.dshDir.trim(),
     });
     onOpenChange(false);
     // Legacy refreshAll(false): every dir-dependent query must refetch.

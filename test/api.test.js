@@ -398,25 +398,26 @@ describe('backup', () => {
 
   it('copies every session log once, then skips everything on the second run', async () => {
     const first = await sendJson(srv.base, 'POST', '/api/backup', undefined);
-    // codex 2 + claude 2 + history.jsonl + omp 2 (subagent transcripts excluded)
-    assert.equal(first.copied, 7);
+    // codex 2 + claude 2 + history.jsonl + omp 2 + dsh 2 (subagent transcripts excluded)
+    assert.equal(first.copied, 9);
     assert.equal(first.skipped, 0);
-    assert.equal(first.total, 7);
+    assert.equal(first.total, 9);
     assert.deepEqual(first.byPlatform.codex, { copied: 2, skipped: 0 });
     assert.deepEqual(first.byPlatform['claude-code'], { copied: 3, skipped: 0 });
     assert.deepEqual(first.byPlatform.omp, { copied: 2, skipped: 0 });
+    assert.deepEqual(first.byPlatform.dsh, { copied: 2, skipped: 0 });
     // Archive stays inside the temp HOME
     assert.equal(first.archiveDir, path.join(srv.home, '.agentxray', 'archive'));
     assert.ok(await exists(path.join(first.archiveDir, 'claude-code', 'history.jsonl')));
 
     const second = await sendJson(srv.base, 'POST', '/api/backup', undefined);
     assert.equal(second.copied, 0);
-    assert.equal(second.skipped, 7);
-    assert.equal(second.total, 7);
+    assert.equal(second.skipped, 9);
+    assert.equal(second.total, 9);
 
     const status = await getJson(srv.base, '/api/backup/status');
     assert.equal(status.archiveDir, first.archiveDir);
-    assert.equal(status.files, 7);
+    assert.equal(status.files, 9);
     assert.ok(status.bytes > 0);
     assert.ok(typeof status.lastBackup === 'string');
   });
