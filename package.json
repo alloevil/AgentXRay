@@ -37,7 +37,7 @@
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^11.8.2",
-    "express": "^4.21.2"
+    "express": "^4.22.2"
   },
   "engines": {
     "node": ">=18.17"
