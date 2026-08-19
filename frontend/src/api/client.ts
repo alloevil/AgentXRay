@@ -29,6 +29,8 @@ import type {
   ToolsAudit,
   VersionInfo,
 } from './types';
+import { DEMO } from '@/demo/flag';
+import { demoJson } from '@/demo/router';
 
 /** Per-platform log-directory overrides (settings dialog). Empty string = default. */
 export interface DirSettings {
@@ -52,6 +54,7 @@ function withParams(path: string, params: Record<string, ParamValue>): string {
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  if (DEMO) return demoJson<T>(url, init);
   const response = await fetch(url, init);
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -177,6 +180,7 @@ export async function getPromptAnalysis(opts: {
     skipLlm: opts.skipLlm,
   });
   if (opts.cached) {
+    if (DEMO) return null; // nothing persisted in demo mode
     const resp = await fetch(url);
     if (resp.status !== 200) return null;
     return (await resp.json()) as PromptAnalysis;
@@ -216,6 +220,7 @@ export async function getToolsAudit(opts: {
     dirOmp: opts.dirs?.ompDir,
     [opts.refresh ? 'refresh' : 'cached']: true,
   });
+  if (DEMO) return null; // no persisted audit in demo mode
   const resp = await fetch(url);
   if (resp.status === 204) return null;
   if (!resp.ok) {

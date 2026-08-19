@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { watchUrl } from '@/api/client';
 import type { SessionDetail, SessionMessage, SessionMeta } from '@/api/types';
+import { DEMO } from '@/demo/flag';
 import { dirForPlatform, useAppStore } from '@/store';
 
 export type SseStatus = 'off' | 'connecting' | 'live' | 'error';
@@ -27,7 +28,8 @@ export function useSessionSse(onNewMessages: (count: number) => void): SseStatus
   onNewRef.current = onNewMessages;
 
   const dir = dirForPlatform(settings, platform);
-  const enabled = autoRefresh && !!sessionId && !viewingChildAgent;
+  // Demo mode has no backend to stream from — the toggle stays visibly off.
+  const enabled = !DEMO && autoRefresh && !!sessionId && !viewingChildAgent;
 
   useEffect(() => {
     if (!enabled) {

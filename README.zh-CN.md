@@ -4,6 +4,8 @@ AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude C
 
 [English](README.md) | 中文
 
+**[在线 Demo](https://alloevil.github.io/AgentXRay/)**（合成示例数据，非真实用户会话）
+
 ![Main View](screenshots/main-view.png)
 
 ## 功能特性

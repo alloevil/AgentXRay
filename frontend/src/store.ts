@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { DirSettings } from '@/api/client';
 import type { Platform } from '@/api/types';
 import { PLATFORMS } from '@/api/types';
+import { DEMO } from '@/demo/flag';
 
 // Settings persist to the SAME localStorage key/shape as the legacy app
 // (public/js/app.js SETTINGS_KEY) so both UIs share settings:
@@ -54,7 +55,13 @@ export function dirForPlatform(settings: DirSettings, platform: Platform): strin
 }
 
 function loadPersisted(): { settings: DirSettings; platform: Platform; hasStoredPlatform: boolean } {
-  const result = { settings: { ...EMPTY_SETTINGS }, platform: 'openclaw' as Platform, hasStoredPlatform: false };
+  // Demo build ships claude-code/codex fixtures only — land on a populated tab.
+  const defaultPlatform: Platform = DEMO ? 'claude-code' : 'openclaw';
+  const result: { settings: DirSettings; platform: Platform; hasStoredPlatform: boolean } = {
+    settings: { ...EMPTY_SETTINGS },
+    platform: defaultPlatform,
+    hasStoredPlatform: false,
+  };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {

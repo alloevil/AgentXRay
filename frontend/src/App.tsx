@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useVersionPoller } from '@/hooks/useVersionPoller';
+import { DEMO } from '@/demo/flag';
 import { useAppStore } from '@/store';
 import type { MainView } from '@/store';
 import { InsightsView } from '@/views/insights/InsightsView';
@@ -25,6 +26,20 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex h-full flex-col overflow-hidden">
+        {DEMO ? (
+          <div className="border-b border-[#e3b341]/40 bg-[#e3b341]/15 px-3 py-1.5 text-center text-xs text-[#e3b341]">
+            🧪 Demo mode — synthetic sample data (not real user sessions).{' '}
+            <a
+              href="https://github.com/alloevil/AgentXRay"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Run AgentXRay locally
+            </a>{' '}
+            to inspect your own agent logs.
+          </div>
+        ) : null}
         <PlatformBar />
         <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)]">
           <Sidebar />
