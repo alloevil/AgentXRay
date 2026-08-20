@@ -36,6 +36,18 @@ if (HAS_DIST) {
 }
 app.use(express.json({ limit: '256kb' }));
 
+// CSRF protection: reject state-changing requests whose Origin/Referer does
+// not match the server's own Host header (same-origin check, no extra deps).
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.headers.origin || req.headers.referer || '';
+  const host = req.headers.host || '';
+  if (origin && !origin.startsWith(`http://${host}`) && !origin.startsWith(`https://${host}`)) {
+    return res.status(403).json({ error: 'Forbidden: CSRF check failed' });
+  }
+  next();
+});
+
 // Disable all caching
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
