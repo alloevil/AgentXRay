@@ -40,10 +40,7 @@ test('file-based platforms expose find/parse/collectFiles/watchParse', () => {
 test('derived registries stay in sync with PLATFORMS', () => {
   // Export covers every platform; OTLP every file platform except openclaw
   assert.deepEqual(Object.keys(EXPORT_PLATFORMS).sort(), Object.keys(PLATFORMS).sort());
-  assert.deepEqual(
-    Object.keys(OTLP_PLATFORMS).sort(),
-    FILE_PLATFORMS.filter((k) => !PLATFORMS[k].needsAgent).sort()
-  );
+  assert.deepEqual(Object.keys(OTLP_PLATFORMS).sort(), FILE_PLATFORMS.filter((k) => !PLATFORMS[k].needsAgent).sort());
   assert.deepEqual([...TOOL_AUDIT_PLATFORMS].sort(), FILE_PLATFORMS.sort());
 });
 
