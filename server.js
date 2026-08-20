@@ -179,7 +179,7 @@ app.get('/api/agents', async (req, res) => {
 app.get('/api/insights', async (req, res) => {
   try {
     const platform = req.query.platform || 'openclaw';
-    const agent = req.query.agent || '';
+    const agent = sanitizeAgentName(req.query.agent || '') || '';
     const dir = req.query.dir || '';
 
     const cacheKey = getInsightsCacheKey(platform, agent, dir);
@@ -213,7 +213,7 @@ app.get('/api/insights', async (req, res) => {
 app.get('/api/prompts', async (req, res) => {
   try {
     const platform = req.query.platform || 'openclaw';
-    const agent = req.query.agent || '';
+    const agent = sanitizeAgentName(req.query.agent || '') || '';
     const dir = req.query.dir || '';
 
     const cacheKey = getPromptsCacheKey(platform, agent, dir);
@@ -238,7 +238,7 @@ app.get('/api/prompts', async (req, res) => {
 app.get('/api/prompts/analyze', async (req, res) => {
   try {
     const platform = req.query.platform || 'openclaw';
-    const agent = req.query.agent || '';
+    const agent = sanitizeAgentName(req.query.agent || '') || '';
     const dir = req.query.dir || '';
     const refresh = req.query.refresh === '1';
     const skipLlm = req.query.skipLlm === '1';
@@ -414,7 +414,7 @@ app.get('/api/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim().toLowerCase();
     const platform = req.query.platform || 'openclaw';
-    const agent = req.query.agent || '';
+    const agent = sanitizeAgentName(req.query.agent || '') || '';
     const maxResults = Math.min(parseInt(req.query.limit) || 50, 100);
     if (!q) return res.json([]);
     // Multi-keyword AND search: whitespace-separated keywords must all appear

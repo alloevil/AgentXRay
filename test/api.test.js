@@ -214,6 +214,32 @@ describe('AgentXRay API', () => {
       assert.equal(hit.project, '/fixtures/project-beta');
       assert.ok(hit.matches[0].snippet.includes('history-needle-gamma'));
     });
+
+    it('rejects path traversal via the agent query parameter', async () => {
+      // Plant a session file OUTSIDE the openclaw data dir, reachable only by
+      // escaping it: <home>/.openclaw/agents/../../escape/sessions/evil.jsonl.
+      const evilDir = path.join(srv.home, 'escape', 'sessions');
+      await fsp.mkdir(evilDir, { recursive: true });
+      await fsp.writeFile(
+        path.join(evilDir, 'evil.jsonl'),
+        `${JSON.stringify({
+          type: 'message',
+          timestamp: '2026-01-20T08:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'escape-needle-secret' }] },
+        })}\n`
+      );
+
+      // Search must not follow ../ out of the agents dir
+      const results = await getJson(
+        srv.base,
+        '/api/search?q=escape-needle-secret&platform=openclaw&agent=..%2F..%2Fescape'
+      );
+      assert.deepEqual(results, []);
+
+      // Insights must not aggregate the escaped file either
+      const insights = await getJson(srv.base, '/api/insights?platform=openclaw&agent=..%2F..%2Fescape');
+      assert.equal(insights.totalSessions, 0);
+    });
   });
 
   describe('prompts + hidden prompts', () => {
