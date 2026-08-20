@@ -1838,9 +1838,14 @@ app.get('/api/watch', async (req, res) => {
       const lines = text.split('\n').filter((l) => l.trim());
       return { lines, newOffset: byteOffset + consumed };
     }
-    const text = buf.toString('utf8');
+    // Only advance past the last complete line — a torn trailing line (the
+    // writer was mid-append when fs.watch fired) is retried on the next
+    // change event once its remaining bytes land. Mirrors the zstd branch.
+    const lastNewline = buf.lastIndexOf(0x0a);
+    if (lastNewline === -1) return { lines: [], newOffset: byteOffset };
+    const text = buf.subarray(0, lastNewline + 1).toString('utf8');
     const lines = text.split('\n').filter((l) => l.trim());
-    return { lines, newOffset: stat.size };
+    return { lines, newOffset: byteOffset + lastNewline + 1 };
   }
 
   // Helper: normalize lines according to platform
