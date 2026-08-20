@@ -17,63 +17,28 @@ const {
   ARCHIVE_DIR,
   sessionMetaCache,
   resolveDir,
-  isArchivedFile,
   sanitizeAgentName,
   sanitizeSessionId,
   readAgents,
 } = require('./lib/config');
+const { PLATFORMS, collectSessionFiles } = require('./lib/platforms');
 const {
   getHermesDbPath,
   openHermesDbForWatch,
-  listHermesSessions,
-  getHermesSession,
   normalizeHermesMessage,
   searchHermesSessions,
 } = require('./lib/platforms/hermes');
+const { readDshSessionLines, decompressDshLog, scanZstdFrames } = require('./lib/platforms/dsh');
+const { foldGeminiRecords } = require('./lib/platforms/gemini');
+const { parseOmpSessionMetadata, parseOmpSessionFile, findOmpSpawnDir } = require('./lib/platforms/omp');
 const {
-  codexSessionIdFromFile,
-  findCodexSessionFile,
-  listCodexSessions,
-  normalizeCodexRecord,
-  parseCodexSessionFile,
-} = require('./lib/platforms/codex');
-const {
-  findDshSessionFile,
-  listDshSessions,
-  readDshSessionLines,
-  decompressDshLog,
-  scanZstdFrames,
-  normalizeDshEvents,
-  parseDshSessionFile,
-} = require('./lib/platforms/dsh');
-const {
-  findGeminiSessionFile,
-  listGeminiSessions,
-  normalizeGeminiRecord,
-  foldGeminiRecords,
-  parseGeminiSessionFile,
-} = require('./lib/platforms/gemini');
-const {
-  ompSessionIdFromFile,
-  findOmpSessionFile,
-  parseOmpSessionMetadata,
-  listOmpSessions,
-  normalizeOmpRecord,
-  parseOmpSessionFile,
-  findOmpSpawnDir,
-} = require('./lib/platforms/omp');
-const {
-  findClaudeCodeSessionFile,
   parseClaudeCodeSessionMetadata,
-  listClaudeCodeSessions,
-  normalizeClaudeCodeRecord,
   parseClaudeCodeSessionFile,
   findClaudeSpawnDir,
 } = require('./lib/platforms/claude');
 const {
   listSessionsForAgent,
   resolveSessionFile,
-  normalizeMessage,
   parseSessionFile,
   buildSpawnMap,
   buildSpawnTree,
@@ -425,155 +390,46 @@ app.get('/api/search', async (req, res) => {
     // in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirHermes/dirOmp.
     const all = platform === 'all';
     const dirFor = (key, fallback) => resolveDir(all ? req.query[key] : req.query.dir, fallback);
+    const dirParamFor = (key) => (all ? req.query[key] : req.query.dir) || '';
 
     if (platform === 'hermes' && !all) {
       const dir = resolveDir(req.query.dir, HERMES_DIR);
       return res.json(searchHermesSessions(dir, q, maxResults));
     }
 
-    // Collect candidate files per platform in parallel, then merge in a
-    // stable order: openclaw, codex, claude-code, omp, dsh, gemini.
-    const openclawFiles = [];
-    const codexFiles = [];
-    const claudeFiles = [];
-    const ompFiles = [];
-    const dshFiles = [];
-    const geminiFiles = [];
+    // Collect candidate files per platform via the registry, in a stable
+    // order: openclaw, codex, claude-code, omp, dsh, gemini. The claude-code
+    // subagents dir is excluded (children surface under their parent), and
+    // gemini ids resolve from the folded metadata during matching.
+    const dirParams = {
+      openclaw: 'dirOpenclaw',
+      codex: 'dirCodex',
+      'claude-code': 'dirClaude',
+      omp: 'dirOmp',
+      dsh: 'dirDsh',
+      gemini: 'dirGemini',
+    };
+    const wanted = Object.keys(dirParams).filter((id) => platform === id || all);
+    const collected = await Promise.all(
+      wanted.map(async (id) => {
+        const agentFor = id === 'openclaw' && !all ? agent : '';
+        const files = await collectSessionFiles(id, agentFor, dirParamFor(dirParams[id]), {
+          subagents: false,
+          resolveIds: false,
+        }).catch(() => []);
+        return files.map((f) => ({ ...f, platform: id }));
+      })
+    );
+    const byPlatform = new Map(wanted.map((id, i) => [id, collected[i]]));
 
-    await Promise.all([
-      (async () => {
-        if (platform !== 'openclaw' && !all) return;
-        const dir = dirFor('dirOpenclaw', DATA_DIR);
-        const agents = agent && !all ? [agent] : await readAgents(dir).catch(() => []);
-        for (const a of agents) {
-          const agentDir = path.join(dir, a, 'sessions');
-          try {
-            const entries = await fsp.readdir(agentDir);
-            for (const f of entries) {
-              if (f.endsWith('.jsonl') && !isArchivedFile(f)) {
-                openclawFiles.push({ path: path.join(agentDir, f), file: f, agent: a, platform: 'openclaw' });
-              }
-            }
-          } catch {
-            /* no sessions */
-          }
-        }
-      })(),
-      (async () => {
-        if (platform !== 'codex' && !all) return;
-        const dir = dirFor('dirCodex', CODEX_DIR);
-        try {
-          // Codex sessions live at <dir>/YYYY/MM/DD/rollout-*.jsonl
-          const entries = await fsp.readdir(dir, { recursive: true });
-          for (const rel of entries) {
-            if (typeof rel === 'string' && rel.endsWith('.jsonl')) {
-              const file = path.basename(rel);
-              // Session list ids are the trailing UUID, not the full rollout-* stem
-              const uuid = file.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
-              codexFiles.push({
-                path: path.join(dir, rel),
-                file,
-                sessionId: uuid ? uuid[1] : codexSessionIdFromFile(file),
-                platform: 'codex',
-              });
-            }
-          }
-        } catch {}
-      })(),
-      (async () => {
-        if (platform !== 'claude-code' && !all) return;
-        const dir = dirFor('dirClaude', CLAUDE_CODE_DIR);
-        try {
-          // Claude Code sessions live at <dir>/<project-slug>/*.jsonl
-          const slugs = await fsp.readdir(dir, { withFileTypes: true });
-          for (const s of slugs) {
-            if (!s.isDirectory()) continue;
-            const slugDir = path.join(dir, s.name);
-            const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
-            for (const f of entries) {
-              if (f.isFile() && f.name.endsWith('.jsonl')) {
-                claudeFiles.push({ path: path.join(slugDir, f.name), file: f.name, platform: 'claude-code' });
-              }
-            }
-          }
-        } catch {}
-      })(),
-      (async () => {
-        if (platform !== 'omp' && !all) return;
-        const dir = dirFor('dirOmp', OMP_DIR);
-        try {
-          const slugs = await fsp.readdir(dir, { withFileTypes: true });
-          for (const s of slugs) {
-            if (!s.isDirectory()) continue;
-            const slugDir = path.join(dir, s.name);
-            const entries = await fsp.readdir(slugDir, { withFileTypes: true }).catch(() => []);
-            for (const f of entries) {
-              if (f.isFile() && f.name.endsWith('.jsonl')) {
-                ompFiles.push({
-                  path: path.join(slugDir, f.name),
-                  file: f.name,
-                  sessionId: ompSessionIdFromFile(f.name),
-                  platform: 'omp',
-                });
-              }
-            }
-          }
-        } catch {}
-      })(),
-      (async () => {
-        if (platform !== 'dsh' && !all) return;
-        const dir = dirFor('dirDsh', DSH_DIR);
-        try {
-          // dsh sessions live at <dir>/<projectKey>/<sessionId>/session.jsonl[.zstd]
-          const projects = await fsp.readdir(dir, { withFileTypes: true });
-          for (const p of projects) {
-            if (!p.isDirectory()) continue;
-            const projDir = path.join(dir, p.name);
-            const sessionDirs = await fsp.readdir(projDir, { withFileTypes: true }).catch(() => []);
-            for (const s of sessionDirs) {
-              if (!s.isDirectory()) continue;
-              const sessionDir = path.join(projDir, s.name);
-              const entries = await fsp.readdir(sessionDir, { withFileTypes: true }).catch(() => []);
-              const logFile = entries.find(
-                (f) => f.isFile() && (f.name === 'session.jsonl.zstd' || f.name === 'session.jsonl')
-              );
-              if (logFile) {
-                dshFiles.push({
-                  path: path.join(sessionDir, logFile.name),
-                  file: logFile.name,
-                  sessionId: s.name,
-                  platform: 'dsh',
-                });
-              }
-            }
-          }
-        } catch {}
-      })(),
-      (async () => {
-        if (platform !== 'gemini' && !all) return;
-        const dir = dirFor('dirGemini', GEMINI_DIR);
-        try {
-          // gemini sessions live at <dir>/<projectHash>/chats/session-*.jsonl
-          const projects = await fsp.readdir(dir, { withFileTypes: true });
-          for (const p of projects) {
-            if (!p.isDirectory()) continue;
-            const chatsDir = path.join(dir, p.name, 'chats');
-            const entries = await fsp.readdir(chatsDir, { withFileTypes: true }).catch(() => []);
-            for (const f of entries) {
-              if (f.isFile() && /^session-.*\.jsonl$/.test(f.name)) {
-                geminiFiles.push({
-                  path: path.join(chatsDir, f.name),
-                  file: f.name,
-                  platform: 'gemini',
-                });
-              }
-            }
-          }
-        } catch {}
-      })(),
-    ]);
-
-    const sessionFiles = [...openclawFiles, ...codexFiles, ...claudeFiles, ...ompFiles];
+    const sessionFiles = [
+      ...(byPlatform.get('openclaw') || []),
+      ...(byPlatform.get('codex') || []),
+      ...(byPlatform.get('claude-code') || []),
+      ...(byPlatform.get('omp') || []),
+    ];
+    const dshFiles = byPlatform.get('dsh') || [];
+    const geminiFiles = byPlatform.get('gemini') || [];
 
     const results = [];
 
@@ -911,31 +767,37 @@ app.get('/api/spawn-tree/:sessionId', async (req, res) => {
   }
 });
 
-// --- Codex platform ---
+// --- Generic platform session routes (registry-driven) ---
+// GET /api/:platform/sessions            → session list (newest first)
+// GET /api/:platform/sessions/:sessionId → normalized { session, messages }
+// openclaw is served by /api/agents/:name/sessions (per-agent listing) and
+// falls through here; platform-specific children routes are registered below.
 
-app.get('/api/codex/sessions', async (req, res) => {
+app.get('/api/:platform/sessions', async (req, res, next) => {
+  const platform = PLATFORMS[req.params.platform];
+  if (!platform || !platform.list) return next();
   try {
-    const dir = resolveDir(req.query.dir, CODEX_DIR);
-    const sessions = await listCodexSessions(dir);
-    res.json(sessions);
+    const dir = resolveDir(req.query.dir, platform.defaultDir());
+    res.json(await platform.list(dir));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/codex/sessions/:sessionId', async (req, res) => {
+app.get('/api/:platform/sessions/:sessionId', async (req, res, next) => {
+  const platform = PLATFORMS[req.params.platform];
+  if (!platform || platform.needsAgent) return next();
   const sessionId = sanitizeSessionId(req.params.sessionId);
   if (!sessionId) {
     return res.status(400).json({ error: 'Invalid session ID' });
   }
 
   try {
-    const dir = resolveDir(req.query.dir, CODEX_DIR);
-    const filePath = await findCodexSessionFile(dir, sessionId);
-    if (!filePath) {
+    const dir = resolveDir(req.query.dir, platform.defaultDir());
+    const payload = await platform.getSession(dir, sessionId);
+    if (!payload) {
       return res.status(404).json({ error: 'Session not found' });
     }
-    const payload = await parseCodexSessionFile(filePath);
     res.json(payload);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -945,107 +807,7 @@ app.get('/api/codex/sessions/:sessionId', async (req, res) => {
   }
 });
 
-// --- DeepSeek Harness (dsh) platform ---
-
-app.get('/api/dsh/sessions', async (req, res) => {
-  try {
-    const dir = resolveDir(req.query.dir, DSH_DIR);
-    const sessions = await listDshSessions(dir);
-    res.json(sessions);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/dsh/sessions/:sessionId', async (req, res) => {
-  const sessionId = sanitizeSessionId(req.params.sessionId);
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Invalid session ID' });
-  }
-
-  try {
-    const dir = resolveDir(req.query.dir, DSH_DIR);
-    const filePath = await findDshSessionFile(dir, sessionId);
-    if (!filePath) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    const payload = await parseDshSessionFile(filePath);
-    res.json(payload);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- Gemini CLI platform ---
-
-app.get('/api/gemini/sessions', async (req, res) => {
-  try {
-    const dir = resolveDir(req.query.dir, GEMINI_DIR);
-    const sessions = await listGeminiSessions(dir);
-    res.json(sessions);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/gemini/sessions/:sessionId', async (req, res) => {
-  const sessionId = sanitizeSessionId(req.params.sessionId);
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Invalid session ID' });
-  }
-
-  try {
-    const dir = resolveDir(req.query.dir, GEMINI_DIR);
-    const filePath = await findGeminiSessionFile(dir, sessionId);
-    if (!filePath) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    const payload = await parseGeminiSessionFile(filePath);
-    res.json(payload);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- OMP platform ---
-
-app.get('/api/omp/sessions', async (req, res) => {
-  try {
-    const dir = resolveDir(req.query.dir, OMP_DIR);
-    const sessions = await listOmpSessions(dir);
-    res.json(sessions);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/omp/sessions/:sessionId', async (req, res) => {
-  const sessionId = sanitizeSessionId(req.params.sessionId);
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Invalid session ID' });
-  }
-
-  try {
-    const dir = resolveDir(req.query.dir, OMP_DIR);
-    const filePath = await findOmpSessionFile(dir, sessionId);
-    if (!filePath) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    const payload = await parseOmpSessionFile(filePath);
-    res.json(payload);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
+// --- OMP subagents ---
 
 app.get('/api/omp/sessions/:sessionId/children', async (req, res) => {
   const sessionId = sanitizeSessionId(req.params.sessionId);
@@ -1092,69 +854,7 @@ app.get('/api/omp/sessions/:sessionId/children/:name', async (req, res) => {
   }
 });
 
-// --- Hermes platform (SQLite) ---
-
-app.get('/api/hermes/sessions', async (req, res) => {
-  try {
-    const dir = resolveDir(req.query.dir, HERMES_DIR);
-    const sessions = listHermesSessions(dir);
-    res.json(sessions);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/hermes/sessions/:sessionId', async (req, res) => {
-  const sessionId = sanitizeSessionId(req.params.sessionId);
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Invalid session ID' });
-  }
-
-  try {
-    const dir = resolveDir(req.query.dir, HERMES_DIR);
-    const payload = getHermesSession(dir, sessionId);
-    if (!payload) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    res.json(payload);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- Claude Code platform ---
-
-app.get('/api/claude-code/sessions', async (req, res) => {
-  try {
-    const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
-    const sessions = await listClaudeCodeSessions(dir);
-    res.json(sessions);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/claude-code/sessions/:sessionId', async (req, res) => {
-  const sessionId = sanitizeSessionId(req.params.sessionId);
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Invalid session ID' });
-  }
-
-  try {
-    const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
-    const filePath = await findClaudeCodeSessionFile(dir, sessionId);
-    if (!filePath) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    const payload = await parseClaudeCodeSessionFile(filePath);
-    res.json(payload);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
+// --- Claude Code subagents ---
 
 app.get('/api/claude-code/sessions/:sessionId/children', async (req, res) => {
   const sessionId = sanitizeSessionId(req.params.sessionId);
@@ -1258,8 +958,8 @@ app.get('/api/:platform/sessions/:sessionId/export', async (req, res) => {
     return res.status(400).json({ error: 'Invalid format: expected md or html' });
   }
   const agent = req.query.agent ? sanitizeAgentName(req.query.agent) : null;
-  if (platformName === 'openclaw' && !agent) {
-    return res.status(400).json({ error: 'agent query parameter is required for openclaw exports' });
+  if (platform.needsAgent && !agent) {
+    return res.status(400).json({ error: `agent query parameter is required for ${platformName} exports` });
   }
   const maxToolBytes = req.query.maxToolBytes ? Math.max(0, parseInt(req.query.maxToolBytes, 10) || 0) : 0;
 
@@ -1681,45 +1381,28 @@ app.get('/api/backup/status', async (req, res) => {
 //   event: error         data: {"error": "..."}
 
 app.get('/api/watch', async (req, res) => {
-  const platform = req.query.platform || 'openclaw';
+  const platformId = req.query.platform || 'openclaw';
+  const platform = PLATFORMS[platformId];
+  if (!platform) return res.status(400).json({ error: 'Unknown platform' });
   const agentName = sanitizeAgentName(req.query.agent || '');
   const sessionId = sanitizeSessionId(req.query.sessionId || '');
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+  if (platform.needsAgent && !agentName) return res.status(400).json({ error: `agent required for ${platformId}` });
 
-  // Resolve the JSONL file path
-  let filePath;
+  // Resolve the JSONL file path (hermes is SQLite — no file, dedicated branch below)
+  let filePath = null;
   try {
-    if (platform === 'openclaw') {
-      if (!agentName) return res.status(400).json({ error: 'agent required for openclaw' });
-      const dir = resolveDir(req.query.dir, DATA_DIR);
-      filePath = await resolveSessionFile(dir, agentName, sessionId);
-    } else if (platform === 'codex') {
-      const dir = resolveDir(req.query.dir, CODEX_DIR);
-      filePath = await findCodexSessionFile(dir, sessionId);
-    } else if (platform === 'dsh') {
-      const dir = resolveDir(req.query.dir, DSH_DIR);
-      filePath = await findDshSessionFile(dir, sessionId);
-    } else if (platform === 'gemini') {
-      const dir = resolveDir(req.query.dir, GEMINI_DIR);
-      filePath = await findGeminiSessionFile(dir, sessionId);
-    } else if (platform === 'claude-code') {
-      const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
-      filePath = await findClaudeCodeSessionFile(dir, sessionId);
-    } else if (platform === 'omp') {
-      const dir = resolveDir(req.query.dir, OMP_DIR);
-      filePath = await findOmpSessionFile(dir, sessionId);
-    } else if (platform === 'hermes') {
-      // Hermes uses SQLite, not file-based SSE — handle separately below
-    } else {
-      return res.status(400).json({ error: 'Unknown platform' });
+    if (platform.find) {
+      const dir = resolveDir(req.query.dir, platform.defaultDir());
+      filePath = await platform.find(dir, sessionId, { agent: agentName });
     }
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
-  if (!filePath && platform !== 'hermes') return res.status(404).json({ error: 'Session not found' });
+  if (!filePath && platformId !== 'hermes') return res.status(404).json({ error: 'Session not found' });
 
   // Hermes: WAL file watch-based SSE
-  if (platform === 'hermes') {
+  if (platformId === 'hermes') {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -1829,7 +1512,7 @@ app.get('/api/watch', async (req, res) => {
     } finally {
       await fd.close();
     }
-    if (platform === 'dsh' && filePath.endsWith('.zstd')) {
+    if (platformId === 'dsh' && filePath.endsWith('.zstd')) {
       // Only advance past complete frames — a torn trailing frame is retried
       // on the next change event once its remaining bytes land.
       const { frames } = scanZstdFrames(buf);
@@ -1859,47 +1542,10 @@ app.get('/api/watch', async (req, res) => {
       } catch {
         continue;
       }
-      if (platform === 'openclaw') {
-        if (rec.type === 'session') {
-          sessionMeta = { id: rec.id, cwd: rec.cwd, timestamp: rec.timestamp };
-        } else if (rec.type === 'message') {
-          messages.push(normalizeMessage(rec));
-        }
-      } else if (platform === 'codex') {
-        const normalized = normalizeCodexRecord(rec);
-        if (normalized) messages.push(normalized);
-      } else if (platform === 'dsh') {
-        if (rec.type === 'session') {
-          sessionMeta = {
-            id: rec.id,
-            cwd: rec.cwd || null,
-            timestamp: typeof rec.createdAt === 'number' ? new Date(rec.createdAt).toISOString() : null,
-          };
-        } else {
-          const normalized = normalizeDshEvents([line]);
-          if (normalized.length) messages.push(...normalized);
-        }
-      } else if (platform === 'gemini') {
-        // Appended records carry an id; a re-appended id supersedes the
-        // earlier one, which the client-side reload handles. Metadata lines
-        // ({sessionId, …}) and $set/$rewindTo folds carry no new messages.
-        if (typeof rec.id === 'string') {
-          const normalized = normalizeGeminiRecord(rec);
-          if (normalized.length) messages.push(...normalized);
-        } else if (typeof rec.sessionId === 'string') {
-          sessionMeta = { id: rec.sessionId, cwd: null, timestamp: rec.startTime || null };
-        }
-      } else if (platform === 'claude-code') {
-        const normalized = normalizeClaudeCodeRecord(rec);
-        if (normalized) messages.push(normalized);
-      } else if (platform === 'omp') {
-        if (rec.type === 'session') {
-          sessionMeta = { id: rec.id, cwd: rec.cwd, timestamp: rec.timestamp };
-        } else {
-          const normalized = normalizeOmpRecord(rec);
-          if (normalized && normalized.length) messages.push(...normalized);
-        }
-      }
+      const parsed = platform.watchParse(rec, line);
+      if (!parsed) continue;
+      if (parsed.session) sessionMeta = parsed.session;
+      if (parsed.messages) messages.push(...parsed.messages);
     }
     return { messages, sessionMeta };
   }
