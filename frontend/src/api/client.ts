@@ -341,6 +341,20 @@ export function getVersion(): Promise<VersionInfo> {
   return fetchJson('/api/version');
 }
 
+/** URL for the server-side session export (Markdown / standalone HTML download). */
+export function exportUrl(
+  platform: Platform,
+  sessionId: string,
+  format: 'md' | 'html',
+  opts: { agent?: string; dir?: string } = {}
+): string {
+  return withParams(`/api/${encodeURIComponent(platform)}/sessions/${encodeURIComponent(sessionId)}/export`, {
+    format,
+    agent: opts.agent,
+    dir: opts.dir,
+  });
+}
+
 /** URL for the real-time tail EventSource (GET /api/watch, SSE — consumed via new EventSource()). */
 export function watchUrl(opts: {
   platform: Platform;

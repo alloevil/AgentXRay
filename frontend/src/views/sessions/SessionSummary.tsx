@@ -5,6 +5,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { SessionDetail } from '@/api/types';
+import { DEMO } from '@/demo/flag';
 import { formatCost, formatDurationCompact } from '@/lib/pure';
 import { cn } from '@/lib/utils';
 import { dirForPlatform, loadStoredFlag, saveStoredFlag, SUMMARY_COLLAPSED_KEY, useAppStore } from '@/store';
@@ -52,6 +53,7 @@ const ACTION_BTN =
 function ExportMenu({ detail }: { detail: SessionDetail }) {
   const platform = useAppStore((s) => s.platform);
   const selectedSessionId = useAppStore((s) => s.selectedSessionId);
+  const selectedAgent = useAppStore((s) => s.selectedAgent);
   const settings = useAppStore((s) => s.settings);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -64,7 +66,8 @@ function ExportMenu({ detail }: { detail: SessionDetail }) {
       detail,
       platform,
       selectedSessionId,
-      dirForPlatform(settings, platform) || undefined
+      dirForPlatform(settings, platform) || undefined,
+      platform === 'openclaw' ? selectedAgent : undefined
     );
     if (result === 'copied') {
       setCopied(true);
@@ -75,6 +78,7 @@ function ExportMenu({ detail }: { detail: SessionDetail }) {
 
   const entries: [ExportFormat, string][] = [
     ['markdown', '📝 Markdown (.md)'],
+    ...(DEMO ? [] : ([['html', '🌐 HTML (.html)']] as [ExportFormat, string][])),
     ['json', '📦 JSON (.json)'],
     ['clipboard', '📋 复制到剪贴板'],
   ];

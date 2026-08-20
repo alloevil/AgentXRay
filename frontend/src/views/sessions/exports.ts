@@ -2,8 +2,9 @@
 // from legacy sessionToMarkdown/exportAs* (public/js/app.js).
 
 import { toast } from 'sonner';
-import { getOtlp } from '@/api/client';
+import { exportUrl, getOtlp } from '@/api/client';
 import type { Platform, SessionDetail } from '@/api/types';
+import { DEMO } from '@/demo/flag';
 import { getTextContent } from '@/lib/pure';
 import { formatDate } from './lib';
 
@@ -106,21 +107,32 @@ export function exportFilename(detail: SessionDetail | undefined, selectedSessio
   return `agentxray-${id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60)}.${ext}`;
 }
 
-export type ExportFormat = 'markdown' | 'json' | 'clipboard' | 'otlp';
+export type ExportFormat = 'markdown' | 'html' | 'json' | 'clipboard' | 'otlp';
 
 export async function runExport(
   format: ExportFormat,
   detail: SessionDetail,
   platform: Platform,
   selectedSessionId: string,
-  dir: string | undefined
+  dir: string | undefined,
+  agent?: string
 ): Promise<'copied' | void> {
-  if (format === 'markdown') {
-    downloadFile(
-      sessionToMarkdown(detail, platform, selectedSessionId),
-      exportFilename(detail, selectedSessionId, 'md'),
-      'text/markdown;charset=utf-8'
-    );
+  if (format === 'markdown' || format === 'html') {
+    if (DEMO) {
+      // No backend in demo mode — fall back to the client-side markdown serializer.
+      downloadFile(
+        sessionToMarkdown(detail, platform, selectedSessionId),
+        exportFilename(detail, selectedSessionId, 'md'),
+        'text/markdown;charset=utf-8'
+      );
+      return;
+    }
+    // Server-rendered export: shareable Markdown / self-contained HTML with
+    // best-effort secret redaction. Content-Disposition drives the filename.
+    const a = document.createElement('a');
+    a.href = exportUrl(platform, selectedSessionId, format === 'html' ? 'html' : 'md', { agent, dir });
+    a.download = '';
+    a.click();
   } else if (format === 'json') {
     downloadFile(
       JSON.stringify(detail, null, 2),

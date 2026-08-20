@@ -3342,6 +3342,7 @@ function renderSummary() {
               <button class="export-btn" id="exportBtn">📥 导出</button>
               <div class="export-menu" id="exportMenu">
                 <button data-export="markdown">📝 Markdown (.md)</button>
+                <button data-export="html">🌐 HTML (.html)</button>
                 <button data-export="json">📦 JSON (.json)</button>
                 <button data-export="clipboard">📋 复制到剪贴板</button>
                 ${['codex', 'claude-code', 'omp'].includes(state.platform) ? '<button data-export="otlp">🔭 OTLP JSON</button>' : ''}
@@ -3477,6 +3478,7 @@ function renderSummary() {
         exportMenu.classList.remove('open');
         const fmt = btn.dataset.export;
         if (fmt === 'markdown') exportAsMarkdown();
+        else if (fmt === 'html') exportAsHtml();
         else if (fmt === 'json') exportAsJson();
         else if (fmt === 'clipboard') exportToClipboard();
         else if (fmt === 'otlp') exportAsOtlp();
@@ -3625,6 +3627,19 @@ function exportAsJson() {
   if (!state.sessionData) return;
   const json = JSON.stringify(state.sessionData, null, 2);
   downloadFile(json, getExportFilename('json'), 'application/json;charset=utf-8');
+}
+
+// Server-rendered standalone HTML export (inline CSS, secrets scrubbed best-effort).
+function exportAsHtml() {
+  if (!state.selectedSessionId) return;
+  const params = new URLSearchParams({ format: 'html' });
+  if (state.platform === 'openclaw') params.set('agent', state.selectedAgent);
+  const dir = dirParam();
+  if (dir) params.set('dir', decodeURIComponent(dir.slice('?dir='.length)));
+  const a = document.createElement('a');
+  a.href = `/api/${encodeURIComponent(state.platform)}/sessions/${encodeURIComponent(state.selectedSessionId)}/export?${params}`;
+  a.download = '';
+  a.click();
 }
 
 async function exportAsOtlp() {
