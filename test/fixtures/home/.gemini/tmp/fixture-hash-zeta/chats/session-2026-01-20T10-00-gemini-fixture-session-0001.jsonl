@@ -1,0 +1,4 @@
+{"sessionId":"gemini-fixture-session-0001","projectHash":"fixture-hash-zeta","startTime":"2026-01-20T10:00:00.000Z","lastUpdated":"2026-01-20T10:05:00.000Z","directories":["/fixtures/project-zeta"]}
+{"id":"m1","timestamp":"2026-01-20T10:00:01.000Z","type":"user","content":"fixture: gemini-needle-zeta list the files"}
+{"id":"m2","timestamp":"2026-01-20T10:00:05.000Z","type":"gemini","model":"gemini-2.5-pro","thoughts":[{"subject":"Planning","description":"fixture: think about listing"}],"content":[{"text":"fixture: listing files now."}],"tokens":{"input":200,"output":50,"cached":120,"thoughts":15},"toolCalls":[{"id":"call-gem-1","name":"list_directory","args":{"path":"/fixtures/project-zeta"},"result":[{"text":"file-a.txt\n"}],"status":"success","timestamp":"2026-01-20T10:00:03.000Z"}]}
+{"id":"m3","timestamp":"2026-01-20T10:00:06.000Z","type":"info","content":"fixture: cli chrome to be skipped"}

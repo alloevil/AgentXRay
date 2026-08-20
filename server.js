@@ -12,6 +12,7 @@ const {
   HERMES_DIR,
   OMP_DIR,
   DSH_DIR,
+  GEMINI_DIR,
   LIBRARY_DIR,
   ARCHIVE_DIR,
   sessionMetaCache,
@@ -45,6 +46,13 @@ const {
   normalizeDshEvents,
   parseDshSessionFile,
 } = require('./lib/platforms/dsh');
+const {
+  findGeminiSessionFile,
+  listGeminiSessions,
+  normalizeGeminiRecord,
+  foldGeminiRecords,
+  parseGeminiSessionFile,
+} = require('./lib/platforms/gemini');
 const {
   ompSessionIdFromFile,
   findOmpSessionFile,
@@ -282,7 +290,7 @@ app.get('/api/tools/audit', async (req, res) => {
     }
 
     // Per-platform dir overrides, mirroring /api/search: `dir` applies to the
-    // selected platform; in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirOmp/dirDsh.
+    // selected platform; in `all` mode use dirOpenclaw/dirCodex/dirClaude/dirOmp/dirDsh/dirGemini.
     const all = platform === 'all';
     const dirs = {
       openclaw: (all ? req.query.dirOpenclaw : req.query.dir) || '',
@@ -290,6 +298,7 @@ app.get('/api/tools/audit', async (req, res) => {
       'claude-code': (all ? req.query.dirClaude : req.query.dir) || '',
       omp: (all ? req.query.dirOmp : req.query.dir) || '',
       dsh: (all ? req.query.dirDsh : req.query.dir) || '',
+      gemini: (all ? req.query.dirGemini : req.query.dir) || '',
     };
 
     // cached=1: return the persisted result if present, never compute
@@ -299,7 +308,7 @@ app.get('/api/tools/audit', async (req, res) => {
       return res.json({ ...persisted, persisted: true });
     }
 
-    const cacheKey = `${platform}|${dirs['openclaw']}|${dirs['codex']}|${dirs['claude-code']}|${dirs['omp']}|${dirs['dsh']}`;
+    const cacheKey = `${platform}|${dirs['openclaw']}|${dirs['codex']}|${dirs['claude-code']}|${dirs['omp']}|${dirs['dsh']}|${dirs['gemini']}`;
     if (req.query.refresh !== '1') {
       const cached = toolAuditCache.get(cacheKey);
       if (cached && cached.expires > Date.now()) return res.json(cached.data);
@@ -423,12 +432,13 @@ app.get('/api/search', async (req, res) => {
     }
 
     // Collect candidate files per platform in parallel, then merge in a
-    // stable order: openclaw, codex, claude-code, omp, dsh.
+    // stable order: openclaw, codex, claude-code, omp, dsh, gemini.
     const openclawFiles = [];
     const codexFiles = [];
     const claudeFiles = [];
     const ompFiles = [];
     const dshFiles = [];
+    const geminiFiles = [];
 
     await Promise.all([
       (async () => {
@@ -533,6 +543,28 @@ app.get('/api/search', async (req, res) => {
                   file: logFile.name,
                   sessionId: s.name,
                   platform: 'dsh',
+                });
+              }
+            }
+          }
+        } catch {}
+      })(),
+      (async () => {
+        if (platform !== 'gemini' && !all) return;
+        const dir = dirFor('dirGemini', GEMINI_DIR);
+        try {
+          // gemini sessions live at <dir>/<projectHash>/chats/session-*.jsonl
+          const projects = await fsp.readdir(dir, { withFileTypes: true });
+          for (const p of projects) {
+            if (!p.isDirectory()) continue;
+            const chatsDir = path.join(dir, p.name, 'chats');
+            const entries = await fsp.readdir(chatsDir, { withFileTypes: true }).catch(() => []);
+            for (const f of entries) {
+              if (f.isFile() && /^session-.*\.jsonl$/.test(f.name)) {
+                geminiFiles.push({
+                  path: path.join(chatsDir, f.name),
+                  file: f.name,
+                  platform: 'gemini',
                 });
               }
             }
@@ -664,6 +696,49 @@ app.get('/api/search', async (req, res) => {
       }
       if (matches.length > 0 && seen.size === keywords.length) {
         results.push({ sessionId, file: sf.file, platform: 'dsh', matches });
+      }
+    }
+
+    // Gemini records keep text at the top level (content: string | Part[]) and
+    // fold history via $rewindTo/$set — reuse the adapter's fold, then match.
+    for (const sf of geminiFiles) {
+      if (results.length >= maxResults) break;
+      let folded;
+      try {
+        const text = await fsp.readFile(sf.path, 'utf8');
+        folded = foldGeminiRecords(text.split('\n').filter((l) => l.trim()));
+      } catch {
+        continue;
+      }
+      const matches = [];
+      const seen = new Set();
+      const sessionId = folded.metadata.sessionId || sf.file.replace(/\.jsonl$/, '');
+      for (const rec of folded.messages) {
+        if (matches.length >= 3 && seen.size === keywords.length) break;
+        const parts = [];
+        if (typeof rec.content === 'string') parts.push(rec.content);
+        else if (Array.isArray(rec.content)) {
+          for (const p of rec.content) if (p && typeof p.text === 'string') parts.push(p.text);
+        }
+        const text = parts.join(' ');
+        const textLower = text.toLowerCase();
+        for (const kw of keywords) {
+          if (textLower.includes(kw)) seen.add(kw);
+        }
+        if (matches.length < 3 && textLower.includes(keywords[0])) {
+          const idx = textLower.indexOf(keywords[0]);
+          const start = Math.max(0, idx - 40);
+          const end = Math.min(text.length, idx + keywords[0].length + 60);
+          const snippet = (start > 0 ? '\u2026' : '') + text.slice(start, end) + (end < text.length ? '\u2026' : '');
+          matches.push({
+            role: rec.type === 'gemini' ? 'assistant' : rec.type || '',
+            snippet,
+            timestamp: rec.timestamp || null,
+          });
+        }
+      }
+      if (matches.length > 0 && seen.size === keywords.length) {
+        results.push({ sessionId, file: sf.file, platform: 'gemini', matches });
       }
     }
 
@@ -895,6 +970,40 @@ app.get('/api/dsh/sessions/:sessionId', async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
     const payload = await parseDshSessionFile(filePath);
+    res.json(payload);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Gemini CLI platform ---
+
+app.get('/api/gemini/sessions', async (req, res) => {
+  try {
+    const dir = resolveDir(req.query.dir, GEMINI_DIR);
+    const sessions = await listGeminiSessions(dir);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/gemini/sessions/:sessionId', async (req, res) => {
+  const sessionId = sanitizeSessionId(req.params.sessionId);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Invalid session ID' });
+  }
+
+  try {
+    const dir = resolveDir(req.query.dir, GEMINI_DIR);
+    const filePath = await findGeminiSessionFile(dir, sessionId);
+    if (!filePath) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const payload = await parseGeminiSessionFile(filePath);
     res.json(payload);
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -1590,6 +1699,9 @@ app.get('/api/watch', async (req, res) => {
     } else if (platform === 'dsh') {
       const dir = resolveDir(req.query.dir, DSH_DIR);
       filePath = await findDshSessionFile(dir, sessionId);
+    } else if (platform === 'gemini') {
+      const dir = resolveDir(req.query.dir, GEMINI_DIR);
+      filePath = await findGeminiSessionFile(dir, sessionId);
     } else if (platform === 'claude-code') {
       const dir = resolveDir(req.query.dir, CLAUDE_CODE_DIR);
       filePath = await findClaudeCodeSessionFile(dir, sessionId);
@@ -1762,6 +1874,16 @@ app.get('/api/watch', async (req, res) => {
           const normalized = normalizeDshEvents([line]);
           if (normalized.length) messages.push(...normalized);
         }
+      } else if (platform === 'gemini') {
+        // Appended records carry an id; a re-appended id supersedes the
+        // earlier one, which the client-side reload handles. Metadata lines
+        // ({sessionId, …}) and $set/$rewindTo folds carry no new messages.
+        if (typeof rec.id === 'string') {
+          const normalized = normalizeGeminiRecord(rec);
+          if (normalized.length) messages.push(...normalized);
+        } else if (typeof rec.sessionId === 'string') {
+          sessionMeta = { id: rec.sessionId, cwd: null, timestamp: rec.startTime || null };
+        }
       } else if (platform === 'claude-code') {
         const normalized = normalizeClaudeCodeRecord(rec);
         if (normalized) messages.push(normalized);
@@ -1873,4 +1995,5 @@ app.listen(PORT, HOST, () => {
   console.log(`  Hermes:      ${path.join(HERMES_DIR, 'state.db')}`);
   console.log(`  OMP:         ${OMP_DIR}`);
   console.log(`  DeepSeek Harness: ${DSH_DIR}`);
+  console.log(`  Gemini CLI:  ${GEMINI_DIR}`);
 });

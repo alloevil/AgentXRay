@@ -1,0 +1,7 @@
+{"sessionId":"gemini-fixture-session-0002","projectHash":"fixture-hash-eta","startTime":"2026-01-21T09:00:00.000Z","lastUpdated":"2026-01-21T09:02:00.000Z","directories":["/fixtures/project-eta"],"summary":"fixture: eta session summary"}
+{"id":"u1","timestamp":"2026-01-21T09:00:01.000Z","type":"user","content":"fixture: rewound-question-never-visible"}
+{"id":"a1","timestamp":"2026-01-21T09:00:05.000Z","type":"gemini","model":"gemini-2.5-flash","content":"fixture: rewound-answer-never-visible"}
+{"$rewindTo":"u1"}
+{"id":"u2","timestamp":"2026-01-21T09:01:00.000Z","type":"user","content":[{"text":"fixture: gemini-rewind-needle-eta the real question"}]}
+{"id":"a2","timestamp":"2026-01-21T09:01:10.000Z","type":"gemini","model":"gemini-2.5-flash","content":"fixture: the real answer.","tokens":{"input":90,"output":20,"cached":0,"thoughts":0},"toolCalls":[{"id":"call-gem-2","name":"run_shell_command","args":{"command":"false"},"result":[{"text":"fixture: command failed"}],"status":"error"}]}
+{"$set":{"lastUpdated":"2026-01-21T09:02:00.000Z"}}

@@ -20,6 +20,7 @@ const DIR_FIELDS: { key: keyof DirSettings; label: string; placeholder: string }
   { key: 'hermesDir', label: 'Hermes Directory', placeholder: '~/.hermes' },
   { key: 'ompDir', label: 'OMP Directory', placeholder: '~/.omp/agent/sessions' },
   { key: 'dshDir', label: 'DeepSeek Harness Directory', placeholder: '~/.dsh/sessions' },
+  { key: 'geminiDir', label: 'Gemini CLI Directory', placeholder: '~/.gemini/tmp' },
 ];
 
 function BackupSection() {
@@ -93,6 +94,7 @@ export function SettingsDialog({
       hermesDir: draft.hermesDir.trim(),
       ompDir: draft.ompDir.trim(),
       dshDir: draft.dshDir.trim(),
+      geminiDir: draft.geminiDir.trim(),
     });
     onOpenChange(false);
     // Legacy refreshAll(false): every dir-dependent query must refetch.

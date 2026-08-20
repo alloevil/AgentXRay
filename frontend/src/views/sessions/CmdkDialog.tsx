@@ -21,6 +21,7 @@ const PLAT_BADGE: Record<string, [string, string]> = {
   hermes: ['Hermes', '#f78166'],
   omp: ['OMP', '#ffd33d'],
   dsh: ['DeepSeek', '#4d6bfe'],
+  gemini: ['Gemini', '#4285f4'],
 };
 
 interface HitRow {

@@ -82,7 +82,7 @@ function ExportMenu({ detail }: { detail: SessionDetail }) {
     ['json', '📦 JSON (.json)'],
     ['clipboard', '📋 复制到剪贴板'],
   ];
-  if (['codex', 'claude-code', 'omp', 'dsh'].includes(platform)) entries.push(['otlp', '🔭 OTLP JSON']);
+  if (['codex', 'claude-code', 'omp', 'dsh', 'gemini'].includes(platform)) entries.push(['otlp', '🔭 OTLP JSON']);
 
   return (
     <div className="relative">

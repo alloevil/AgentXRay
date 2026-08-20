@@ -26,20 +26,30 @@
 
 ---
 
-X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, **Hermes**, **OMP** and **DeepSeek Harness** — all in one interface.
+X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, **Hermes**, **OMP**, **DeepSeek Harness** and **Gemini CLI** — all in one interface.
+
+## Why AgentXRay
+
+AgentXRay is a **local-first viewer for the agent sessions you already have**.
+
+Observability platforms like LangSmith and Langfuse are built for agents *you* write: you add their SDK, instrument your code, and traces stream to a hosted backend. Great for building your own agent — but CLI coding agents (Claude Code, Codex, Gemini CLI, …) aren't your code to instrument. They already write complete session logs to your disk; AgentXRay just reads them. Zero integration, zero config, nothing leaves your machine.
+
+Compared to grepping the raw JSONL yourself, AgentXRay normalizes seven different log formats into one interface: tool calls paired with their results, token usage summed per session, full-text search across every platform at once, prompt extraction, and trace timelines — things that are tedious to reconstruct by hand from a 50MB session log.
+
+If you build and operate your own agent in production, use a tracing platform. If you want to see what your coding agents actually did, use AgentXRay.
 
 ---
 
 ## Features
 
-- **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, Hermes, OMP and DeepSeek Harness sessions (dsh's multi-frame zstd session logs are decompressed transparently)
+- **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness and Gemini CLI sessions (dsh's multi-frame zstd session logs are decompressed transparently; Gemini CLI's `/rewind` checkpoints are folded so rewound history never renders twice)
 - **Session browser** — Browse agents, filter/search sessions, view message history
 - **Tool call inspection** — Expandable tool calls with arguments and results
 - **Trace view** — Per-turn waterfall of where the time went: model inference (blue) vs tool execution (green, red on error); click any bar to jump to that message
 - **Prompt extraction** — See every real human prompt per session (tool results, slash commands and injected noise filtered out), grouped by working directory, with search / JSON export / copy
 - **Prompt optimization** — Cluster prompts into templates, attribute session outcomes (turns, tool calls, error rate) per template, and get Claude-powered rewrite suggestions via the local `claude` CLI
 - **Prompt library** — Curate the prompts worth keeping into `~/.agentxray/library`, tag / edit / search them, then install any of them as a native slash command for Claude Code, Codex or OMP with one click — `$ARGUMENTS` is passed through, so `/name some args` works in the target CLI
-- **Global search** — One search box across all six platforms at once, multi-keyword AND matching, colored platform badges per hit — including prompts recovered from sessions that Claude Code's cleanup already deleted
+- **Global search** — One search box across all seven platforms at once, multi-keyword AND matching, colored platform badges per hit — including prompts recovered from sessions that Claude Code's cleanup already deleted
 - **Session insights** — Aggregate analytics dashboard with tool stats, error clustering and daily trends
 - **Spawn tracking** — Detect and navigate parent/child agent relationships
 - **OMP sub-agents** — Sub-agents spawned by an OMP session show up as chips in the summary; click one to read the child agent's full transcript
@@ -75,7 +85,7 @@ Sessions that spawn sub-agents are marked with a 🔗 badge. Click to navigate t
 
 ### Multi-Platform Support
 
-Switch between OpenClaw, Codex, Claude Code, Hermes, OMP and DeepSeek Harness with one click. Each platform's sessions are parsed from their native log format.
+Switch between OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness and Gemini CLI with one click. Each platform's sessions are parsed from their native log format.
 
 ![Codex View](screenshots/codex-view.png)
 
@@ -123,7 +133,7 @@ Open http://localhost:3800
 
 ### Basic Workflow
 
-1. **Select a platform** — Click `OpenClaw`, `Codex`, `Claude Code`, `Hermes`, `OMP`, or `DeepSeek Harness` in the top bar
+1. **Select a platform** — Click `OpenClaw`, `Codex`, `Claude Code`, `Hermes`, `OMP`, `DeepSeek Harness`, or `Gemini CLI` in the top bar
 2. **Pick an agent** — For OpenClaw, choose an agent from the dropdown (e.g. `xiaot`, `mimo`)
 3. **Browse sessions** — Sessions are sorted by date, newest first. Each card shows:
    - Timestamp and status (`active` / `archived`)
@@ -171,6 +181,7 @@ Click the **Prompts** tab (next to Sessions / Insights) to see every real human 
 | Hermes      | `~/.hermes`                   |
 | OMP         | `~/.omp/agent/sessions`       |
 | DeepSeek Harness | `~/.dsh/sessions` (honors `DSH_HOME`) |
+| Gemini CLI  | `~/.gemini/tmp`               |
 
 ### Custom directories
 
@@ -185,6 +196,7 @@ CLAUDE_CODE_DIR=/custom/path/claude \
 HERMES_DIR=/custom/path/hermes \
 OMP_DIR=/custom/path/omp \
 DSH_DIR=/custom/path/dsh/sessions \
+GEMINI_DIR=/custom/path/gemini/tmp \
 npm start
 ```
 
@@ -209,6 +221,8 @@ npm start
 | `GET /api/omp/sessions/:id` | Get OMP session messages |
 | `GET /api/dsh/sessions` | List DeepSeek Harness sessions |
 | `GET /api/dsh/sessions/:id` | Get DeepSeek Harness session messages |
+| `GET /api/gemini/sessions` | List Gemini CLI sessions |
+| `GET /api/gemini/sessions/:id` | Get Gemini CLI session messages |
 | `GET /api/spawn-map` | Build agent spawn relationship map |
 | `GET /api/insights` | Aggregate analytics (tool stats, error clusters, trends) |
 | `GET /api/prompts` | Real human prompts per session, grouped by directory |
@@ -250,6 +264,7 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 | Hermes | SQLite | `~/.hermes/state.db` |
 | OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
 | DeepSeek Harness | JSONL / zstd-compressed JSONL | `~/.dsh/sessions/{project}/{id}/session.jsonl[.zstd]` |
+| Gemini CLI | JSONL | `~/.gemini/tmp/{projectHash}/chats/session-*.jsonl` |
 
 dsh's `.jsonl.zstd` logs are a concatenation of independent Zstandard frames (one per append batch); AgentXRay scans the frame boundaries and decompresses every frame, tolerating a torn trailing frame after a crash. Reading compressed dsh logs requires Node.js ≥ 22.15 (built-in zstd); plain `session.jsonl` logs work on any supported Node.
 

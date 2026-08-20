@@ -1,0 +1,2 @@
+{"sessionId":"gemini-fixture-subagent-0001","projectHash":"fixture-hash-zeta","startTime":"2026-01-20T10:01:00.000Z","lastUpdated":"2026-01-20T10:01:30.000Z"}
+{"id":"s1","timestamp":"2026-01-20T10:01:01.000Z","type":"user","content":"fixture: subagent transcript, excluded from the session list"}

@@ -38,6 +38,7 @@ export const EMPTY_SETTINGS: DirSettings = {
   hermesDir: '',
   ompDir: '',
   dshDir: '',
+  geminiDir: '',
 };
 
 export function dirForPlatform(settings: DirSettings, platform: Platform): string {
@@ -54,6 +55,8 @@ export function dirForPlatform(settings: DirSettings, platform: Platform): strin
       return settings.ompDir;
     case 'dsh':
       return settings.dshDir;
+    case 'gemini':
+      return settings.geminiDir;
   }
 }
 
@@ -75,6 +78,7 @@ function loadPersisted(): { settings: DirSettings; platform: Platform; hasStored
       result.settings.hermesDir = typeof parsed.hermesDir === 'string' ? parsed.hermesDir : '';
       result.settings.ompDir = typeof parsed.ompDir === 'string' ? parsed.ompDir : '';
       result.settings.dshDir = typeof parsed.dshDir === 'string' ? parsed.dshDir : '';
+      result.settings.geminiDir = typeof parsed.geminiDir === 'string' ? parsed.geminiDir : '';
       if (PLATFORMS.includes(parsed.platform as Platform)) {
         result.platform = parsed.platform as Platform;
         result.hasStoredPlatform = true;

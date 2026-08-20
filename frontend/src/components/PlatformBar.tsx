@@ -13,6 +13,7 @@ const PLATFORM_TIPS: Record<Platform, string> = {
   hermes: 'Hermes 会话（~/.hermes）',
   omp: 'oh-my-pi 会话（~/.omp/agent/sessions）',
   dsh: 'DeepSeek Harness 会话（~/.dsh/sessions）',
+  gemini: 'Gemini CLI 会话（~/.gemini/tmp）',
 };
 
 // Probe every platform's session count once per page load (legacy

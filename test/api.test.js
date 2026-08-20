@@ -199,7 +199,7 @@ describe('AgentXRay API', () => {
     it('platform=all merges hits across platforms', async () => {
       const results = await getJson(srv.base, '/api/search?q=fixture&platform=all&limit=100');
       const platforms = new Set(results.map((r) => r.platform));
-      for (const p of ['codex', 'claude-code', 'omp']) {
+      for (const p of ['codex', 'claude-code', 'omp', 'dsh', 'gemini']) {
         assert.ok(platforms.has(p), `missing platform ${p}`);
       }
     });
@@ -398,26 +398,27 @@ describe('backup', () => {
 
   it('copies every session log once, then skips everything on the second run', async () => {
     const first = await sendJson(srv.base, 'POST', '/api/backup', undefined);
-    // codex 2 + claude 2 + history.jsonl + omp 2 + dsh 2 (subagent transcripts excluded)
-    assert.equal(first.copied, 9);
+    // codex 2 + claude 2 + history.jsonl + omp 2 + dsh 2 + gemini 3 (incl. nested subagent transcript)
+    assert.equal(first.copied, 12);
     assert.equal(first.skipped, 0);
-    assert.equal(first.total, 9);
+    assert.equal(first.total, 12);
     assert.deepEqual(first.byPlatform.codex, { copied: 2, skipped: 0 });
     assert.deepEqual(first.byPlatform['claude-code'], { copied: 3, skipped: 0 });
     assert.deepEqual(first.byPlatform.omp, { copied: 2, skipped: 0 });
     assert.deepEqual(first.byPlatform.dsh, { copied: 2, skipped: 0 });
+    assert.deepEqual(first.byPlatform.gemini, { copied: 3, skipped: 0 });
     // Archive stays inside the temp HOME
     assert.equal(first.archiveDir, path.join(srv.home, '.agentxray', 'archive'));
     assert.ok(await exists(path.join(first.archiveDir, 'claude-code', 'history.jsonl')));
 
     const second = await sendJson(srv.base, 'POST', '/api/backup', undefined);
     assert.equal(second.copied, 0);
-    assert.equal(second.skipped, 9);
-    assert.equal(second.total, 9);
+    assert.equal(second.skipped, 12);
+    assert.equal(second.total, 12);
 
     const status = await getJson(srv.base, '/api/backup/status');
     assert.equal(status.archiveDir, first.archiveDir);
-    assert.equal(status.files, 9);
+    assert.equal(status.files, 12);
     assert.ok(status.bytes > 0);
     assert.ok(typeof status.lastBackup === 'string');
   });
