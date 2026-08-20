@@ -214,7 +214,8 @@ npm start
 ## 技术栈
 
 - **后端：** Node.js + Express
-- **前端：** 单文件 HTML/CSS/JS（无构建步骤，无框架依赖）
+- **前端：** `frontend/` 下的 React + Vite + TypeScript（默认 UI，服务自 `frontend/dist`）
+- **Legacy UI：** `public/` 下的原版 vanilla HTML/CSS/JS 应用，服务于 `/legacy` —— **已冻结，仅接受安全修复**。新功能只进 React 应用；改动 React 渲染器无需触碰 `public/js/`。共享逻辑（格式化、trace 构建、markdown/转义管线）单一源在 `frontend/src/lib/pure.ts` 与 `frontend/src/lib/markdown.ts`,`public/js/pure.js` 由其生成（`npm run build:legacy-pure`,也包含在 `build:ui` 中）。
 - **数据：** 直接从磁盘读取 JSONL 会话文件 / SQLite 数据库
 - **零外部 CDN** — 完全自包含，离线可用
 

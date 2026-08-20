@@ -1,5 +1,6 @@
-// Pure (no-DOM) helpers, ported verbatim from public/js/pure.js — algorithms unchanged.
-// The legacy file stays the single source of truth for node tests; keep both in sync.
+// Pure (no-DOM) helpers shared by the React UI and (via the generated
+// public/js/pure.js bundle — see scripts/build-legacy-pure.mjs) the frozen
+// legacy UI and node tests. This file IS the single source of truth.
 
 import type { MessageContentPart, SessionMessage } from '@/api/types';
 

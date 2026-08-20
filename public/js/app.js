@@ -1,3 +1,12 @@
+// ============================================================================
+// FROZEN LEGACY UI — security fixes only.
+// The React app under frontend/src is the default UI and the only place new
+// features land; this vanilla bundle is served at /legacy for fallback use.
+// Shared logic (formatters, trace builder, markdown/escape pipeline) comes
+// from js/pure.js, which is GENERATED from frontend/src/lib/{pure,markdown}.ts
+// — never edit rendering/escaping logic here.
+// ============================================================================
+
 const state = {
   platform: 'openclaw', // 'openclaw' | 'codex' | 'claude-code' | 'hermes' | 'omp' | 'dsh' | 'gemini'
   agents: [],
@@ -173,14 +182,8 @@ backupNowBtn.addEventListener('click', async () => {
 
 loadSettings();
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+// escapeHtml / renderMarkdown live in pure.js (generated from
+// frontend/src/lib/{markdown,pure}.ts) and land on window.* before this script.
 
 function formatDate(value) {
   if (!value) return 'Unknown time';
@@ -2918,85 +2921,6 @@ function summarizeTokens(messagesData) {
     });
     return acc;
   }, {});
-}
-
-function renderMarkdownInline(s) {
-  // s is already HTML-escaped. Apply inline markdown.
-  // Links [text](url) — url may contain &amp; from escaping, which is valid in href
-  s = s.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
-  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  return s;
-}
-
-function renderMarkdownBlock(segment) {
-  const lines = segment.split('\n');
-  const out = [];
-  let para = [];
-  let list = null; // { type: 'ul'|'ol', items: [] }
-
-  const flushPara = () => {
-    const text = para.join('\n').replace(/^\n+|\n+$/g, '');
-    if (text.trim()) out.push(`<p>${renderMarkdownInline(text).replace(/\n/g, '<br>')}</p>`);
-    para = [];
-  };
-  const flushList = () => {
-    if (list) out.push(`<${list.type}>${list.items.join('')}</${list.type}>`);
-    list = null;
-  };
-
-  for (const line of lines) {
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    const ul = line.match(/^\s*[-*]\s+(.*)$/);
-    const ol = line.match(/^\s*\d+[.、]\s+(.*)$/);
-    if (h) {
-      flushPara();
-      flushList();
-      out.push(`<h${h[1].length}>${renderMarkdownInline(h[2])}</h${h[1].length}>`);
-    } else if (ul) {
-      flushPara();
-      if (!list || list.type !== 'ul') {
-        flushList();
-        list = { type: 'ul', items: [] };
-      }
-      list.items.push(`<li>${renderMarkdownInline(ul[1])}</li>`);
-    } else if (ol) {
-      flushPara();
-      if (!list || list.type !== 'ol') {
-        flushList();
-        list = { type: 'ol', items: [] };
-      }
-      list.items.push(`<li>${renderMarkdownInline(ol[1])}</li>`);
-    } else if (!line.trim()) {
-      flushPara();
-      flushList();
-    } else {
-      flushList();
-      para.push(line);
-    }
-  }
-  flushPara();
-  flushList();
-  return out.join('');
-}
-
-function renderMarkdown(text) {
-  const escaped = escapeHtml(text);
-  const segments = escaped.split(/```/);
-  const html = segments
-    .map((segment, index) => {
-      if (index % 2 === 1) {
-        const lines = segment.split('\n');
-        const maybeLang = lines[0].trim();
-        const code = lines.slice(1).join('\n') || lines.join('\n');
-        return `<pre><code data-lang="${escapeHtml(maybeLang)}">${code}</code></pre>`;
-      }
-      return renderMarkdownBlock(segment);
-    })
-    .join('');
-  return `<div class="markdown">${html}</div>`;
 }
 
 function createCollapse(toolId, headerHtml, bodyHtml, extraClass) {

@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": ["server.js", "bin/**", "lib/**", "public/js/**", "test/**/*.js"]
+    "includes": ["server.js", "bin/**", "lib/**", "scripts/**", "public/js/**", "test/**/*.js", "!public/js/pure.js"]
   },
   "formatter": {
     "enabled": true,

@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci  # prepare script builds the web UI
+      - run: npm ci  # prepare script builds the web UI (and regenerates public/js/pure.js)
+      # public/js/pure.js is generated from frontend/src/lib/{pure,markdown}.ts;
+      # fail when the committed copy has drifted from the TS sources.
+      - run: git diff --exit-code public/js/pure.js
       - run: npx biome check .
       - run: npm test

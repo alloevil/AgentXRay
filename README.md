@@ -248,7 +248,8 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 ## Tech Stack
 
 - **Backend:** Node.js + Express
-- **Frontend:** Single-file HTML/CSS/JS (~70KB, no build step, no framework)
+- **Frontend:** React + Vite + TypeScript under `frontend/` (default UI, served from `frontend/dist`)
+- **Legacy UI:** the original vanilla HTML/CSS/JS app under `public/`, served at `/legacy` — **frozen: security fixes only**. New features land in the React app exclusively; a feature change to the React renderer requires zero edits under `public/js/`. Shared logic (formatters, trace builder, markdown/escape pipeline) is authored once in `frontend/src/lib/pure.ts` and `frontend/src/lib/markdown.ts`, and `public/js/pure.js` is generated from them (`npm run build:legacy-pure`, also part of `build:ui`).
 - **Data:** Reads JSONL session files directly from disk
 - **Zero external CDN** — Everything is self-contained, works offline
 

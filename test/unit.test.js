@@ -303,3 +303,35 @@ test('buildTraceTurns drops turns without spans and sorts spans by start', () =>
     );
   }
 });
+
+// --- markdown/escape pipeline (single definition site: frontend/src/lib/markdown.ts,
+// bundled into public/js/pure.js for the legacy UI and these tests) ---
+
+test('pure.js exposes the markdown pipeline', () => {
+  for (const name of ['escapeHtml', 'renderMarkdownHtml', 'renderMarkdown']) {
+    assert.equal(typeof pure[name], 'function', `${name} missing`);
+  }
+});
+
+test('escapeHtml neutralizes all five HTML metacharacters', () => {
+  assert.equal(pure.escapeHtml(`<img src=x onerror='a' "b" & c>`), '&lt;img src=x onerror=&#39;a&#39; &quot;b&quot; &amp; c&gt;');
+  assert.equal(pure.escapeHtml(null), 'null');
+});
+
+test('renderMarkdown escapes first, then transforms (XSS-safe)', () => {
+  // Raw HTML in the input must never survive as markup
+  const html = pure.renderMarkdown('<script>alert(1)</script> **bold**');
+  assert.ok(!html.includes('<script>'));
+  assert.ok(html.includes('&lt;script&gt;'));
+  assert.ok(html.includes('<strong>bold</strong>'));
+  assert.ok(html.startsWith('<div class="markdown">'));
+});
+
+test('renderMarkdownHtml renders headings, lists, links and fenced code', () => {
+  const html = pure.renderMarkdownHtml('# Title\n\n- item1\n- item2\n\n1. one\n\n[x](https://e.co/a&b)\n\n```js\ncode<>\n```');
+  assert.ok(html.includes('<h1>Title</h1>'));
+  assert.ok(html.includes('<ul><li>item1</li><li>item2</li></ul>'));
+  assert.ok(html.includes('<ol><li>one</li></ol>'));
+  assert.ok(html.includes('<a href="https://e.co/a&amp;b" target="_blank" rel="noopener">x</a>'));
+  assert.ok(html.includes('<pre><code data-lang="js">code&lt;&gt;\n</code></pre>'));
+});
