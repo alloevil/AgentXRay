@@ -12,8 +12,11 @@ for (let i = 0; i < argv.length; i++) {
   const next = () => (inline !== null ? inline : argv[++i]);
   if (flag === '--port' || flag === '-p') port = next();
   else if (flag === '--host' || flag === '-H') host = next();
-  else if (flag === '--help' || flag === '-h') {
-    console.log('Usage: agentxray [--port <port>] [--host <host>]');
+  else if (flag === '--version' || flag === '-v') {
+    console.log(require('../package.json').version);
+    process.exit(0);
+  } else if (flag === '--help' || flag === '-h') {
+    console.log('Usage: agentxray [--port <port>] [--host <host>] [--version]');
     process.exit(0);
   } else {
     console.error(`agentxray: unknown option '${arg}'`);
