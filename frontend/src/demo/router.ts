@@ -136,6 +136,9 @@ export function demoJson<T>(url: string, init?: RequestInit): Promise<T> {
   if (parsed.pathname === '/api/backup/status') {
     return ok({ archiveDir: '(demo)', files: 0, bytes: 0, lastBackup: null });
   }
+  if (parsed.pathname === '/api/settings/llm') {
+    return ok({ baseUrl: '', model: '', hasApiKey: false, backend: null });
+  }
 
   // /api/:platform/sessions[/:id[/children[/:name]]]
   if (seg(2) === 'sessions') {

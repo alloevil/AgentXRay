@@ -66,8 +66,13 @@ export function PromptItemRow({
     mutationFn: rewritePrompt,
     onSuccess: (data) => setRewrite(data),
     onError: (error) => {
-      setRewriteError('改写失败: ' + errorMessage(error));
-      errorTimer.current = window.setTimeout(() => setRewriteError(''), 5000);
+      const msg = errorMessage(error);
+      setRewriteError('改写失败: ' + msg);
+      // NO_LLM_BACKEND guidance (设置 → LLM 接口) stays until dismissed;
+      // transient failures clear themselves after 5s.
+      if (!msg.includes('未配置 LLM 后端')) {
+        errorTimer.current = window.setTimeout(() => setRewriteError(''), 5000);
+      }
     },
   });
 
@@ -127,7 +132,7 @@ export function PromptItemRow({
             variant="outline"
             size="sm"
             className="h-6 px-2 text-xs"
-            title="用 Claude 改写这条 prompt"
+            title="用配置的 LLM 后端改写这条 prompt（设置 → LLM 接口）"
             disabled={rewriteMutation.isPending}
             onClick={() => {
               if (rewrite) {

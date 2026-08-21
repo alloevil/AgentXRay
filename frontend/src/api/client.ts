@@ -344,6 +344,31 @@ export function getVersion(): Promise<VersionInfo> {
   return fetchJson('/api/version');
 }
 
+// ---------- LLM backend settings (#14) ----------
+
+/** GET/PUT /api/settings/llm — OpenAI-compatible endpoint config, persisted server-side. */
+export interface LlmSettings {
+  baseUrl: string;
+  model: string;
+  /** true when an API key is stored (the key itself never leaves the server) */
+  hasApiKey: boolean;
+  /** which backend prompt tooling would use right now */
+  backend: 'openai' | 'claude-cli' | null;
+}
+
+export function getLlmSettings(): Promise<LlmSettings> {
+  return fetchJson('/api/settings/llm');
+}
+
+/** apiKey semantics: undefined = keep the stored key, '' = clear it, else replace. */
+export function saveLlmSettings(body: {
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+}): Promise<LlmSettings> {
+  return requestJson('/api/settings/llm', 'PUT', body);
+}
+
 /** URL for the server-side session export (Markdown / standalone HTML download). */
 export function exportUrl(
   platform: Platform,

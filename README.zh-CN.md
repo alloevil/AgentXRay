@@ -195,7 +195,8 @@ npm start
 | `GET /api/insights` | 聚合分析（工具统计、错误聚类、趋势） |
 | `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
 | `GET /api/prompts/analyze` | 模板聚类 + 效果归因 + Claude 建议（`?refresh=1` 重算，`?skipLlm=1` 仅聚类） |
-| `POST /api/prompts/rewrite` | 通过 claude CLI 改写单条 prompt（`{ "text": "..." }`） |
+| `POST /api/prompts/rewrite` | 通过配置的 LLM 后端改写单条 prompt（`{ "text": "..." }`；无可用后端时返回 503 及配置指引） |
+| `GET/PUT /api/settings/llm` | LLM 后端配置：OpenAI 兼容 `baseUrl`/`model`/`apiKey`,持久化在 `~/.agentxray/llm.json`（key 不回显） |
 | `GET /api/search` | 会话全文搜索（`?platform=all` 一次搜索全部平台，多关键词 AND） |
 | `GET /api/omp/sessions/:id/children` | 获取该 OMP 会话派生的子 Agent 列表 |
 | `GET /api/omp/sessions/:id/children/:name` | 获取指定子 Agent 的消息详情 |
@@ -205,7 +206,7 @@ npm start
 | `DELETE /api/library/:name` | 删除 prompt 及其已安装的 slash command |
 | `POST /api/library/:name/install` | 安装为 slash command（`{ "targets": ["claude", "codex", "omp"] }`） |
 | `POST /api/library/:name/uninstall` | 卸载已安装的 slash command（请求体同上） |
-| `POST /api/library/suggest-name` | 通过 claude CLI 为 prompt 生成库内命名（`{ "text": "..." }`，CLI 不可用时返回 `null`） |
+| `POST /api/library/suggest-name` | 通过配置的 LLM 后端为 prompt 生成库内命名（`{ "text": "..." }`，无可用后端时返回 `null`） |
 | `POST /api/backup` | 执行一次增量备份到 `~/.agentxray/archive` |
 | `GET /api/backup/status` | 归档统计：文件数、总字节数、最近备份时间 |
 

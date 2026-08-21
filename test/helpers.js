@@ -45,9 +45,9 @@ function serverEnv(home, port) {
 
 // Spawn `node server.js` on one candidate port; resolve with the child once
 // /api/version answers, reject if the child dies first (e.g. EADDRINUSE).
-async function spawnOnce(home, port) {
+async function spawnOnce(home, port, extraEnv) {
   const child = spawn(process.execPath, [path.join(REPO_ROOT, 'server.js')], {
-    env: serverEnv(home, port),
+    env: { ...serverEnv(home, port), ...extraEnv },
     cwd: REPO_ROOT,
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -79,7 +79,7 @@ async function spawnOnce(home, port) {
 }
 
 // Starts a hermetic server instance. Returns { base, home, stop }.
-async function startServer() {
+async function startServer(extraEnv) {
   const home = await makeTmpHome();
   let child = null;
   let lastError = null;
@@ -87,7 +87,7 @@ async function startServer() {
   for (let attempt = 0; attempt < 3 && !child; attempt++) {
     port = randomPort();
     try {
-      child = await spawnOnce(home, port);
+      child = await spawnOnce(home, port, extraEnv);
     } catch (error) {
       lastError = error;
     }

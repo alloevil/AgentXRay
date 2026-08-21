@@ -47,7 +47,7 @@ If you build and operate your own agent in production, use a tracing platform. I
 - **Tool call inspection** — Expandable tool calls with arguments and results
 - **Trace view** — Per-turn waterfall of where the time went: model inference (blue) vs tool execution (green, red on error); click any bar to jump to that message
 - **Prompt extraction** — See every real human prompt per session (tool results, slash commands and injected noise filtered out), grouped by working directory, with search / JSON export / copy
-- **Prompt optimization** — Cluster prompts into templates, attribute session outcomes (turns, tool calls, error rate) per template, and get Claude-powered rewrite suggestions via the local `claude` CLI
+- **Prompt optimization** — Cluster prompts into templates, attribute session outcomes (turns, tool calls, error rate) per template, and get LLM-powered rewrite suggestions — through any OpenAI-compatible endpoint (Settings → LLM 接口) or, if none is configured, the local `claude` CLI
 - **Prompt library** — Curate the prompts worth keeping into `~/.agentxray/library`, tag / edit / search them, then install any of them as a native slash command for Claude Code, Codex or OMP with one click — `$ARGUMENTS` is passed through, so `/name some args` works in the target CLI
 - **Global search** — One search box across all seven platforms at once, multi-keyword AND matching, colored platform badges per hit — including prompts recovered from sessions that Claude Code's cleanup already deleted
 - **Session insights** — Aggregate analytics dashboard with tool stats, error clustering and daily trends
@@ -151,7 +151,7 @@ Click the **Prompts** tab (next to Sessions / Insights) to see every real human 
 - **Search** — Filter prompts / directories / sessions live
 - **Export JSON** — Download all extracted prompts for offline processing
 - **分析优化 (Analyze)** — Cluster prompts into templates, attribute session outcomes (avg turns, tool calls, error rate) per template, and get rewrite suggestions from Claude. Requires the [`claude` CLI](https://claude.com/claude-code) on the server's PATH; without it the clustering and attribution table still works
-- **优化 (Optimize)** — Hover any single prompt and click 优化 for an inline Claude-powered rewrite
+- **优化 (Optimize)** — Hover any single prompt and click 优化 for an inline LLM-powered rewrite (configure the backend in Settings → LLM 接口, or have the `claude` CLI on PATH)
 
 ### Keyboard Shortcuts
 
@@ -227,7 +227,8 @@ npm start
 | `GET /api/insights` | Aggregate analytics (tool stats, error clusters, trends) |
 | `GET /api/prompts` | Real human prompts per session, grouped by directory |
 | `GET /api/prompts/analyze` | Template clustering + attribution + Claude suggestions (`?refresh=1` to recompute, `?skipLlm=1` for clustering only) |
-| `POST /api/prompts/rewrite` | Rewrite a single prompt via the claude CLI (`{ "text": "..." }`) |
+| `POST /api/prompts/rewrite` | Rewrite a single prompt via the configured LLM backend (`{ "text": "..." }`; 503 with guidance when no backend is available) |
+| `GET/PUT /api/settings/llm` | LLM backend config: OpenAI-compatible `baseUrl`/`model`/`apiKey`, persisted in `~/.agentxray/llm.json` (key never echoed back) |
 | `GET /api/search` | Full-text search across sessions (`?platform=all` searches every platform at once, multi-keyword AND) |
 | `GET /api/omp/sessions/:id/children` | List sub-agents spawned by an OMP session |
 | `GET /api/omp/sessions/:id/children/:name` | Get a spawned sub-agent's messages |
@@ -237,7 +238,7 @@ npm start
 | `DELETE /api/library/:name` | Delete a prompt and any installed slash commands |
 | `POST /api/library/:name/install` | Install as a slash command (`{ "targets": ["claude", "codex", "omp"] }`) |
 | `POST /api/library/:name/uninstall` | Remove the installed slash commands (same body) |
-| `POST /api/library/suggest-name` | Suggest a library name for a prompt via the claude CLI (`{ "text": "..." }`; `null` when the CLI is unavailable) |
+| `POST /api/library/suggest-name` | Suggest a library name for a prompt via the configured LLM backend (`{ "text": "..." }`; `null` when no backend is available) |
 | `POST /api/backup` | Run an incremental backup into `~/.agentxray/archive` |
 | `GET /api/backup/status` | Archive stats: file count, total bytes, last backup time |
 

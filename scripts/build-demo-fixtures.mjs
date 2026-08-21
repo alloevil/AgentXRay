@@ -88,7 +88,10 @@ async function main() {
     );
   }
 
-  const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env, stdio: ['ignore', 'ignore', 'inherit'] });
+  const child = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    env,
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
   try {
     const deadline = Date.now() + 15000;
     for (;;) {
