@@ -34,6 +34,7 @@ var __axrPure = (() => {
     formatDurationCompact: () => formatDurationCompact,
     getTextContent: () => getTextContent,
     parseTimestampMs: () => parseTimestampMs,
+    pickAutoPlatform: () => pickAutoPlatform,
     renderMarkdown: () => renderMarkdown,
     renderMarkdownHtml: () => renderMarkdownHtml
   });
@@ -75,6 +76,13 @@ var __axrPure = (() => {
   }
   function formatCost(dollars) {
     return "$" + (dollars >= 0.01 ? dollars.toFixed(2) : dollars.toFixed(4));
+  }
+  function pickAutoPlatform(counts, order) {
+    if (!counts) return null;
+    for (const p of order) {
+      if ((counts[p] ?? 0) > 0) return p;
+    }
+    return null;
   }
   function firstInformativeLine(text) {
     const joined = String(text || "");

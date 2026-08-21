@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { getAgents, getSessions } from '@/api/client';
+import { useEffect, useState } from 'react';
 import type { Platform } from '@/api/types';
 import { PLATFORM_LABELS, PLATFORMS } from '@/api/types';
-import { dirForPlatform, useAppStore } from '@/store';
+import { DEMO } from '@/demo/flag';
+import { usePlatformProbe } from '@/hooks/usePlatformProbe';
+import { pickAutoPlatform } from '@/lib/pure';
+import { useAppStore } from '@/store';
 import { cn } from '@/lib/utils';
 
 const PLATFORM_TIPS: Record<Platform, string> = {
@@ -16,37 +17,21 @@ const PLATFORM_TIPS: Record<Platform, string> = {
   gemini: 'Gemini CLI 会话（~/.gemini/tmp）',
 };
 
-// Probe every platform's session count once per page load (legacy
-// probePlatformSessionCounts): 0 or unreachable = known empty → collapsible.
-function usePlatformProbe() {
-  const settings = useAppStore((s) => s.settings);
-  return useQuery({
-    queryKey: ['platform-probe', settings],
-    staleTime: Number.POSITIVE_INFINITY,
-    queryFn: async () => {
-      const entries = await Promise.all(
-        PLATFORMS.map(async (p) => {
-          try {
-            const list =
-              p === 'openclaw'
-                ? await getAgents(settings.openclawDir || undefined)
-                : await getSessions(p, { dir: dirForPlatform(settings, p) || undefined });
-            return [p, Array.isArray(list) ? list.length : 0] as const;
-          } catch {
-            return [p, 0] as const; // unreachable = treat as empty
-          }
-        })
-      );
-      return Object.fromEntries(entries) as Record<Platform, number>;
-    },
-  });
-}
-
 export function PlatformBar() {
   const platform = useAppStore((s) => s.platform);
   const setPlatform = useAppStore((s) => s.setPlatform);
   const [expanded, setExpanded] = useState(false);
   const { data: counts } = usePlatformProbe();
+
+  // First-launch auto-pick (#13): no platform persisted yet → land on the
+  // first platform that actually has sessions. SessionList then auto-selects
+  // the most recent session. The demo build already defaults to a populated
+  // tab, and setPlatform persists the choice so this runs at most once.
+  useEffect(() => {
+    if (DEMO || !counts || useAppStore.getState().hasStoredPlatform) return;
+    const target = pickAutoPlatform(counts, PLATFORMS);
+    if (target) setPlatform(target);
+  }, [counts, setPlatform]);
 
   // While probing (counts undefined) every platform stays visible — same as legacy.
   const isCollapsed = (p: Platform) => p !== platform && !expanded && counts?.[p] === 0;

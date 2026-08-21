@@ -2,6 +2,7 @@
 // scroll-to-message (local + cross-view via pendingScrollMsgId), SSE tail.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePlatformProbe } from '@/hooks/usePlatformProbe';
 import { useAppStore } from '@/store';
 import { ChildAgentBanner } from '@/views/trace/ChildAgentsSection';
 import { useActiveSessionDetail } from '@/views/trace/childAgents';
@@ -14,6 +15,49 @@ import { MessageList, MSG_BATCH_SIZE } from './MessageList';
 import { useSessionDetail } from './queries';
 import { SessionSummary } from './SessionSummary';
 import { useSessionSse } from './useSessionSse';
+
+// Every platform probed empty (#13): guide the user to where logs are
+// expected instead of showing feature marketing over a blank list.
+const PLATFORM_DEFAULT_PATHS: [string, string][] = [
+  ['OpenClaw', '~/.openclaw/agents'],
+  ['Codex', '~/.codex/sessions'],
+  ['Claude Code', '~/.claude/projects'],
+  ['Hermes', '~/.hermes'],
+  ['OMP', '~/.omp/agent/sessions'],
+  ['DeepSeek Harness', '~/.dsh/sessions'],
+  ['Gemini CLI', '~/.gemini/tmp'],
+];
+
+function AllEmptyState() {
+  return (
+    <div className="mx-auto max-w-3xl space-y-4 py-8" data-testid="all-empty-state">
+      <h3 className="text-base font-semibold">没有找到任何会话日志</h3>
+      <div className="space-y-3 text-sm leading-6 text-muted-foreground">
+        <p>
+          AgentXRay 直接读取各 CLI agent 落盘的会话日志，无需任何集成。当前在以下默认路径都没有发现日志
+          —— 用过其中某个工具后刷新页面即可,或在 <b className="text-foreground">⚙ 设置</b>
+          里指向自定义目录：
+        </p>
+        <table className="w-full text-left">
+          <tbody>
+            {PLATFORM_DEFAULT_PATHS.map(([name, dir]) => (
+              <tr key={name} className="border-b border-border/50">
+                <td className="py-1 pr-4 text-foreground">{name}</td>
+                <td className="py-1">
+                  <code className="rounded bg-secondary px-1">{dir}</code>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>
+          日志目录不在默认位置？打开左上角 <b className="text-foreground">⚙ 设置</b>
+          为每个平台单独指定目录，保存后立即生效。
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function EmptyState() {
   return (
@@ -89,6 +133,7 @@ export function SessionsView() {
 
   const parentQuery = useSessionDetail(); // summary always shows the parent
   const activeQuery = useActiveSessionDetail(); // messages area: parent or child transcript
+  const probe = usePlatformProbe(); // all-empty guided state (#13); cache shared with PlatformBar
 
   const [msgFilter, setMsgFilter] = useState<MsgFilter>(null);
   const [visibleUnitCount, setVisibleUnitCount] = useState<number>(MSG_BATCH_SIZE);
@@ -161,7 +206,11 @@ export function SessionsView() {
     }, [])
   );
 
-  if (!selectedSessionId) return <EmptyState />;
+  if (!selectedSessionId) {
+    const counts = probe.data;
+    const allEmpty = !!counts && Object.values(counts).every((n) => n === 0);
+    return allEmpty ? <AllEmptyState /> : <EmptyState />;
+  }
 
   return (
     <MessageActionsContext.Provider value={{ scrollToMessage }}>

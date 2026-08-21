@@ -45,6 +45,19 @@ export function formatCost(dollars: number): string {
   return '$' + (dollars >= 0.01 ? dollars.toFixed(2) : dollars.toFixed(4));
 }
 
+// First-launch auto-pick (#13): the first platform, in display order, that
+// actually has sessions. null = every platform empty (or probe not done yet).
+export function pickAutoPlatform<P extends string>(
+  counts: Partial<Record<P, number>> | null | undefined,
+  order: readonly P[]
+): P | null {
+  if (!counts) return null;
+  for (const p of order) {
+    if ((counts[p] ?? 0) > 0) return p;
+  }
+  return null;
+}
+
 // First line that carries information — skips structural-only lines
 // ({ } [ ] ``` etc.) so JSON-body errors don't render as a lone symbol
 export function firstInformativeLine(text: string | null | undefined): string {

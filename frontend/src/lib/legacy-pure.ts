@@ -12,5 +12,6 @@ export {
   getTextContent,
   clusterPrefillContent,
   buildTraceTurns,
+  pickAutoPlatform,
 } from './pure';
 export { escapeHtml, renderMarkdownHtml, renderMarkdown } from './markdown';

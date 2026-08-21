@@ -176,6 +176,18 @@ test('clusterPrefillContent uses LCP with $ARGUMENTS for real templates', () => 
   assert.equal(pure.clusterPrefillContent({ pattern: 'p' }), 'p');
 });
 
+test('pickAutoPlatform picks the first platform with sessions, in order', () => {
+  const order = ['openclaw', 'codex', 'claude-code'];
+  assert.equal(pure.pickAutoPlatform({ openclaw: 0, codex: 3, 'claude-code': 5 }, order), 'codex');
+  assert.equal(pure.pickAutoPlatform({ openclaw: 1, codex: 3 }, order), 'openclaw');
+  // Missing counts are treated as empty
+  assert.equal(pure.pickAutoPlatform({ 'claude-code': 2 }, order), 'claude-code');
+  // All empty / probe not done yet → null (guided empty state)
+  assert.equal(pure.pickAutoPlatform({ openclaw: 0, codex: 0, 'claude-code': 0 }, order), null);
+  assert.equal(pure.pickAutoPlatform(null, order), null);
+  assert.equal(pure.pickAutoPlatform(undefined, order), null);
+});
+
 // --- buildTraceTurns on a synthetic session ---
 
 const T0 = Date.parse('2026-01-01T10:00:00.000Z');
