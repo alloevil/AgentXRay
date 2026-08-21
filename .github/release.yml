@@ -1,0 +1,13 @@
+# Categorizes auto-generated release notes (gh release create --generate-notes).
+changelog:
+  exclude:
+    labels: [ignore-for-release]
+  categories:
+    - title: New Features
+      labels: [enhancement, feature]
+    - title: Bug Fixes
+      labels: [bug, fix]
+    - title: Documentation
+      labels: [documentation]
+    - title: Other Changes
+      labels: ["*"]
