@@ -90,6 +90,40 @@
     "cwd": "/demo/orders-service",
     "file": "rollout-2026-08-13T14-02-00-01991234-aaaa-7000-8000-syntheticdemo1.jsonl"
    }
+  ],
+  "omp": [
+   {
+    "id": "0199demo-omp-spawn",
+    "timestamp": "2026-08-15T10:00:00.000Z",
+    "lastActivity": "2026-08-15T10:03:30.000Z",
+    "messageCount": 10,
+    "userCount": 1,
+    "assistantCount": 4,
+    "toolCallCount": 5,
+    "toolResultCount": 5,
+    "topTools": [
+     {
+      "name": "edit",
+      "count": 2
+     },
+     {
+      "name": "task",
+      "count": 1
+     },
+     {
+      "name": "read",
+      "count": 1
+     },
+     {
+      "name": "bash",
+      "count": 1
+     }
+    ],
+    "firstUserMessage": "[Synthetic demo] Add rate limiting to the public /v1/search endpoint: 60 req/min per API key, 429 with Retry-After when ",
+    "title": "[Synthetic demo] Add rate limiting to the public /v1/search endpoint: 60 req/min per API key, 429 with Retry-After when ",
+    "cwd": "/demo/api-service",
+    "file": "2026-08-15T10-00-00-000Z_0199demo-omp-spawn.jsonl"
+   }
   ]
  },
  "details": {
@@ -992,6 +1026,460 @@
      "isError": false
     }
    ]
+  },
+  "omp/0199demo-omp-spawn": {
+   "session": {
+    "id": "0199demo-omp-spawn",
+    "cwd": "/demo/api-service",
+    "timestamp": "2026-08-15T10:00:00.000Z",
+    "version": "0.9.2",
+    "model": "claude-sonnet-4-5"
+   },
+   "messages": [
+    {
+     "id": "omp-u1",
+     "timestamp": "2026-08-15T10:00:02.000Z",
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "[Synthetic demo] Add rate limiting to the public /v1/search endpoint: 60 req/min per API key, 429 with Retry-After when exceeded. Spawn a subagent to survey how our other services do it before touching code."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": null,
+     "timestamp": "2026-08-15T10:00:10.000Z",
+     "role": "reasoning",
+     "content": [
+      {
+       "type": "text",
+       "text": "Two-phase plan: delegate the survey of existing rate-limit implementations to a subagent, meanwhile read the search route myself. Then implement a sliding-window limiter keyed by API key."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-a1",
+     "timestamp": "2026-08-15T10:00:10.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "I'll spawn a DocsWriter subagent to survey the rate-limiting patterns in our other services while I read the search route."
+      }
+     ],
+     "usage": {
+      "input": 2200,
+      "output": 170
+     },
+     "model": "claude-sonnet-4-5",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-t1",
+     "timestamp": "2026-08-15T10:00:10.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t1",
+     "toolName": "task",
+     "details": {
+      "agent": "DocsWriter",
+      "task": "Survey how billing-service and auth-service implement per-key rate limiting: algorithm, storage, headers returned. Summarize in a table."
+     },
+     "isError": false
+    },
+    {
+     "id": "omp-t2",
+     "timestamp": "2026-08-15T10:00:10.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t2",
+     "toolName": "read",
+     "details": {
+      "path": "src/routes/search.ts"
+     },
+     "isError": false
+    },
+    {
+     "id": "omp-r2",
+     "timestamp": "2026-08-15T10:00:12.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "import { Router } from 'express';\nexport const search = Router();\nsearch.get('/v1/search', async (req, res) => {\n  const key = req.get('X-Api-Key');\n  const hits = await index.query(req.query.q);\n  res.json({ hits });\n});"
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t2",
+     "toolName": "read",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-r1",
+     "timestamp": "2026-08-15T10:01:45.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "DocsWriter finished. Summary:\n\n| service | algorithm | storage | headers |\n|---|---|---|---|\n| billing-service | fixed window 100/min | Redis INCR + EXPIRE | X-RateLimit-Remaining |\n| auth-service | sliding window log | in-memory LRU | Retry-After on 429 |\n\nRecommendation: sliding window like auth-service, but keep counters in Redis so multiple replicas share state."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t1",
+     "toolName": "task",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-a2",
+     "timestamp": "2026-08-15T10:02:00.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Survey is in — going with a Redis-backed sliding window. Implementing the middleware now."
+      }
+     ],
+     "usage": {
+      "input": 3100,
+      "output": 140
+     },
+     "model": "claude-sonnet-4-5",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-t3",
+     "timestamp": "2026-08-15T10:02:00.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t3",
+     "toolName": "edit",
+     "details": {
+      "path": "src/middleware/rate-limit.ts",
+      "content": "export function rateLimit({ limit = 60, windowMs = 60_000 } = {}) { /* sliding-window ZADD/ZCOUNT per api key */ }"
+     },
+     "isError": false
+    },
+    {
+     "id": "omp-r3",
+     "timestamp": "2026-08-15T10:02:05.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Created src/middleware/rate-limit.ts"
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t3",
+     "toolName": "edit",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-a3",
+     "timestamp": "2026-08-15T10:02:20.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Wiring it into the search route and adding a test for the 429 path."
+      }
+     ],
+     "usage": {
+      "input": 3600,
+      "output": 120
+     },
+     "model": "claude-sonnet-4-5",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-t4",
+     "timestamp": "2026-08-15T10:02:20.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t4",
+     "toolName": "edit",
+     "details": {
+      "path": "src/routes/search.ts",
+      "old": "search.get('/v1/search', async (req, res) => {",
+      "new": "search.get('/v1/search', rateLimit({ limit: 60 }), async (req, res) => {"
+     },
+     "isError": false
+    },
+    {
+     "id": "omp-t5",
+     "timestamp": "2026-08-15T10:02:20.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t5",
+     "toolName": "bash",
+     "details": {
+      "command": "npm test -- rate-limit"
+     },
+     "isError": false
+    },
+    {
+     "id": "omp-r4",
+     "timestamp": "2026-08-15T10:02:24.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Updated src/routes/search.ts"
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t4",
+     "toolName": "edit",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-r5",
+     "timestamp": "2026-08-15T10:03:10.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "PASS test/rate-limit.test.ts\n  ✓ allows 60 requests inside the window (12 ms)\n  ✓ 61st request gets 429 with Retry-After (9 ms)\n\nTests: 2 passed, 2 total"
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "omp-t5",
+     "toolName": "bash",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "omp-a4",
+     "timestamp": "2026-08-15T10:03:30.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Done:\n\n- `src/middleware/rate-limit.ts` — Redis sliding-window limiter (60 req/min per API key), returns 429 + `Retry-After`.\n- `/v1/search` wired through the middleware.\n- DocsWriter's survey table is in the PR description; both rate-limit tests pass."
+      }
+     ],
+     "usage": {
+      "input": 4100,
+      "output": 150
+     },
+     "model": "claude-sonnet-4-5",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    }
+   ]
+  }
+ },
+ "children": {
+  "omp/0199demo-omp-spawn": [
+   {
+    "name": "DocsWriter",
+    "file": "DocsWriter.jsonl",
+    "title": "Survey how billing-service and auth-service implement per-key rate limiting: algorithm, storage, headers returned. Summa",
+    "timestamp": "2026-08-15T10:00:11.000Z",
+    "lastActivity": "2026-08-15T10:01:40.000Z",
+    "messageCount": 5,
+    "toolCallCount": 2
+   }
+  ]
+ },
+ "childDetails": {
+  "omp/0199demo-omp-spawn/DocsWriter": {
+   "session": {
+    "id": "0199demo-omp-child",
+    "cwd": "/demo/api-service",
+    "timestamp": "2026-08-15T10:00:11.000Z",
+    "version": "0.9.2",
+    "model": "claude-haiku-4"
+   },
+   "messages": [
+    {
+     "id": "dw-u1",
+     "timestamp": "2026-08-15T10:00:11.000Z",
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Survey how billing-service and auth-service implement per-key rate limiting: algorithm, storage, headers returned. Summarize in a table."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "dw-a1",
+     "timestamp": "2026-08-15T10:00:18.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Reading both services' middleware."
+      }
+     ],
+     "usage": {
+      "input": 900,
+      "output": 70
+     },
+     "model": "claude-haiku-4",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "dw-t1",
+     "timestamp": "2026-08-15T10:00:18.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "dw-t1",
+     "toolName": "grep",
+     "details": {
+      "pattern": "rateLimit|rate_limit",
+      "path": "../billing-service/src"
+     },
+     "isError": false
+    },
+    {
+     "id": "dw-t2",
+     "timestamp": "2026-08-15T10:00:18.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "dw-t2",
+     "toolName": "grep",
+     "details": {
+      "pattern": "rateLimit|rate_limit",
+      "path": "../auth-service/src"
+     },
+     "isError": false
+    },
+    {
+     "id": "dw-r1",
+     "timestamp": "2026-08-15T10:00:20.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "src/middleware/limiter.ts:12: const count = await redis.incr(key); // fixed window\nsrc/middleware/limiter.ts:14: await redis.expire(key, 60);\nsrc/middleware/limiter.ts:21: res.set('X-RateLimit-Remaining', String(100 - count));"
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "dw-t1",
+     "toolName": "grep",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "dw-r2",
+     "timestamp": "2026-08-15T10:00:22.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "src/limit/window.ts:8: // sliding window log, per-key timestamps in LRU\nsrc/limit/window.ts:30: res.set('Retry-After', String(retryAfterSec)); res.status(429);"
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "dw-t2",
+     "toolName": "grep",
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "dw-a2",
+     "timestamp": "2026-08-15T10:01:40.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Survey complete:\n\n| service | algorithm | storage | headers |\n|---|---|---|---|\n| billing-service | fixed window 100/min | Redis INCR + EXPIRE | X-RateLimit-Remaining |\n| auth-service | sliding window log | in-memory LRU | Retry-After on 429 |\n\nRecommendation: sliding window like auth-service, but keep counters in Redis so multiple replicas share state."
+      }
+     ],
+     "usage": {
+      "input": 1400,
+      "output": 160
+     },
+     "model": "claude-haiku-4",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    }
+   ]
   }
  },
  "insights": {
@@ -1118,6 +1606,58 @@
    ],
    "errorClusters": [],
    "trend": []
+  },
+  "omp": {
+   "totalSessions": 1,
+   "totalMessages": 10,
+   "totalToolCalls": 5,
+   "errorRate": 0,
+   "totalCost": 0,
+   "tokenUsage": {
+    "input": 13000,
+    "output": 580,
+    "cacheRead": 0
+   },
+   "toolStats": [
+    {
+     "name": "edit",
+     "calls": 2,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    },
+    {
+     "name": "task",
+     "calls": 1,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    },
+    {
+     "name": "read",
+     "calls": 1,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    },
+    {
+     "name": "bash",
+     "calls": 1,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    }
+   ],
+   "errorClusters": [],
+   "trend": [
+    {
+     "date": "2026-08-15",
+     "sessions": 1,
+     "errors": 0,
+     "toolCalls": 5,
+     "cost": 0
+    }
+   ]
   }
  },
  "prompts": {
@@ -1200,6 +1740,88 @@
      "promptCount": 1
     }
    ]
+  },
+  "omp": {
+   "platform": "omp",
+   "totalSessions": 1,
+   "totalPrompts": 1,
+   "groups": [
+    {
+     "directory": "/demo/api-service",
+     "sessions": [
+      {
+       "id": "0199demo-omp-spawn",
+       "file": "2026-08-15T10-00-00-000Z_0199demo-omp-spawn.jsonl",
+       "timestamp": "2026-08-15T10:00:00.000Z",
+       "lastActivity": "2026-08-15T10:03:30.000Z",
+       "slug": null,
+       "title": null,
+       "promptCount": 1,
+       "prompts": [
+        {
+         "text": "[Synthetic demo] Add rate limiting to the public /v1/search endpoint: 60 req/min per API key, 429 with Retry-After when exceeded. Spawn a subagent to survey how our other services do it before touching code.",
+         "timestamp": "2026-08-15T10:00:02.000Z"
+        }
+       ]
+      }
+     ],
+     "sessionCount": 1,
+     "promptCount": 1
+    }
+   ]
   }
- }
+ },
+ "library": {
+  "prompts": [
+   {
+    "name": "bugfix-tdd",
+    "description": "缺陷修复:先写失败测试再修,红绿验证",
+    "tags": [
+     "debugging",
+     "tests"
+    ],
+    "source": "demo",
+    "createdAt": "2026-08-15T00:00:00.000Z",
+    "content": "Fix this bug using test-first flow: 1) write a failing test that reproduces it, 2) make the minimal fix, 3) show the test passing, 4) list any related code paths that share the same defect.\n\nBug report:\n$ARGUMENTS\n",
+    "installed": {
+     "claude": false,
+     "codex": false,
+     "omp": false
+    }
+   },
+   {
+    "name": "explain-arch",
+    "description": "架构讲解:模块职责、数据流和权衡,配 mermaid 图",
+    "tags": [
+     "docs",
+     "onboarding"
+    ],
+    "source": "demo",
+    "createdAt": "2026-08-15T00:00:00.000Z",
+    "content": "Explain the architecture of $ARGUMENTS for a new team member: main modules and their responsibilities, how data flows between them, key design trade-offs, and a mermaid diagram of the component graph.\n",
+    "installed": {
+     "claude": false,
+     "codex": false,
+     "omp": false
+    }
+   },
+   {
+    "name": "review-pr",
+    "description": "代码评审:按风险分级列出问题并给出修复建议",
+    "tags": [
+     "review",
+     "quality"
+    ],
+    "source": "demo",
+    "createdAt": "2026-08-15T00:00:00.000Z",
+    "content": "Review the following change set. For each issue found, classify it as blocker / major / minor, explain the risk in one sentence, and propose a concrete fix. End with a merge verdict.\n\n$ARGUMENTS\n",
+    "installed": {
+     "claude": false,
+     "codex": false,
+     "omp": false
+    }
+   }
+  ]
+ },
+ "spawnMap": []
 }

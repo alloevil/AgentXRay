@@ -1,3 +1,5 @@
+import { Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { PlatformBar } from '@/components/PlatformBar';
 import { Sidebar } from '@/components/Sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,17 +29,30 @@ export default function App() {
     <TooltipProvider delayDuration={300}>
       <div className="flex h-full flex-col overflow-hidden">
         {DEMO ? (
-          <div className="border-b border-[#e3b341]/40 bg-[#e3b341]/15 px-3 py-1.5 text-center text-xs text-[#e3b341]">
-            🧪 Demo mode — synthetic sample data (not real user sessions).{' '}
+          <div className="flex items-center justify-center gap-2 border-b border-[#e3b341]/40 bg-[#e3b341]/15 px-3 py-1.5 text-center text-xs text-[#e3b341]">
+            <span>🧪 Demo mode — synthetic sample data (not real user sessions). Inspect your own agent logs:</span>
+            <button
+              type="button"
+              title="Copy install command"
+              onClick={() => {
+                navigator.clipboard?.writeText('npx @alloevil/agent-xray').then(
+                  () => toast.success('Copied: npx @alloevil/agent-xray'),
+                  () => toast.error('Copy failed')
+                );
+              }}
+              className="inline-flex items-center gap-1 rounded border border-[#e3b341]/50 bg-black/20 px-1.5 py-0.5 font-mono text-[11px] hover:border-[#e3b341] hover:text-foreground"
+            >
+              npx @alloevil/agent-xray
+              <Copy className="h-3 w-3" />
+            </button>
             <a
               href="https://github.com/alloevil/AgentXRay"
               target="_blank"
               rel="noreferrer"
               className="underline underline-offset-2 hover:text-foreground"
             >
-              Run AgentXRay locally
-            </a>{' '}
-            to inspect your own agent logs.
+              GitHub
+            </a>
           </div>
         ) : null}
         <PlatformBar />
