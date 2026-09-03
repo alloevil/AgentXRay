@@ -59,5 +59,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.7"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
