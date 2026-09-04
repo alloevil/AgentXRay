@@ -9,11 +9,14 @@
 // `node scripts/build-legacy-pure.mjs` after editing the TS sources.
 
 import { writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildSync } from '../frontend/node_modules/esbuild/lib/main.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+// esbuild is a transitive dependency of vite inside frontend/. Resolve it from
+// there instead of hardcoding node_modules layout, which breaks when hoisting changes.
+const { buildSync } = createRequire(path.join(root, 'frontend', 'package.json'))('esbuild');
 const entry = path.join(root, 'frontend', 'src', 'lib', 'legacy-pure.ts');
 const outfile = path.join(root, 'public', 'js', 'pure.js');
 
