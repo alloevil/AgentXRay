@@ -16,7 +16,7 @@ import { errorMessage } from './promptsLib';
 /** Copy-to-clipboard button with the legacy 1.2s "Copied!" flash. */
 export function CopyButton({ text, className }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
-  const timer = useRef<number>();
+  const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
     <Button
@@ -59,7 +59,7 @@ export function PromptItemRow({
   const [clamped, setClamped] = useState(true);
   const [rewrite, setRewrite] = useState<RewriteResult | null>(null);
   const [rewriteError, setRewriteError] = useState('');
-  const errorTimer = useRef<number>();
+  const errorTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(errorTimer.current), []);
 
   const rewriteMutation = useMutation({
