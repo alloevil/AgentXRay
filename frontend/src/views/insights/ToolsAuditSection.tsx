@@ -4,7 +4,7 @@
 // 运行体检/重新体检 recomputes with refresh=1 and writes into the same cache entry.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { getToolsAudit } from '@/api/client';
 import type { ToolsAudit } from '@/api/types';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ export function ToolsAuditSection() {
   const maxCalls = tools.length ? Math.max(tools[0].calls, 1) : 1;
   const unused = audit?.configuredUnused || [];
 
-  let body: JSX.Element;
+  let body: ReactElement;
   if (loading && !audit) {
     body = <div className="text-sm text-muted-foreground">体检中…扫描全部平台会话统计工具调用</div>;
   } else if (error && !refresh.isPending) {
