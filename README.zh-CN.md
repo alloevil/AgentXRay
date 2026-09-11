@@ -296,3 +296,9 @@ dsh 的 `.jsonl.zstd` 日志是多个独立 Zstandard 帧的串联（每个持�
 ## 开源协议
 
 MIT
+
+---
+
+<p align="center">
+  <a href="https://github.com/oil-oil/beautify-github-readme"><img src="./assets/readme/made-with-beautify.svg" width="300" alt="README made with beautify-github-readme"></a>
+</p>
