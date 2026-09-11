@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="64" viewBox="0 0 420 64" role="img" aria-labelledby="mwTitle mwDesc">
+  <title id="mwTitle">README made with beautify-github-readme</title>
+  <desc id="mwDesc">Signature: README made with beautify-github-readme.</desc>
+  <rect x="0.5" y="0.5" width="419" height="63" rx="12" fill="#0d1117" stroke="#3fb950" stroke-opacity="0.28"/>
+  <g transform="translate(22 20)">
+    <rect x="0" y="12" width="5" height="10" rx="2" fill="#3fb950" fill-opacity="0.45"/>
+    <rect x="9" y="6" width="5" height="16" rx="2" fill="#3fb950" fill-opacity="0.72"/>
+    <rect x="18" y="0" width="5" height="22" rx="2" fill="#3fb950"/>
+  </g>
+  <text x="56" y="27" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" fill="#8a8d92" letter-spacing="1.4">README MADE WITH</text>
+  <text x="56" y="50" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#f0f3f7">beautify-github-readme</text>
+  <path d="M392 34 L404 22 M396 22 h8 v8" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

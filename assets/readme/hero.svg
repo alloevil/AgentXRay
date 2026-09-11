@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="420" viewBox="0 0 1200 420"
+     role="img" aria-labelledby="title desc">
+  <title id="title">AgentXRay session timeline and per-turn ledger</title>
+  <desc id="desc">AgentXRay reads the session logs your AI coding agents already write to disk. On the left: the seven supported platforms (OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness, Gemini CLI) in one view. On the right: the synthetic-feature-dark-mode Claude Code session, 16:30:00 to 16:31:33 in /demo/webapp, one user turn with the five tool calls it made (Glob, Read, Edit, Edit, Bash), and the per-turn ledger strip for that turn: time 1m33s, tokens 12,436, cost not reported, 5 tool calls, 0 errors.</desc>
+
+  <rect width="1200" height="420" fill="#0d1117"/>
+
+  <g id="identity" transform="translate(56 0)">
+    <text x="0" y="88" fill="#8b949e"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="19" font-weight="500" letter-spacing="3">LOCAL-FIRST SESSION LOG DASHBOARD</text>
+
+    <text x="-2" y="160" fill="#c9d1d9"
+          font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+          font-size="62" font-weight="700">AgentXRay</text>
+
+    <text x="0" y="204" fill="#c9d1d9"
+          font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+          font-size="21">Reads the session logs your AI coding</text>
+    <text x="0" y="232" fill="#c9d1d9"
+          font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+          font-size="21">agents already write to disk.</text>
+
+    <text x="0" y="276" fill="#8b949e"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="19" font-weight="500" letter-spacing="2">SEVEN LOG FORMATS · ONE VIEW</text>
+  </g>
+
+  <g id="platform-switcher" transform="translate(56 288)"
+     font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="600">
+    <rect x="0" y="0" width="114" height="28" rx="6" fill="#58a6ff" fill-opacity="0.15" stroke="#58a6ff" stroke-opacity="0.6"/>
+    <text x="57" y="19" fill="#c9d1d9" text-anchor="middle">OpenClaw</text>
+
+    <rect x="122" y="0" width="82" height="28" rx="6" fill="none" stroke="#30363d"/>
+    <text x="163" y="19" fill="#c9d1d9" text-anchor="middle">Codex</text>
+
+    <rect x="212" y="0" width="147" height="28" rx="6" fill="none" stroke="#30363d"/>
+    <text x="285" y="19" fill="#c9d1d9" text-anchor="middle">Claude Code</text>
+
+    <rect x="367" y="0" width="93" height="28" rx="6" fill="none" stroke="#30363d"/>
+    <text x="413" y="19" fill="#c9d1d9" text-anchor="middle">Hermes</text>
+
+    <rect x="0" y="36" width="60" height="28" rx="6" fill="none" stroke="#30363d"/>
+    <text x="30" y="55" fill="#c9d1d9" text-anchor="middle">OMP</text>
+
+    <rect x="68" y="36" width="201" height="28" rx="6" fill="none" stroke="#30363d"/>
+    <text x="168" y="55" fill="#c9d1d9" text-anchor="middle">DeepSeek Harness</text>
+
+    <rect x="277" y="36" width="136" height="28" rx="6" fill="none" stroke="#30363d"/>
+    <text x="345" y="55" fill="#c9d1d9" text-anchor="middle">Gemini CLI</text>
+  </g>
+
+  <text x="56" y="392" fill="#8b949e"
+        font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="18">Node.js 22.13+ · MIT · ~70KB build</text>
+
+  <g id="session-panel">
+    <rect x="584" y="48" width="560" height="262" rx="12" fill="#161b22" stroke="#30363d"/>
+
+    <text x="604" y="82" fill="#58a6ff"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="20" font-weight="600">synthetic-feature-dark-mode</text>
+
+    <text x="604" y="108" fill="#8b949e"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="18">/demo/webapp · turn1</text>
+    <text x="1124" y="108" fill="#8b949e" text-anchor="end"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="18">16:30:00 → 16:31:33</text>
+
+    <line x1="604" y1="122" x2="1124" y2="122" stroke="#30363d"/>
+
+    <line x1="616" y1="140" x2="616" y2="286" stroke="#30363d" stroke-width="2"/>
+
+    <circle cx="616" cy="140" r="5" fill="#58a6ff"/>
+    <text x="634" y="146" fill="#58a6ff"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="18" font-weight="600">user</text>
+    <text x="690" y="146" fill="#c9d1d9"
+          font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+          font-size="19">Add a dark mode toggle to the settings page…</text>
+
+    <g id="tool-calls" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+      <circle cx="616" cy="174" r="5" fill="#3fb950"/>
+      <text x="634" y="180" fill="#3fb950" font-size="20" font-weight="600">Glob</text>
+      <text x="710" y="180" fill="#8b949e" font-size="18">src/**/theme*</text>
+
+      <circle cx="616" cy="202" r="5" fill="#3fb950"/>
+      <text x="634" y="208" fill="#3fb950" font-size="20" font-weight="600">Read</text>
+      <text x="710" y="208" fill="#8b949e" font-size="18">src/pages/Settings.tsx</text>
+
+      <circle cx="616" cy="230" r="5" fill="#3fb950"/>
+      <text x="634" y="236" fill="#3fb950" font-size="20" font-weight="600">Edit</text>
+      <text x="710" y="236" fill="#8b949e" font-size="18">src/lib/theme.ts</text>
+
+      <circle cx="616" cy="258" r="5" fill="#3fb950"/>
+      <text x="634" y="264" fill="#3fb950" font-size="20" font-weight="600">Edit</text>
+      <text x="710" y="264" fill="#8b949e" font-size="18">src/pages/Settings.tsx</text>
+
+      <circle cx="616" cy="286" r="5" fill="#3fb950"/>
+      <text x="634" y="292" fill="#3fb950" font-size="20" font-weight="600">Bash</text>
+      <text x="710" y="292" fill="#8b949e" font-size="18">npm run build &amp;&amp; npm test -- theme</text>
+    </g>
+  </g>
+
+  <g id="ledger-panel">
+    <rect x="584" y="318" width="560" height="88" rx="12" fill="#161b22" stroke="#30363d"/>
+
+    <text x="604" y="348" fill="#8b949e"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="19" font-weight="600" letter-spacing="2">PER-TURN LEDGER</text>
+    <text x="1124" y="348" fill="#8b949e" text-anchor="end"
+          font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+          font-size="18">1 turn · 1m33s · 12,436 tok</text>
+
+    <g id="ledger-fields" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" fill="#8b949e">
+      <text x="604" y="374">time</text>
+      <text x="714" y="374">tokens</text>
+      <text x="824" y="374">cost</text>
+      <text x="934" y="374">tools</text>
+      <text x="1044" y="374">errors</text>
+    </g>
+
+    <g id="ledger-values" font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+       font-size="22" font-weight="600" fill="#c9d1d9">
+      <text x="604" y="398">1m33s</text>
+      <text x="714" y="398">12,436</text>
+      <text x="824" y="398" fill="#8b949e">—</text>
+      <text x="934" y="398">5</text>
+      <text x="1044" y="398">0</text>
+    </g>
+  </g>
+</svg>

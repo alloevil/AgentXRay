@@ -3,7 +3,7 @@
 **AgentXRay** is a local-first web dashboard that reads and visualizes the session logs your AI coding agents already write to disk, for developers who want to see what those agents actually did.
 
 <p align="center">
-  <img src="./assets/hero.svg" width="100%" alt="AgentXRay — X-ray vision into your AI agent sessions. Supports OpenClaw, Codex, Claude Code, and Hermes.">
+  <img src="./assets/readme/hero.svg" width="100%" alt="AgentXRay — a local-first dashboard for AI coding agent session logs. Left: reads the session logs your AI coding agents already write to disk, with the seven supported log formats OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness and Gemini CLI. Right: the synthetic-feature-dark-mode Claude Code session, 16:30:00 to 16:31:33 in /demo/webapp, one user turn with the five tool calls it made (Glob, Read, Edit, Edit, Bash), above a per-turn ledger strip for that turn: time 1m33s, tokens 12,436, cost not reported, 5 tool calls, 0 errors.">
 </p>
 
 <p align="center">
@@ -338,6 +338,10 @@ Open <https://alloevil.github.io/AgentXRay/>. That GitHub Pages deployment is th
 Two files: write an adapter at `lib/platforms/<name>.js` implementing list / find / parse / normalize for that format, then register it in the `PLATFORMS` table in `lib/platforms/index.js`. Every generic route resolves platforms through that registry, so no other file needs to change. See [Development](#development).
 
 ---
+
+<p align="center">
+  <a href="https://github.com/oil-oil/beautify-github-readme"><img src="./assets/readme/made-with-beautify.svg" width="300" alt="README made with beautify-github-readme"></a>
+</p>
 
 ## License
 
