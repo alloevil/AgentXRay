@@ -17,8 +17,7 @@
   <a href="https://github.com/alloevil/AgentXRay/releases/latest"><img src="https://img.shields.io/github/v/release/alloevil/AgentXRay?style=flat&logo=github&color=blue" alt="Release" /></a>
   <img src="https://img.shields.io/badge/license-MIT-00ccff?style=flat" alt="License" />
   <img src="https://img.shields.io/github/stars/alloevil/AgentXRay?style=flat&logo=github&color=yellow" alt="Stars" />
-  <img src="https://img.shields.io/badge/framework-None-6e7681?style=flat" alt="No framework" />
-  <img src="https://img.shields.io/badge/build-size~70KB-3FB950?style=flat" alt="Lightweight" />
+  <img src="https://img.shields.io/badge/stack-Express%20%2B%20React-6e7681?style=flat" alt="Express + React" />
 </p>
 
 <p align="center">
@@ -35,13 +34,13 @@
 
 X-ray vision into your AI agent sessions. Supports **OpenClaw**, **Codex**, **Claude Code**, **Hermes**, **OMP**, **DeepSeek Harness** and **Gemini CLI** — all in one interface.
 
-AgentXRay is a single Node.js + Express server plus a React UI. It reads the JSONL session logs (SQLite, for Hermes) that those CLIs already write under your home directory and normalizes all seven formats into one view: tool calls paired with their results, tokens and cost summed per user turn, per-turn trace waterfalls, prompt extraction and cross-platform full-text search. Nothing is instrumented, and nothing leaves your machine.
+AgentXRay is a single Node.js + Express server plus a React UI. It reads the JSONL session logs (SQLite, for Hermes) that those CLIs already write under your home directory and normalizes all seven formats into one view: tool calls paired with their results, tokens and cost summed per user turn, per-turn trace waterfalls, prompt extraction and cross-platform full-text search. Nothing is instrumented, and your session data never leaves your machine — the only outbound calls are the prompt-rewrite backend you configure and the on-demand Fabric pattern import.
 
 ## Why AgentXRay
 
 AgentXRay is a **local-first viewer for the agent sessions you already have**.
 
-Observability platforms like LangSmith and Langfuse are built for agents *you* write: you add their SDK, instrument your code, and traces stream to a hosted backend. Great for building your own agent — but CLI coding agents (Claude Code, Codex, Gemini CLI, …) aren't your code to instrument. They already write complete session logs to your disk; AgentXRay just reads them. Zero integration, zero config, nothing leaves your machine.
+Observability platforms like LangSmith and Langfuse are built for agents *you* write: you add their SDK, instrument your code, and traces stream to a hosted backend. Great for building your own agent — but CLI coding agents (Claude Code, Codex, Gemini CLI, …) aren't your code to instrument. They already write complete session logs to your disk; AgentXRay just reads them. Zero integration, zero config, and your logs stay on your machine.
 
 Compared to grepping the raw JSONL yourself, AgentXRay normalizes seven different log formats into one interface: tool calls paired with their results, token usage summed per session, full-text search across every platform at once, prompt extraction, and trace timelines — things that are tedious to reconstruct by hand from a 50MB session log.
 
@@ -52,7 +51,7 @@ If you build and operate your own agent in production, use a tracing platform. I
 - You use one or more CLI coding agents and want to review what a session actually did — which tools ran, with what arguments, what came back, where the time and tokens went.
 - You want token and cost accounting per user turn for sessions that have already finished, without having instrumented anything beforehand.
 - You need to search across every agent platform at once, including prompts recoverable from sessions Claude Code's own cleanup already deleted.
-- You want your session data to stay on your machine: no SDK, no account, no egress.
+- You want your session data to stay on your machine: no SDK, no account, and no egress unless you configure a rewrite backend or use the Fabric pattern import.
 - You want to collect the prompts worth keeping and install them as native slash commands for Claude Code, Codex or OMP.
 
 ## When NOT to use it
@@ -71,7 +70,7 @@ If you build and operate your own agent in production, use a tracing platform. I
 | Built for | agent sessions you already have on disk | agents you write yourself |
 | Integration | none — reads existing log files | add their SDK and instrument your code |
 | Works with off-the-shelf CLI agents (Claude Code, Codex, Gemini CLI) | yes, they already log to disk | not their model — that code is not yours to instrument |
-| Where data lives | your machine only | hosted backend |
+| Where data lives | your machine only | hosted backend (or a self-hosted Langfuse deployment) |
 
 Rule of thumb: if you build and operate your own agent in production, use a tracing platform. If you want to see what your coding agents actually did, use AgentXRay. LangSmith and Langfuse are the only alternatives this project makes any comparison against.
 
@@ -79,11 +78,11 @@ Rule of thumb: if you build and operate your own agent in production, use a trac
 
 ## Features
 
-- **Per-turn ledger** — In the session summary: one row per user turn with wall-clock time, tokens (input + output + cache) and cost, bars scaled to the session maximum, tool-call and error counts, click to jump. Answers "why did this take 40 minutes / cost $3" without reading the transcript.
+- **Per-turn ledger** — In the session summary, from two user turns on: one row per user turn with wall-clock time, tokens (input + output + cache) and cost, bars scaled to the session maximum, tool-call counts inline (error counts in the row tooltip), click to jump. Answers "why did this take 40 minutes / cost $3" without reading the transcript.
 - **Multi-platform** — Unified view across OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness and Gemini CLI sessions (dsh's multi-frame zstd session logs are decompressed transparently; Gemini CLI's `/rewind` checkpoints are folded so rewound history never renders twice)
 - **Session browser** — Browse agents, filter/search sessions, view message history
 - **Tool call inspection** — Expandable tool calls with arguments and results
-- **Trace view** — Per-turn waterfall of where the time went: model inference (blue) vs tool execution (green, red on error); click any bar to jump to that message
+- **Trace view** — Per-turn waterfall of where the time went: model inference (blue) vs tool execution (green, red on error); click any bar for its span detail in the sidebar, and a purple bar to load the spawned sub-agent's transcript
 - **Prompt extraction** — See every real human prompt per session (tool results, slash commands and injected noise filtered out), grouped by working directory, with search / JSON export / copy
 - **Prompt optimization** — Cluster prompts into templates, attribute session outcomes (turns, tool calls, error rate) per template, and get LLM-powered rewrite suggestions — through any OpenAI-compatible endpoint (Settings → LLM 接口) or, if none is configured, the local `claude` CLI
 - **Prompt library** — Curate the prompts worth keeping into `~/.agentxray/library`, tag / edit / search them, then install any of them as a native slash command for Claude Code, Codex or OMP with one click — `$ARGUMENTS` is passed through, so `/name some args` works in the target CLI
@@ -96,7 +95,7 @@ Rule of thumb: if you build and operate your own agent in production, use a trac
 - **Collapsible summary** — Fold the session summary away when you want the full height for messages
 - **Auto-refresh** — Live-updating session list and messages
 - **Settings panel** — Configure platform directories from the UI, persisted in localStorage
-- **Session backup** — Incremental archive of your session logs into `~/.agentxray/archive`, one click in settings (also runs automatically, daily); unchanged files are skipped
+- **Session backup** — Incremental archive of your Codex, Claude Code, OMP, DeepSeek Harness and Gemini CLI session logs into `~/.agentxray/archive` (Hermes and OpenClaw are not archived), one click in settings (also runs automatically, daily); unchanged files are skipped
 - **Keyboard navigation** — Arrow keys to move between sessions
 
 ---
@@ -188,7 +187,7 @@ Click the **Prompts** tab (next to Sessions / Insights) to see every real human 
 - **Preview & expand** — Each session row shows a one-line preview of its first prompt; click to expand the full markdown-rendered prompt list
 - **Search** — Filter prompts / directories / sessions live
 - **Export JSON** — Download all extracted prompts for offline processing
-- **分析优化 (Analyze)** — Cluster prompts into templates, attribute session outcomes (avg turns, tool calls, error rate) per template, and get rewrite suggestions from Claude. Requires the [`claude` CLI](https://claude.com/claude-code) on the server's PATH; without it the clustering and attribution table still works
+- **分析优化 (Analyze)** — Cluster prompts into templates, attribute session outcomes (avg turns, tool calls, error rate) per template, and get rewrite suggestions from the configured LLM backend (Settings → LLM 接口) or, when no endpoint is set, the [`claude` CLI](https://claude.com/claude-code) on the server's PATH. With neither, clustering and attribution still work, and the analysis route reports the missing backend as `llmError`
 - **优化 (Optimize)** — Hover any single prompt and click 优化 for an inline LLM-powered rewrite (configure the backend in Settings → LLM 接口, or have the `claude` CLI on PATH)
 
 ### Keyboard Shortcuts
@@ -299,8 +298,8 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 | Platform | Format | Path Pattern |
 |----------|--------|--------------|
 | OpenClaw | JSONL | `~/.openclaw/agents/{agent}/sessions/{id}.jsonl` |
-| Codex | JSONL | `~/.codex/sessions/{id}.jsonl` |
-| Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
+| Codex | JSONL | `~/.codex/sessions/{YYYY}/{MM}/{DD}/rollout-{timestamp}-{uuid}.jsonl` (session id is the trailing UUID) |
+| Claude Code | JSONL | `~/.claude/projects/{project-slug}/{sessionId}.jsonl` (plus `{sessionId}/subagents/agent-*.jsonl` for spawned children) |
 | Hermes | SQLite | `~/.hermes/state.db` |
 | OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
 | DeepSeek Harness | JSONL / zstd-compressed JSONL | `~/.dsh/sessions/{project}/{id}/session.jsonl[.zstd]` |
@@ -308,13 +307,13 @@ All list/detail endpoints accept an optional `?dir=` parameter to override the d
 
 dsh's `.jsonl.zstd` logs are a concatenation of independent Zstandard frames (one per append batch); AgentXRay scans the frame boundaries and decompresses every frame, tolerating a torn trailing frame after a crash. Reading compressed dsh logs requires Node.js ≥ 22.15 (built-in zstd); plain `session.jsonl` logs work on any supported Node.
 
-Archived sessions (`.jsonl.reset.*`, `.jsonl.deleted.*`) are also supported when "Include archived" is enabled.
+Archived sessions (`.jsonl.reset.*`, `.jsonl.deleted.*`) are shown for OpenClaw when "Include archived" is enabled; the other adapters list active `.jsonl` files only.
 
 ---
 
 ## Development
 
-Tests live in `test/` and use Node's built-in test runner — no extra dependencies. Run `npm ci` once, then `npm test` (`node --test test/*.test.js`). The tests start their own server on a random port with `HOME` and every platform directory pointed at a throwaway copy of `test/fixtures/home`, so your real session logs are never read or modified. CI runs the same two commands on Node 22 for every push and pull request to `master` (see `.github/workflows/test.yml`).
+Tests live in `test/` and use Node's built-in test runner — no extra dependencies. Run `npm ci` once, then `npm test` (`node --test test/*.test.js`). The tests start their own server on a random port with `HOME` and every platform directory pointed at a throwaway copy of `test/fixtures/home`, so your real session logs are never read or modified. CI (`.github/workflows/test.yml`) runs on Node 22 for every push and pull request to `master`, in four steps: `npm ci` (whose `prepare` script builds the web UI and regenerates `public/js/pure.js`), a drift check (`git diff --exit-code public/js/pure.js`), `npx biome check .`, and `npm test`.
 
 **Adding a platform** takes two files: write one adapter in `lib/platforms/<name>.js` (list / find / parse / normalize for that log format — `lib/platforms/shared.js` provides the metadata cache, the normalized-message factory and the session sort), then register it in the `PLATFORMS` table in `lib/platforms/index.js`. The generic session routes, search, watch (SSE tail), insights, prompts, tool audit, OTLP and Markdown/HTML export all resolve platforms through that registry — no other file needs to change.
 
@@ -326,13 +325,13 @@ Tests live in `test/` and use Node's built-in test runner — no extra dependenc
 Seven platforms: OpenClaw, Codex, Claude Code, Hermes, OMP (oh-my-pi), DeepSeek Harness and Gemini CLI. Six of them store JSONL; Hermes stores SQLite at `~/.hermes/state.db`. DeepSeek Harness logs may be multi-frame zstd-compressed `.jsonl.zstd`, which AgentXRay decompresses frame by frame, tolerating a torn trailing frame left by a crash. The authoritative list is the `PLATFORMS` registry in `lib/platforms/index.js` — run `node -e 'console.log(Object.keys(require("./lib/platforms/index.js").PLATFORMS))'` to print it.
 
 **Does AgentXRay send my session data anywhere?**
-No. It is a local Node.js server reading files from your own disk, serving a self-contained UI with zero external CDN dependencies, so it works offline. The only outbound traffic it can make is the optional prompt-rewrite feature, which calls an OpenAI-compatible endpoint you configure yourself or shells out to a local `claude` CLI; configure neither and nothing is sent anywhere.
+No. It is a local Node.js server reading files from your own disk, serving a self-contained UI with zero external CDN dependencies, so it works offline. Two features make outbound calls, and only when you use them: the optional prompt-rewrite feature, which sends the prompt text you asked to rewrite to the OpenAI-compatible endpoint you configure or to a local `claude` CLI, and the prompt-library Fabric import, which on demand downloads the pattern list from `api.github.com` and each pattern's `system.md` from `raw.githubusercontent.com` (falling back to the contents API), caching the pattern list on disk for 24 hours. Configure no endpoint and never use the Fabric import and nothing is sent anywhere.
 
 **Do I have to change my agent or add instrumentation?**
 No. CLI coding agents already write complete session logs to disk, and AgentXRay just reads them. There is no SDK to add to your code and no wrapper command to run your agent under. A default install needs no configuration either, because the default directories listed under [Configuration](#configuration) are used unless you override them in the settings panel or through environment variables such as `CLAUDE_CODE_DIR`.
 
 **How do I try it without installing anything?**
-Open <https://alloevil.github.io/AgentXRay/>. That GitHub Pages deployment is the real React UI, built by `.github/workflows/pages.yml`, running against the synthetic sample logs committed under `frontend/demo/sample-logs`. It contains no real user sessions, so treat it as a UI tour rather than as data.
+Open <https://alloevil.github.io/AgentXRay/>. That GitHub Pages deployment is the real React UI, built by `.github/workflows/pages.yml`, running against `frontend/src/demo/fixtures.json` — API fixtures generated from the synthetic sample logs committed under `frontend/demo/sample-logs` by `scripts/build-demo-fixtures.mjs`. It contains no real user sessions, so treat it as a UI tour rather than as data.
 
 **How do I add support for a log format that is not listed?**
 Two files: write an adapter at `lib/platforms/<name>.js` implementing list / find / parse / normalize for that format, then register it in the `PLATFORMS` table in `lib/platforms/index.js`. Every generic route resolves platforms through that registry, so no other file needs to change. See [Development](#development).
