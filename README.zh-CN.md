@@ -10,13 +10,13 @@
 
 AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code**、**Hermes**、**OMP**、**DeepSeek Harness** 和 **Gemini CLI** —— 一个界面全搞定。
 
-AgentXRay 由一个 Node.js + Express 服务和一套 React UI 组成：它读取这些 CLI 本来就写在你 home 目录下的 JSONL 会话日志（Hermes 是 SQLite），把七种格式归一化到同一个视图 —— 工具调用与结果自动配对、按轮次汇总 token 与花费、每轮耗时瀑布图、prompt 提取、跨平台全文搜索。零埋点、零接入，数据不出本机。
+AgentXRay 由一个 Node.js + Express 服务和一套 React UI 组成：它读取这些 CLI 本来就写在你 home 目录下的 JSONL 会话日志（Hermes 是 SQLite），把七种格式归一化到同一个视图 —— 工具调用与结果自动配对、按轮次汇总 token 与花费、每轮耗时瀑布图、prompt 提取、跨平台全文搜索。零埋点、零接入，会话数据不出本机（仅有的外发请求，是你自行配置的 prompt 改写后端，以及按需触发的 Fabric 模式导入）。
 
 ## 为什么是 AgentXRay
 
 AgentXRay 是一个 **local-first 的查看器，看的是你已经拥有的 agent 会话**。
 
-LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接入 SDK、埋点插桩，trace 上报到托管后端。做自研 agent 时它们很好用 —— 但 Claude Code、Codex、Gemini CLI 这些现成的 CLI coding agent 不是你的代码，没法插桩。它们本来就把完整会话日志写在你的磁盘上，AgentXRay 直接读这些日志：零接入、零配置，数据不出本机。
+LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接入 SDK、埋点插桩，trace 上报到托管后端。做自研 agent 时它们很好用 —— 但 Claude Code、Codex、Gemini CLI 这些现成的 CLI coding agent 不是你的代码，没法插桩。它们本来就把完整会话日志写在你的磁盘上，AgentXRay 直接读这些日志：零接入、零配置，会话数据留在本机。
 
 相比自己翻原始 JSONL，AgentXRay 把七种日志格式归一化到一个界面里：工具调用与结果自动配对、token 用量按会话汇总、跨平台全文搜索、prompt 提取、trace 时间线 —— 这些从一份 50MB 的会话日志里手工还原起来非常费劲。
 
@@ -29,7 +29,7 @@ LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接
 - 你在用一个或多个 CLI coding agent，想复盘某次会话到底做了什么：调用了哪些工具、参数是什么、返回了什么、时间和 token 花在哪里。
 - 你想按用户轮次核算 token 与花费，而这些会话早已结束，当时并没有做任何埋点。
 - 你需要一次搜索全部 agent 平台，包括从 Claude Code 自身清理机制已删除的会话里恢复出来的 prompt。
-- 你希望会话数据只留在本机：不装 SDK、不注册账号、不外传。
+- 你希望会话数据只留在本机：不装 SDK、不注册账号；除非你自行配置改写后端或使用 Fabric 模式导入，否则不外传。
 - 你想把值得复用的 prompt 收集起来，并一键安装为 Claude Code、Codex 或 OMP 的原生 slash command。
 
 ## 何时不该用
@@ -48,7 +48,7 @@ LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接
 | 面向 | 你磁盘上已有的 agent 会话 | 你自己写的 agent |
 | 接入方式 | 无需接入，直接读现有日志文件 | 接入 SDK，在代码里埋点 |
 | 能否覆盖现成 CLI agent（Claude Code、Codex、Gemini CLI） | 可以，它们本来就在落盘 | 不适用，这些代码不是你的，没法埋点 |
-| 数据存放 | 仅本机 | 托管后端 |
+| 数据存放 | 仅本机 | 托管后端（Langfuse 也可自托管） |
 
 一句话：在生产环境构建和运营自己的 agent，请用 tracing 平台；想看清 coding agent 到底干了什么，用 AgentXRay。本项目只与 LangSmith、Langfuse 作对比，不评价其他工具。
 
@@ -57,9 +57,9 @@ LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接
 - **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes、OMP、DeepSeek Harness、Gemini CLI 的会话日志（dsh 的多帧 zstd 压缩日志透明解压；Gemini CLI 的 `/rewind` 回滚记录会先折叠，回滚掉的历史不会重复渲染）
 - **会话浏览** — 浏览 Agent 列表，搜索/过滤会话，查看消息历史
 - **工具调用检查** — 可展开的工具调用详情，包含参数和返回结果
-- **Trace 视图** — 每轮对话的耗时瀑布图：模型推理（蓝）与工具执行（绿，出错为红）一目了然，点击色条跳转到对应消息
+- **Trace 视图** — 每轮对话的耗时瀑布图：模型推理（蓝）与工具执行（绿，出错为红）一目了然，点击色条在侧栏查看该 span 详情（紫色条则加载派生出的子 Agent 对话）
 - **Prompt 提取** — 按 session 提取全部真人 prompt（自动过滤工具结果、斜杠命令、系统注入等噪音），按工作目录分组，支持搜索 / JSON 导出 / 复制
-- **Prompt 优化** — 相似 prompt 自动聚类成模板，结合 session 效果归因（轮次、工具调用、错误率），通过本机 `claude` CLI 生成改写建议
+- **Prompt 优化** — 相似 prompt 自动聚类成模板，结合 session 效果归因（轮次、工具调用、错误率），通过配置的 LLM 后端（设置 → LLM 接口）或本机 `claude` CLI 生成改写建议
 - **Prompt 资产库** — 把值得复用的 prompt 收进 `~/.agentxray/library`，支持标签 / 编辑 / 搜索，一键安装为 Claude Code、Codex、OMP 的原生 slash command（`$ARGUMENTS` 原样保留，在目标 CLI 里 `/名字 参数` 直接可用）
 - **全局搜索** — 一个搜索框同时搜七个平台，多关键词 AND 匹配，每条结果带平台色标 —— 包含从被 Claude Code 清理掉的会话里恢复出来的 prompt
 - **会话洞察** — 聚合分析面板：工具统计、错误聚类、每日趋势
@@ -70,7 +70,7 @@ LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接
 - **摘要可折叠** — 需要更多阅读空间时可折叠会话摘要
 - **自动刷新** — 会话列表和消息实时更新
 - **设置面板** — 在页面上直接配置各平台目录，保存到 localStorage，无需重启
-- **会话备份** — 增量归档会话日志到 `~/.agentxray/archive`，在设置面板一键触发（也会每天自动执行），未变化的文件自动跳过
+- **会话备份** — 增量归档 Codex、Claude Code、OMP、DeepSeek Harness、Gemini CLI 的会话日志到 `~/.agentxray/archive`（Hermes 与 OpenClaw 不归档），在设置面板一键触发（也会每天自动执行），未变化的文件自动跳过
 - **键盘导航** — 使用方向键在会话之间切换
 
 ## 截图预览
@@ -156,8 +156,8 @@ npm start
 - **预览与展开** — 每个 session 行内直接预览首条 prompt，点击展开完整列表（markdown 渲染）
 - **搜索** — 实时过滤 prompt / 目录 / session
 - **Export JSON** — 导出全部提取的 prompt 用于离线处理
-- **分析优化** — 相似 prompt 聚类成模板，结合每个模板的 session 效果归因（平均轮次、工具调用、错误率），由 Claude 生成模板改写建议。需要服务器 PATH 中有 [`claude` CLI](https://claude.com/claude-code)；没有时聚类和归因表格仍可用
-- **优化单条** — 悬停任意 prompt 点击「优化」，内联生成 Claude 改写版本
+- **分析优化** — 相似 prompt 聚类成模板，结合每个模板的 session 效果归因（平均轮次、工具调用、错误率），由配置的 LLM 后端（设置 → LLM 接口）生成模板改写建议；未配置端点时改由服务器 PATH 中的 [`claude` CLI](https://claude.com/claude-code) 生成。两者都没有时，聚类和归因仍然可用，接口会把缺失的后端报告为 `llmError`
+- **优化单条** — 悬停任意 prompt 点击「优化」，内联生成 LLM 改写版本（在 设置 → LLM 接口 配置后端，或 PATH 上有 `claude` CLI）
 
 ### 键盘快捷键
 
@@ -259,8 +259,8 @@ npm start
 | 平台 | 格式 | 路径模式 |
 |------|------|----------|
 | OpenClaw | JSONL | `~/.openclaw/agents/{agent}/sessions/{id}.jsonl` |
-| Codex | JSONL | `~/.codex/sessions/{id}.jsonl` |
-| Claude Code | JSONL | `~/.claude/projects/*/sessions/*/session.jsonl` |
+| Codex | JSONL | `~/.codex/sessions/{YYYY}/{MM}/{DD}/rollout-{timestamp}-{uuid}.jsonl`（session id 是结尾的 UUID） |
+| Claude Code | JSONL | `~/.claude/projects/{project-slug}/{sessionId}.jsonl`（派生子 Agent 另有 `{sessionId}/subagents/agent-*.jsonl`） |
 | Hermes | SQLite | `~/.hermes/state.db` |
 | OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
 | DeepSeek Harness | JSONL / zstd 压缩 JSONL | `~/.dsh/sessions/{project}/{id}/session.jsonl[.zstd]` |
@@ -268,11 +268,11 @@ npm start
 
 dsh 的 `.jsonl.zstd` 日志是多个独立 Zstandard 帧的串联（每个持久化批次一帧）；AgentXRay 会扫描帧边界并逐帧解压，崩溃残留的尾部不完整帧会被容忍丢弃。读取压缩日志需要 Node.js ≥ 22.15（内置 zstd）；未压缩的 `session.jsonl` 在任何受支持的 Node 上都能读。
 
-启用「包含已归档」后，还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话。
+启用「包含已归档」后，OpenClaw 还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话；其他适配器只列出活跃的 `.jsonl` 文件。
 
 ## 开发
 
-测试代码位于 `test/`，使用 Node 内置的测试运行器，无需额外依赖。先执行一次 `npm ci`，然后运行 `npm test`（即 `node --test test/*.test.js`）。测试会在随机端口上启动自己的服务实例，并把 `HOME` 及各平台目录都指向 `test/fixtures/home` 的临时副本，因此不会读取或修改你的真实会话日志。CI 在每次向 `master` 的 push 和 pull request 上以 Node 22 执行同样的两条命令（见 `.github/workflows/test.yml`）。
+测试代码位于 `test/`，使用 Node 内置的测试运行器，无需额外依赖。先执行一次 `npm ci`，然后运行 `npm test`（即 `node --test test/*.test.js`）。测试会在随机端口上启动自己的服务实例，并把 `HOME` 及各平台目录都指向 `test/fixtures/home` 的临时副本，因此不会读取或修改你的真实会话日志。CI（`.github/workflows/test.yml`）在每次向 `master` 的 push 和 pull request 上以 Node 22 执行四个步骤：`npm ci`（其 `prepare` 脚本会构建 Web UI 并重新生成 `public/js/pure.js`）、漂移检查（`git diff --exit-code public/js/pure.js`）、`npx biome check .` 和 `npm test`。
 
 **新增平台只需两个文件**：在 `lib/platforms/<name>.js` 写一个适配器（针对该日志格式的 list / find / parse / normalize，`lib/platforms/shared.js` 提供元数据缓存、归一化消息工厂和会话排序），再到 `lib/platforms/index.js` 的 `PLATFORMS` 注册表登记一条。通用会话路由、搜索、watch（SSE 实时跟踪）、洞察、Prompt 提取、工具体检、OTLP 与 Markdown/HTML 导出全部通过该注册表解析平台，无需改动其他文件。
 
@@ -282,13 +282,13 @@ dsh 的 `.jsonl.zstd` 日志是多个独立 Zstandard 帧的串联（每个持�
 七个平台：OpenClaw、Codex、Claude Code、Hermes、OMP（oh-my-pi）、DeepSeek Harness 和 Gemini CLI。其中六个是 JSONL，Hermes 是位于 `~/.hermes/state.db` 的 SQLite。DeepSeek Harness 的日志可能是多帧 zstd 压缩的 `.jsonl.zstd`，AgentXRay 会逐帧解压，并容忍崩溃残留的尾部不完整帧。权威清单是 `lib/platforms/index.js` 里的 `PLATFORMS` 注册表，可用 `node -e 'console.log(Object.keys(require("./lib/platforms/index.js").PLATFORMS))'` 打印。
 
 **AgentXRay 会把我的会话数据传到别处吗？**
-不会。它是一个读取你本机磁盘文件的本地 Node.js 服务，UI 完全自包含、零外部 CDN，因此离线也能用。唯一可能产生外发流量的是可选的 prompt 改写功能：它调用你自己配置的 OpenAI 兼容端点，或调起本机的 `claude` CLI；两者都不配置时，不会有任何数据外发。
+不会。它是一个读取你本机磁盘文件的本地 Node.js 服务，UI 完全自包含、零外部 CDN，因此离线也能用。有两个功能会产生外发请求，且只在你主动使用它们时：可选的 prompt 改写功能，把你要求改写的那段 prompt 文本发给你自己配置的 OpenAI 兼容端点，或本机的 `claude` CLI；以及 Prompt 资产库的 Fabric 导入，它按需从 `api.github.com` 下载模式列表、从 `raw.githubusercontent.com` 下载每个模式的 `system.md`（失败时回退到 contents API），并把模式列表在磁盘上缓存 24 小时。不配置端点、也不使用 Fabric 导入，就不会有任何数据外发。
 
 **需要改动我的 agent 或加埋点吗？**
 不需要。CLI coding agent 本来就把完整会话日志写在磁盘上，AgentXRay 只是读它们。你不需要在代码里接 SDK，也不需要用什么包装命令来启动 agent。默认安装同样无需配置，[配置](#配置) 一节列出的默认目录会直接生效，除非你在设置面板里改，或用 `CLAUDE_CODE_DIR` 之类的环境变量覆盖。
 
 **不装任何东西能先试试吗？**
-可以，打开 <https://alloevil.github.io/AgentXRay/>。这个 GitHub Pages 部署就是真实的 React UI，由 `.github/workflows/pages.yml` 构建，跑在仓库里提交的合成示例日志 `frontend/demo/sample-logs` 上。它不含任何真实用户会话，所以请把它当作界面导览，而不是数据。
+可以，打开 <https://alloevil.github.io/AgentXRay/>。这个 GitHub Pages 部署就是真实的 React UI，由 `.github/workflows/pages.yml` 构建，跑在 `frontend/src/demo/fixtures.json` 上 —— 这些 API fixture 由 `scripts/build-demo-fixtures.mjs` 从仓库里提交的合成示例日志 `frontend/demo/sample-logs` 生成。它不含任何真实用户会话，所以请把它当作界面导览，而不是数据。
 
 **想支持一个没列出的日志格式怎么办？**
 两个文件：在 `lib/platforms/<name>.js` 写一个适配器，实现该格式的 list / find / parse / normalize，然后在 `lib/platforms/index.js` 的 `PLATFORMS` 表里登记一条。所有通用路由都通过该注册表解析平台，无需改动其他文件。详见 [开发](#开发)。

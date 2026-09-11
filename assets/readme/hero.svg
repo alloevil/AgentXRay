@@ -53,7 +53,7 @@
 
   <text x="56" y="392" fill="#8b949e"
         font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="18">Node.js 22.13+ · MIT · ~70KB build</text>
+        font-size="18">Node.js 22.13+ · MIT</text>
 
   <g id="session-panel">
     <rect x="584" y="48" width="560" height="262" rx="12" fill="#161b22" stroke="#30363d"/>
