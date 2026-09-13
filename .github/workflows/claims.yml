@@ -28,4 +28,4 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
-      - uses: alloevil/verify-claims@v0.1.0
+      - uses: alloevil/verify-claims@v0.1.1
