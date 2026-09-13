@@ -1,0 +1,31 @@
+name: claims
+
+# Runs the receipts behind claims.json: every number published in the README,
+# the hero figure caption, the roadmap or the CI description must still be
+# printed by the command next to it. Weekly as well as on push, because those
+# numbers move without anyone committing (session counts, npm releases, upstream
+# platform formats).
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: published numbers still reproduce
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Two receipts run the repo's own gates, so this job needs a checkout with
+      # dependencies: `npm test` (the 130-test count) needs express, and the
+      # public/js/pure.js drift check needs the esbuild inside frontend/node_modules,
+      # which npm ci's prepare script installs by building the web UI.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm ci
+      - uses: alloevil/verify-claims@v0.1.0

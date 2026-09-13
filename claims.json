@@ -1,0 +1,288 @@
+{
+  "$comment": "Receipts for every number AgentXRay publishes in prose: the README first screen, the hero figure caption, the FAQ, the roadmap and the CI description. Each claim carries the command that recomputes it from committed artifacts (scripts/claims-receipts.mjs derives the figures from the platform registry, lib/config.js, package.json, the workflow, the demo sample log and the test fixtures) or check.manual with the reason no command can. No claim asserts a package version: package.json is 1.17.2 while npm still serves 1.17.1 and this machine has no npm token, so a version-consistency claim would be permanently red; instead readme-no-version pins the deliberate absence of a version in the README. .github/workflows/claims.yml runs the lot weekly and on every push.",
+  "project": "AgentXRay",
+  "repository": "https://github.com/alloevil/AgentXRay",
+  "updated": "2026-09-13",
+  "claims": [
+    {
+      "id": "platform-registry",
+      "claim": "AgentXRay supports seven agent log formats — OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness and Gemini CLI — registered in one table.",
+      "value": "7 platforms",
+      "metric": "entries in the PLATFORMS registry in lib/platforms/index.js",
+      "method": "Object.keys(PLATFORMS) is printed directly. The registry is the single source of platform truth: the README's 'seven supported log formats', its format table and the hero's left column all describe this table, and every generic surface (session routes, search, watch, insights, prompts, tool audit, OTLP, Markdown/HTML export) resolves platforms through it.",
+      "repro": "node scripts/claims-receipts.mjs platform-registry",
+      "evidence": "lib/platforms/index.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs platform-registry",
+        "expect": { "equals": "7 platforms: openclaw, codex, claude-code, omp, dsh, gemini, hermes" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "platform-storage",
+      "claim": "Six of the seven platforms are read from JSONL logs; Hermes is the only SQLite-backed one (~/.hermes/state.db).",
+      "value": "6 JSONL / 1 SQLite",
+      "metric": "registry entries carrying a file parser vs entries that read a database",
+      "method": "The FAQ says 'Six of them store JSONL; Hermes stores SQLite at ~/.hermes/state.db'. The receipt counts registry entries with a parse(filePath) adapter: every platform except hermes has one and is listed through a file-based list/find/collectFiles; hermes has parse: null and is served by getHermesSession against the SQLite state.db.",
+      "repro": "node scripts/claims-receipts.mjs platform-storage",
+      "evidence": "lib/platforms/index.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs platform-storage",
+        "expect": { "equals": "6 JSONL-backed, 1 SQLite-only (hermes)" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "readme-platform-list",
+      "claim": "The README and its Chinese translation enumerate exactly the registered platforms, and the Supported Log Formats table has one row per platform.",
+      "value": "7/7 in both READMEs",
+      "metric": "registry labels found in each README, and data rows in the Supported Log Formats table",
+      "method": "Every PLATFORMS[].label is looked up in README.md and README.zh-CN.md, and the markdown table under '## Supported Log Formats' is counted with its header row dropped. The expected names come from the registry, not from the prose, so a rename in an adapter turns this red until the documentation follows.",
+      "repro": "node scripts/claims-receipts.mjs readme-platform-list",
+      "evidence": "README.md#supported-log-formats",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs readme-platform-list",
+        "expect": { "equals": "7/7 labels in README.md (7 format-table rows) · 7/7 in README.zh-CN.md" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "default-dirs",
+      "claim": "Each platform's default session directory comes from lib/config.js, and the README's Default directories table lists that same path for all seven.",
+      "value": "7/7 default dirs match the README table",
+      "metric": "each platform's defaultDir() resolved against HOME, compared with the `~/.…` paths in the README",
+      "method": "PLATFORMS[id].defaultDir() → path.relative(HOME, dir) → `~/<rel>`, and every one of those strings must appear in the Configuration table of README.md. The dirs are env-overridable (OPENCLAW_DIR, CODEX_DIR, … and DSH_HOME for dsh), which is what those env vars do at runtime.",
+      "repro": "node scripts/claims-receipts.mjs default-dirs",
+      "evidence": "lib/config.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs default-dirs",
+        "expect": {
+          "equals": "7/7 default dirs match README.md (~/.openclaw/agents ~/.codex/sessions ~/.claude/projects ~/.omp/agent/sessions ~/.dsh/sessions ~/.gemini/tmp ~/.hermes)"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "hero-per-turn-ledger",
+      "claim": "The hero figure caption is the real per-turn ledger of the committed synthetic Claude Code session: 16:30:00 → 16:31:33 in /demo/webapp, one user turn, 1m33s, 12,436 tokens, five tool calls (Glob, Read, Edit, Edit, Bash), 0 errors, cost not reported.",
+      "value": "1m33s / 12,436 tokens / 5 tool calls / 0 errors",
+      "metric": "wall-clock, tokens, tool calls and errors of the turn built from the demo sample log",
+      "method": "parseClaudeCodeSessionFile over frontend/demo/sample-logs/claude/-demo-webapp/synthetic-feature-dark-mode.jsonl, then buildTurnLedger — the UI's own function, required from the generated public/js/pure.js — and the same duration and token strings are looked for in assets/readme/hero.svg. The message timestamps give the 16:30:00 → 16:31:33 range and the cwd field gives /demo/webapp.",
+      "repro": "node scripts/claims-receipts.mjs hero-ledger",
+      "evidence": "assets/readme/hero.svg",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs hero-ledger",
+        "expect": {
+          "equals": "1 turn · 1m33s · 12,436 tok · cost not reported · 5 tool calls (Glob, Read, Edit, Edit, Bash) · 0 errors · 16:30:00→16:31:33 · /demo/webapp · hero.svg agrees"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "per-turn-ledger-fields",
+      "claim": "A per-turn ledger row carries wall-clock time, tokens summed as input + output + cache read + cache write, cost when the platform reports it, and tool-call and error counts; the strip only appears from two turns on.",
+      "value": "240 tok = 120 in + 40 out + 80 cache read; cost shown only when reported",
+      "metric": "the row fields built from two committed fixtures that differ in exactly those columns",
+      "method": "buildTurnLedger over the dsh fixture (test/fixtures/home/.dsh/sessions/--fixtures-project-delta--/dsh-fixture-session-0001/session.jsonl) and the omp fixture: the dsh turn totals 240 tokens only when its 80 cache-read tokens are counted, and its cost column stays hidden because no cost is reported, while the omp turn reports $0.0054 and one tool error. The two-turn display gate and the sort keys live in frontend/src/views/sessions/TurnLedger.tsx.",
+      "repro": "node scripts/claims-receipts.mjs ledger-fields",
+      "evidence": "frontend/src/views/sessions/TurnLedger.tsx",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs ledger-fields",
+        "expect": {
+          "equals": "dsh: 1 row, 240 tok = 120 in + 40 out + 80 cache read + 0 cache write, cost not reported, 1 tool call, 0 errors · omp: 1 row, 300 tok = 220 in + 80 out + 0 cache read + 0 cache write, cost $0.0054 reported, 1 tool call, 1 error"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "test-count",
+      "claim": "130 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
+      "value": "130",
+      "metric": "passing node:test cases (# tests 130 / # pass 130 / # fail 0)",
+      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('130 tests on Node's built-in runner (`npm test`, 2026-09-12)') is verified by the run, not read back from the prose.",
+      "repro": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
+      "evidence": "docs/ROADMAP.md",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
+        "expect": { "contains": ["# tests 130", "# pass 130", "# fail 0"] },
+        "timeout": 120
+      }
+    },
+    {
+      "id": "ci-test-workflow",
+      "claim": "CI (.github/workflows/test.yml) runs one `test` job on Node 22 for every push and pull request to master, in four steps: npm ci (whose prepare script builds the web UI and regenerates public/js/pure.js), the pure.js drift check, biome, and npm test.",
+      "value": "1 job (test) · Node 22 · 4 steps",
+      "metric": "jobs, node-version and `- run:` steps parsed out of the workflow",
+      "method": "The workflow is parsed in the receipt: the job keys under jobs:, the triggers under on:, the branches, node-version and every `- run:` step in order. Four run steps means the README's 'in four steps' list is still the whole job.",
+      "repro": "node scripts/claims-receipts.mjs ci-test-workflow",
+      "evidence": ".github/workflows/test.yml",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs ci-test-workflow",
+        "expect": {
+          "equals": "1 job (test) on Node 22 · 4 steps: npm ci | git diff --exit-code public/js/pure.js | npx biome check . | npm test · on push, pull_request of master"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "legacy-pure-drift",
+      "claim": "public/js/pure.js is generated from frontend/src/lib/{pure,markdown}.ts, and the committed copy must not drift from those sources — CI fails on drift.",
+      "value": "regenerate then diff clean",
+      "metric": "exit code of the regenerate-and-diff gate",
+      "method": "node scripts/build-legacy-pure.mjs rebuilds public/js/pure.js from the TypeScript sources with esbuild (resolved from frontend/node_modules, hence the npm ci step in the claims job), then git diff --exit-code public/js/pure.js must be clean. This is step 2 of the test job, re-run here so the claim carries its own receipt.",
+      "repro": "node scripts/build-legacy-pure.mjs && git diff --exit-code public/js/pure.js",
+      "evidence": "public/js/pure.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": ["node scripts/build-legacy-pure.mjs", "git diff --exit-code public/js/pure.js"],
+        "expect": { "exit_code": 0 },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "backup-platforms",
+      "claim": "Session backup incrementally archives Codex, Claude Code, OMP, DeepSeek Harness and Gemini CLI logs into ~/.agentxray/archive; Hermes and OpenClaw are not archived, and unchanged files are skipped.",
+      "value": "5 archived / 2 excluded; second run copies 0",
+      "metric": "platforms present in runFullBackup()'s summary, and copied/skipped counts across two runs",
+      "method": "runFullBackup() is called twice against a throwaway copy of test/fixtures/home with HOME and AGENTXRAY_ARCHIVE_DIR pointed into a temp dir — the isolation test/helpers.js uses — and the archive keys are compared with the platform registry, so 'Hermes and OpenClaw are not archived' is recomputed rather than quoted. The second run copies 0 files because every archived copy is already current, which is the documented skip.",
+      "repro": "node scripts/claims-receipts.mjs backup-platforms",
+      "evidence": "lib/backup.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs backup-platforms",
+        "expect": {
+          "equals": "archive: 5 platforms (codex, claude-code, omp, dsh, gemini) · excluded: openclaw, hermes · first run 12 copied / 0 skipped of 12 · re-run 0 copied / 12 skipped"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "install-command",
+      "claim": "The published install command is `npx @alloevil/agent-xray`, and the package exposes that launcher under two bin names.",
+      "value": "@alloevil/agent-xray · bins: agentxray, agent-xray",
+      "metric": "package.json name and bin keys vs the README install block",
+      "method": "The name and the bin keys are read from package.json, and README.md must still carry the `npx <name>` line, so the documented command cannot drift from the published package name.",
+      "repro": "node scripts/claims-receipts.mjs install-command",
+      "evidence": "package.json",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs install-command",
+        "expect": { "equals": "@alloevil/agent-xray · bins: agentxray, agent-xray · README.md npx line present" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "default-port",
+      "claim": "The server's default port is 3800, the http://localhost:3800 the README tells you to open, and the launcher can override it with --port/--host.",
+      "value": "3800",
+      "metric": "the PORT fallback in server.js and the README's localhost URL",
+      "method": "`const PORT = process.env.PORT || 3800` is matched in server.js, README.md must contain http://localhost:3800, and bin/agentxray.js must still parse --port and --host.",
+      "repro": "node scripts/claims-receipts.mjs default-port",
+      "evidence": "server.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs default-port",
+        "expect": { "equals": "3800 · README.md states http://localhost:3800: yes · launcher --port/--host: yes" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "node-engine-floor",
+      "claim": "The package requires Node.js ≥ 22.13 — the floor the README badge and the 'When NOT to use it' section both state.",
+      "value": ">=22.13",
+      "metric": "package.json engines.node vs the README badge and prose",
+      "method": "engines.node is read from package.json, and README.md must contain both the badge text `Node.js-22.13+` and the prose `≥ 22.13`.",
+      "repro": "node scripts/claims-receipts.mjs node-engine-floor",
+      "evidence": "package.json",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs node-engine-floor",
+        "expect": { "equals": ">=22.13 · badge ok · README \"≥ 22.13\": ok" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "dsh-zstd-floor",
+      "claim": "Reading compressed DeepSeek Harness logs requires Node.js ≥ 22.15, because the adapter only decompresses frames when node:zlib exposes zstdDecompressSync.",
+      "value": ">=22.15",
+      "metric": "the Node floor in dsh.js's upgrade message and in the README",
+      "method": "The floor is parsed out of the message lib/platforms/dsh.js raises for a compressed log, the runtime gate (HAS_NODE_ZSTD = typeof zlib.zstdDecompressSync === 'function') must still guard the decompression path, and README.md must state ≥ 22.15.",
+      "repro": "node scripts/claims-receipts.mjs dsh-zstd-floor",
+      "evidence": "lib/platforms/dsh.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs dsh-zstd-floor",
+        "expect": {
+          "equals": "22.15 · dsh.js message \"Node.js >= 22.15\" + runtime zstd gate: yes · README.md \"≥ 22.15\": ok"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "tests-node-only",
+      "claim": "The test suite uses Node's built-in test runner with no extra dependencies: every require in test/ is a node: builtin or a relative path.",
+      "value": "0 third-party requires",
+      "metric": "distinct require() specifiers across test/ by kind",
+      "method": "Every require('…') in test/*.js is classified; a specifier that is neither node:* nor relative fails the receipt. express and the other runtime dependencies are reached through ../server.js, which is why the tests need no test-only dependency.",
+      "repro": "node scripts/claims-receipts.mjs tests-node-only",
+      "evidence": "test/helpers.js",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs tests-node-only",
+        "expect": {
+          "equals": "12 files in test/ · 11 distinct requires: 9 node builtins, 2 relative, 0 third-party"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "readme-no-version",
+      "claim": "The README publishes no version number of its own — the npm release badge is the only version shown — so no committed prose can go stale against the registry.",
+      "value": "0 version strings",
+      "metric": "semver-looking strings in README.md, excluding the 127.0.0.1 in the host example",
+      "method": "README.md is scanned for standalone x.y.z tokens (not part of an IP address). package.json's own version is deliberately not claimed anywhere: it is 1.17.2 while npm still serves 1.17.1, and there is no npm token on this machine to reconcile the two, so a version-consistency claim would be permanently red.",
+      "repro": "node scripts/claims-receipts.mjs readme-no-version",
+      "evidence": "README.md",
+      "as_of": "2026-09-13",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs readme-no-version",
+        "expect": { "equals": "0 version strings in README.md" },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "branch-protection-requires-test",
+      "claim": "master requires the `test` check to pass before a pull request can merge, so the workflow above is a gate and not just a notification.",
+      "value": "required check: test",
+      "metric": "the required status checks on the master branch",
+      "method": "Branch protection is GitHub repository state, not a committed file: no command in this repository can read it, and this machine has no token that could query the protection API (the same absence that makes the published-version comparison manual). The committed half — that test.yml defines exactly one job, named test — is machine-checked by ci-test-workflow.",
+      "repro": "gh api repos/alloevil/AgentXRay/branches/master/protection --jq '.required_status_checks.contexts'",
+      "evidence": ".github/workflows/test.yml",
+      "as_of": "2026-09-13",
+      "check": {
+        "manual": "branch protection lives in GitHub's settings, not in the repository, and reading it needs an authenticated API call (network) which the claims job does not make — deliberately, since every other check here runs offline."
+      }
+    },
+    {
+      "id": "hosted-demo-is-synthetic",
+      "claim": "The hosted demo at https://alloevil.github.io/AgentXRay/ is the real React UI running against frontend/src/demo/fixtures.json — synthetic sample data, no real sessions.",
+      "value": "synthetic fixtures, not user logs",
+      "metric": "what the deployed site actually serves",
+      "method": "pages.yml builds frontend/ with VITE_DEMO=1 and deploys frontend/dist, and the fixtures are generated from frontend/demo/sample-logs by scripts/build-demo-fixtures.mjs; whether the deployment currently serves that bundle can only be answered over the network.",
+      "repro": "curl -s https://alloevil.github.io/AgentXRay/ | grep -o '<title>[^<]*'",
+      "evidence": "frontend/src/demo/fixtures.json",
+      "as_of": "2026-09-13",
+      "check": {
+        "manual": "confirming it means fetching the deployed page and its bundle over the network; the claims job runs offline by design, so the deployed artifact is out of reach here. The committed half — the demo build path and its synthetic source — is what pages.yml and scripts/build-demo-fixtures.mjs describe."
+      }
+    }
+  ]
+}
