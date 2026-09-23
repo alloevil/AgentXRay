@@ -60,7 +60,29 @@ Storage limits:
 - They are not encrypted, authenticated attestations or a backup. Another browser, a changed hostname/port, private mode or cleared site data may make them unavailable. Other tabs use the latest saved record; there is no collaborative edit merge.
 - Storage denial, a corrupt record or quota exhaustion is shown explicitly. A failed save does not count as saved; unreadable reviews remain unreviewed. You can revoke an individual review without clearing unrelated settings.
 - Use localhost or HTTPS for browser cryptography. If fingerprints cannot be calculated, saving reviews is disabled while automatic diagnostics remain available.
-- Notes are not automatically deleted when an event becomes automatically recovered or its identity changes; they may remain in site storage. There is no review archive, export/import or cross-device sync in this version.
+- Notes are not automatically deleted when an event becomes automatically recovered or its identity changes; they may remain in site storage. Current-event export/import is available below, but there is no whole-history review archive or automatic cross-device sync.
+
+## Transfer reviews between browsers
+
+Open **迁移当前会话复核 / Export & import** in the diagnostics panel. This is a local, explicit file transfer—not a server backup or authenticated proof that a task passed.
+
+1. On the source browser, open the session you reviewed and select **预览导出**. The full JSON is shown before downloading. Only reviews whose identity and full-evidence fingerprint still match the **currently loaded automatic events** are included; the selected review filter does not limit the export.
+2. Inspect the notes, acknowledge the plaintext warning, then select **下载复核 JSON**. The filename is always `agentxray-reviews.json`, without a session ID or path. Store it safely: notes you typed may include secrets even though the app does not copy logs into the file.
+3. On the destination browser/origin, open the same session with the same platform, configured log-directory setting and child scope. Select the JSON file. **No review is written during preview.** Every record shows its note, timestamp and one decision: import, unmatched, stale, already identical, or local conflict.
+4. After checking the preview, acknowledge the warning and select **确认导入匹配记录**. Only exact current-event/full-evidence matches with an empty local slot are written. Every existing local slot is kept—even an old or corrupt one. Clear it explicitly in the ordinary review UI first if you intend to replace it, then preview again.
+5. The result reports imported, skipped and failed counts. Evidence/review changes invalidate an open preview. Storage is rechecked immediately before each write; partial failures retain successful writes and report failures, not an all-or-nothing transaction. Re-preview to retry; already-imported records are skipped.
+
+### File format and boundaries
+
+- Format `agentxray-review-transfer`, version `1`; maximum **1 MiB UTF-8** and **500 unique records**. Invalid JSON, unknown fields/versions, duplicate keys in the record list, invalid storage identifiers and invalid review fields are rejected before import writes.
+- Top-level fields: `format`, `version`, `exportedAt`, `records`. Each record has `storageKey` and `record`; the nested record has `version`, `fingerprint`, `status`, `note`, `reviewedAt`.
+- Only hash identifiers, evidence fingerprints, human states, human-written notes and timestamps are exported. Raw commands, log content, paths, session titles and automatic diagnostics are not copied into the file. Notes are plain text, not redacted or encrypted; HTML in a note is displayed as text.
+- Matching preserves the existing fingerprint contract. Different browser or port can work; changed directory settings, session/child scope, first occurrence, original arguments or full evidence do not. There is no fuzzy cross-machine path remapping. If source logs are no longer available at the destination, the file cannot recreate them.
+- Files can be edited or fabricated. A matching hash is an association check, **not a signature, trust guarantee or independent task verification**. Imported human labels never modify automatic failure/recovery counts.
+- This is not a complete browser/history backup: recovered, missing, stale or unloaded event notes are excluded. Unreadable current records abort export with an error rather than silently producing an incomplete file. Exceeding limits requires a smaller current-session set; automatic splitting is not provided.
+- Browser localStorage has no multi-tab transaction. The app skips observed conflicts and rechecks each write, but cannot guarantee a lock against truly simultaneous independent writes. No remote requests or automatic cloud sync are added.
+
+![Synthetic review transfer preview](../screenshots/review-transfer.png)
 
 ## What an event means
 
@@ -99,6 +121,7 @@ These checks cover navigation, session messages and the review workflow—not co
 ```sh
 node --test test/diagnostic-events.test.js test/diagnostics.test.js test/omp-outcome.test.js
 node --test test/diagnostic-reviews.test.js
+node --test test/review-transfer.test.js
 npm test
 npm run build:ui
 npm run lint
@@ -141,7 +164,20 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 
 **存储边界：**标记只在当前浏览器同源 localStorage 中保存，刷新可恢复、同源多标签页会同步，但不上传后端、不改原始日志。自动保存的内容为哈希标识、完整证据指纹、状态、时间和你手写的依据，不复制原始日志或参数；手写依据是明文，请勿填写密钥。不同日志目录、平台、会话及子会话隔离。换浏览器、端口、清除站点数据可能不可见或丢失，不能当备份；多标签页采用最后一次保存，不做协作合并。
 
-新增失败、完整输出变化或状态依据变化会要求重新复核；身份变化的事件不沿用旧标记。读取损坏、浏览器拒绝存储或配额不足会明确报错，不会假装保存成功。使用 localhost 或 HTTPS 以便计算指纹。自动恢复或身份变化后的旧笔记不会自动清理；当前没有复核归档、导入导出或跨设备同步。
+新增失败、完整输出变化或状态依据变化会要求重新复核；身份变化的事件不沿用旧标记。读取损坏、浏览器拒绝存储或配额不足会明确报错，不会假装保存成功。使用 localhost 或 HTTPS 以便计算指纹。自动恢复或身份变化后的旧笔记不会自动清理；可迁移当前有效复核，但不是历史归档或自动跨设备同步。
+
+## 迁移复核记录
+
+在诊断面板展开“迁移当前会话复核 / Export & import”：
+
+1. **源浏览器**打开已有复核的会话，点击“预览导出”，检查将下载的完整 JSON，勾选明文提醒后下载。仅导出当前自动事件中仍有效的复核，筛选队列不影响范围。
+2. **目标浏览器**打开相同平台、配置目录、会话及子会话，选择文件。预览逐条展示依据、时间与处理决定，尚不写入数据。
+3. 只有**身份和完整证据匹配、本地没有任何记录**的条目可导入。过期、不匹配、重复均跳过；不同、过期或损坏的本地记录也不覆盖。确需替换时，先在原复核界面主动撤销，再重新预览。
+4. 明确确认后导入，显示成功、跳过、失败数量。预览期间证据或复核变化会禁用旧确认；确认时再次核对。部分写入失败不回滚成功项，可重新预览重试，已成功项会跳过。
+
+限制 **500 条、1 MiB UTF-8**，严格检查版本、允许字段、哈希标识、重复记录和依据格式；导出文件只含哈希、状态、时间和手写笔记，不自动包含日志、命令、参数或路径。**手写内容仍可能含秘密，文件未加密、未脱敏、未签名**；不要盲目信任他人给的复核文件，哈希匹配不等于结论可信。导入不会改变自动失败/恢复计数。
+
+不同浏览器、端口可迁移，但目录配置或原始会话/证据变化会拒绝匹配，不自动改写路径。没有原始日志时不能用文件重建事件。已恢复、过期或未加载事件不在导出范围；这不是整库备份。多标签页只做写入前复查，不提供跨标签页事务锁。操作均在浏览器本地完成，没有新增上传或同步服务。
 
 本轮的 373 个真实冻结事件只使用**内存中的合成测试标记**检验隔离与失效，没有替你判断真实事件，也没有把这些测试标记写成真实复核。完整证据见 [本机复核验收](diagnostics-verification.md)。
 

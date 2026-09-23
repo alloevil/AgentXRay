@@ -14,6 +14,7 @@ interface ReviewSnapshot {
 
 export function useEventReviews(scope: string, events: FailureEvent[]) {
   const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null);
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     let generation = 0;
     let cancelled = false;
@@ -45,7 +46,7 @@ export function useEventReviews(scope: string, events: FailureEvent[]) {
     void load();
     window.addEventListener('storage', onStorage);
     return () => { cancelled = true; window.removeEventListener('storage', onStorage); };
-  }, [scope, events]);
+  }, [scope, events, revision]);
 
   const loaded = snapshot?.scope === scope && snapshot.events === events;
   const entries = loaded ? snapshot.entries : {};
@@ -67,7 +68,7 @@ export function useEventReviews(scope: string, events: FailureEvent[]) {
     } : previous);
   }
 
-  return { entries, loaded, error, update };
+  return { entries, loaded, error, update, refresh: () => setRevision((value) => value + 1) };
 }
 
 export function DiagnosticReview({ entry, ready, onUpdate }: {

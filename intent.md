@@ -45,6 +45,19 @@ Release receipt: PR #48 merged as `c882564`; v1.18.0 Publish run `35880348489` s
 
 Hosted walkthrough acceptance: 216 tests pass, including raw-to-bundled fixture parity; regeneration is deterministic. Desktop and 360px browser checks cover the entry from another view/navigation, all six edit evidence links and local review with zero API requests. A height cap fixes the guide hiding the transcript on short screens; 740×360 remains cramped and is documented rather than called full mobile support.
 
+## Review portability increment
+
+- Continue the authorized roadmap with a current-session review transfer file, no backend or dependencies. Reject whole-browser scans, cross-directory fuzzy matching and silent overwrites.
+- Export only valid, non-stale reviews for currently loaded automatic events. Construct a whitelist of hashed storage keys, evidence fingerprints, human statuses, notes and timestamps; no automatic logs, arguments, paths or session titles. Preview the exact JSON before a user-triggered download and warn that hand-written notes may contain secrets.
+- Import a bounded JSON file (1 MiB, at most 500 unique records), validate the exact versioned schema and identifiers before accessing storage. Show all notes and per-record decisions before explicit confirmation. Treat files as untrusted human notes, not authenticated success evidence.
+- Only exact current-event identity and full-evidence fingerprint matches with empty local slots may be imported. Distinguish unmatched, stale, already identical and conflicting local records; skip every existing slot, including corrupt/stale local entries. Never alter automatic failure/recovery counts.
+- Recheck current evidence and local storage on confirmation. Invalidate previews when the active event set or loaded reviews change. If individual writes fail, report imported/skipped/failed counts accurately, preserve prior successes, never claim an atomic transaction or roll back other tabs.
+- Export/import works between browsers or ports with identical platform, configured directory, session/child scope and evidence. Changed configured directory, missing/recovered events and changed transcripts intentionally do not match. This is not whole-history backup, encryption or collaborative conflict merging.
+- Test privacy whitelist, limits/schema/version, duplicates, wrong scope, stale fingerprint, conflicts, unreadable storage, write failures, race rechecks and no-write preview; use synthetic browser migration across isolated contexts with zero review network requests.
+- Publish as a new minor release through protected PR and the existing Release workflow after all checks pass. Keep private evaluation output ignored. Update claims/test totals, public guidance and roadmap acceptance without claiming productivity gains.
+
+Portability acceptance: 17 new transfer tests and 103 focused tests pass. Browser tests exercised an actual 2-record download/import into an isolated browser, a different-origin restore, stale and cross-tab preview invalidation, no-overwrite conflicts, schema/size rejection, literal HTML notes and partial write failure/retry. Prepare v1.19.0 and verify the actual registry package and Pages deployment after protected checks, without mutating the prior v1.18.0 release.
+
 ## Non-goals
 
 - No new platform, dependency, model call, account, telemetry, cloud log storage or automatic command execution.

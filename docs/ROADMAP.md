@@ -8,7 +8,7 @@
 - **Session browser** with tool-call inspection, trace/waterfall view, spawn tracking and message timeline
 - **Prompt tooling** — extraction (noise filtered), template clustering with outcome attribution, Claude-powered rewrites, and a prompt library that installs entries as native slash commands
 - **Global search** across all platforms, insights dashboard, incremental session backup
-- **React + Vite frontend** served by an Express backend; 216 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
+- **React + Vite frontend** served by an Express backend; 233 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
 - **Evidence-backed failure events and local review** with full-result invalidation, evidence navigation and narrow-screen session layout
 
 ## Current priorities
@@ -18,7 +18,7 @@ The product direction is **review the coding-agent sessions you already have, wi
 | Priority | Outcome | Acceptance, not a promise |
 | --- | --- | --- |
 | P0 | Make the new workflow immediately testable | A demo-only entry opens a clearly synthetic case: 7 pending records in 2 events, all evidence accessible, local review does not rewrite automatic results. Preserve the existing default demo and samples. |
-| P1 | Make review work portable without exposing logs | Design explicit user-controlled review export/import, validate schema and evidence fingerprints, show a preview of exactly what leaves the browser, and reject stale/mismatched records. No automatic upload or raw-log export by default. |
+| P1 | Current-session review portability implemented | Preview-only import and explicit plaintext download; exact identity/evidence matching, no overwrites, bounded schema and partial-failure reporting. Validate with synthetic migration and publish after CI; whole-history backup and path remapping remain out of scope. |
 | P2 | Validate daily usefulness with the maintainer's own sessions | Record reviewed/follow-up/expected/alternative-verification counts and timed review tasks using a fixed rubric. Keep measurements local, separate unknowns and stale labels, and publish only consented aggregate evidence. Do not infer precision or time saved from event compression. |
 | P3 | Make releases reproducible for contributors | Keep clean-install tests, generated fixtures, documentation claims and release/package verification aligned. Add browser regression automation when it can run deterministically without personal logs. |
 
