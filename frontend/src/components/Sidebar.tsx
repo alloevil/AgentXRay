@@ -79,7 +79,7 @@ function AgentNav() {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const platform = useAppStore((s) => s.platform);
   const includeArchived = useAppStore((s) => s.includeArchived);
   const setIncludeArchived = useAppStore((s) => s.setIncludeArchived);
@@ -106,7 +106,7 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="flex min-h-0 flex-col gap-3 overflow-hidden border-r border-border bg-panel-alt/95 p-4">
+    <aside aria-label="会话导航" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden border-r border-border bg-panel-alt/95 p-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-wide">AgentXRay</h1>
@@ -169,9 +169,9 @@ export function Sidebar() {
           onChange={setAutoScroll}
         />
       </div>
-      <SessionList filterTerm={filterTerm} />
+      <SessionList filterTerm={filterTerm} onNavigate={onNavigate} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-      <CmdkDialog open={cmdkOpen} onOpenChange={setCmdkOpen} seedQuery={cmdkSeed} />
+      <CmdkDialog open={cmdkOpen} onOpenChange={setCmdkOpen} seedQuery={cmdkSeed} onNavigate={onNavigate} />
     </aside>
   );
 }

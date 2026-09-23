@@ -48,11 +48,16 @@ function SessionCard({ session, active, onClick }: { session: SessionSummary; ac
     : '';
   return (
     <div
+      role="button"
+      aria-pressed={active}
       tabIndex={0}
       data-session-id={session.id}
       onClick={onClick}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onClick();
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
       }}
       className={cn(
         'cursor-pointer rounded-md border px-2.5 py-2 text-xs transition-colors',
@@ -80,7 +85,7 @@ function SessionCard({ session, active, onClick }: { session: SessionSummary; ac
   );
 }
 
-export function SessionList({ filterTerm }: { filterTerm: string }) {
+export function SessionList({ filterTerm, onNavigate }: { filterTerm: string; onNavigate?: () => void }) {
   const selectedSessionId = useAppStore((s) => s.selectedSessionId);
   const setSelectedSessionId = useAppStore((s) => s.setSelectedSessionId);
   const { data, isLoading, error } = useSessionsList();
@@ -89,6 +94,10 @@ export function SessionList({ filterTerm }: { filterTerm: string }) {
   const virtualized = filtered.length > VIRT_THRESHOLD;
 
   const parentRef = useRef<HTMLDivElement>(null);
+  const selectSession = (id: string) => {
+    setSelectedSessionId(id);
+    onNavigate?.();
+  };
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
@@ -112,6 +121,7 @@ export function SessionList({ filterTerm }: { filterTerm: string }) {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       if (target.matches('input, textarea, select') || target.closest('[role="dialog"]')) return;
+      if (!parentRef.current?.getClientRects().length) return;
       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
       const state = useAppStore.getState();
       if (state.view !== 'sessions' || !filtered.length) return;
@@ -172,7 +182,7 @@ export function SessionList({ filterTerm }: { filterTerm: string }) {
                 <SessionCard
                   session={session}
                   active={session.id === selectedSessionId}
-                  onClick={() => setSelectedSessionId(session.id)}
+                  onClick={() => selectSession(session.id)}
                 />
               </div>
             );
@@ -185,7 +195,7 @@ export function SessionList({ filterTerm }: { filterTerm: string }) {
               key={session.id}
               session={session}
               active={session.id === selectedSessionId}
-              onClick={() => setSelectedSessionId(session.id)}
+              onClick={() => selectSession(session.id)}
             />
           ))}
         </div>

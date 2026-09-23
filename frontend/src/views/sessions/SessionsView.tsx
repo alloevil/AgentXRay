@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlatformProbe } from '@/hooks/usePlatformProbe';
-import { useAppStore } from '@/store';
+import { dirForPlatform, useAppStore } from '@/store';
 import { ChildAgentBanner } from '@/views/trace/ChildAgentsSection';
 import { useActiveSessionDetail } from '@/views/trace/childAgents';
 import { TraceView } from '@/views/trace/TraceView';
@@ -14,6 +14,7 @@ import { MessageActionsContext } from './MessageItem';
 import { MessageList, MSG_BATCH_SIZE } from './MessageList';
 import { useSessionDetail } from './queries';
 import { SessionSummary } from './SessionSummary';
+import { SessionDiagnostics } from './SessionDiagnostics';
 import { useSessionSse } from './useSessionSse';
 
 // Every platform probed empty (#13): guide the user to where logs are
@@ -97,6 +98,7 @@ function EmptyState() {
 // Legacy scrollToMessage findEl: several anchor id shapes
 function findAnchorEl(msgId: string): HTMLElement | null {
   return (
+    (msgId.startsWith('diagnostic-result-') ? document.getElementById(msgId) : null) ||
     document.getElementById(`message-${msgId}`) ||
     document.getElementById(`tool-result-${msgId}`) ||
     document.getElementById(`row-${msgId}`) ||
@@ -113,7 +115,14 @@ function revealAndFlash(el: HTMLElement, color = '#58a6ff') {
   }
   const inner = el.querySelector('details');
   if (inner) inner.open = true;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const messages = el.closest<HTMLElement>('[data-testid="messages-scroll"]');
+  if (messages) {
+    const offset = el.getBoundingClientRect().top - messages.getBoundingClientRect().top;
+    const center = Math.max(0, (messages.clientHeight - el.offsetHeight) / 2);
+    messages.scrollTo({ top: messages.scrollTop + offset - center, behavior: 'smooth' });
+  } else {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
   el.style.outline = `2px solid ${color}`;
   el.style.outlineOffset = '2px';
   window.setTimeout(() => {
@@ -143,6 +152,9 @@ export function SessionsView() {
   const paginatedKeyRef = useRef('');
 
   const activeKey = `${platform}:${selectedSessionId}:${viewingChildAgent ?? ''}`;
+  const reviewDirectory = useAppStore((state) => dirForPlatform(state.settings, state.platform));
+  const selectedAgent = useAppStore((state) => state.selectedAgent);
+  const reviewScope = JSON.stringify([platform, reviewDirectory, selectedSessionId, viewingChildAgent, platform === 'openclaw' ? selectedAgent : '']);
   const activeDetail = activeQuery.data;
   const timing = buildTimingAnalysis(activeDetail?.messages);
 
@@ -234,7 +246,7 @@ export function SessionsView() {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {(['messages', 'trace'] as const).map((sv) => (
             <button
               key={sv}
@@ -269,14 +281,17 @@ export function SessionsView() {
           <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto pr-1" data-testid="messages-scroll">
             <ChildAgentBanner />
             {activeDetail ? (
-              <MessageList
-                messages={activeDetail.messages}
-                platform={platform}
-                msgFilter={msgFilter}
-                timing={timing}
-                visibleUnitCount={visibleUnitCount}
-                onLoadMore={() => setVisibleUnitCount((c) => c + MSG_BATCH_SIZE)}
-              />
+              <>
+                <SessionDiagnostics key={reviewScope} reviewScope={reviewScope} messages={activeDetail.messages} onScrollToMessage={scrollToMessage} />
+                <MessageList
+                  messages={activeDetail.messages}
+                  platform={platform}
+                  msgFilter={msgFilter}
+                  timing={timing}
+                  visibleUnitCount={visibleUnitCount}
+                  onLoadMore={() => setVisibleUnitCount((c) => c + MSG_BATCH_SIZE)}
+                />
+              </>
             ) : activeQuery.isError ? (
               <div className="py-8 text-center text-sm text-destructive">{(activeQuery.error as Error).message}</div>
             ) : (

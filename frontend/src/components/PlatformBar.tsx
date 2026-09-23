@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Platform } from '@/api/types';
 import { PLATFORM_LABELS, PLATFORMS } from '@/api/types';
 import { DEMO } from '@/demo/flag';
@@ -22,6 +22,18 @@ export function PlatformBar() {
   const setPlatform = useAppStore((s) => s.setPlatform);
   const [expanded, setExpanded] = useState(false);
   const { data: counts } = usePlatformProbe();
+  const barRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const bar = barRef.current;
+    const selected = bar?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!bar || !selected) return;
+    const bounds = bar.getBoundingClientRect();
+    const button = selected.getBoundingClientRect();
+    if (button.left < bounds.left || button.right > bounds.right) {
+      bar.scrollLeft += button.left - bounds.left - (bar.clientWidth - button.width) / 2;
+    }
+  }, [platform, counts, expanded]);
 
   // First-launch auto-pick (#13): no platform persisted yet → land on the
   // first platform that actually has sessions. SessionList then auto-selects
@@ -39,15 +51,16 @@ export function PlatformBar() {
   const collapsed = PLATFORMS.filter((p) => isCollapsed(p));
 
   return (
-    <div className="flex items-center gap-1.5 border-b border-border bg-panel-alt/95 px-3 py-2">
+    <nav ref={barRef} aria-label="Agent 平台" className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border bg-panel-alt/95 px-3 py-1 md:py-2">
       {shown.map((p) => (
         <button
           key={p}
           type="button"
+          aria-pressed={p === platform}
           title={PLATFORM_TIPS[p]}
           onClick={() => setPlatform(p)}
           className={cn(
-            'rounded-md border px-3 py-1 text-sm transition-colors',
+            'min-h-11 shrink-0 whitespace-nowrap rounded-md border px-3 py-1 text-sm transition-colors md:min-h-0',
             p === platform
               ? 'border-primary/60 bg-primary/15 text-foreground'
               : 'border-border bg-transparent text-muted-foreground hover:border-primary/40 hover:text-foreground'
@@ -61,11 +74,11 @@ export function PlatformBar() {
           type="button"
           title={`暂无会话的平台：${collapsed.map((p) => PLATFORM_LABELS[p]).join('、')} — 点击展开`}
           onClick={() => setExpanded(true)}
-          className="rounded-md border border-dashed border-border px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
+          className="min-h-11 shrink-0 whitespace-nowrap rounded-md border border-dashed border-border px-3 py-1 text-sm text-muted-foreground hover:text-foreground md:min-h-0"
         >
           +{collapsed.length}
         </button>
       )}
-    </div>
+    </nav>
   );
 }

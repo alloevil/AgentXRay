@@ -73,6 +73,12 @@ export interface MessageUsage {
 }
 
 /** Normalized message (all platforms are normalized server-side to this shape). */
+export interface OmpOutcome {
+  state: 'success' | 'failure' | 'running' | 'cancelled' | 'unknown';
+  evidence: string[];
+  warnings: string[];
+}
+
 export interface SessionMessage {
   id: string;
   timestamp: string | null;
@@ -85,6 +91,7 @@ export interface SessionMessage {
   toolName: string | null;
   details: Record<string, unknown> | null;
   isError: boolean;
+  ompOutcome?: OmpOutcome;
   /** some platforms attach reasoning text directly on the assistant record */
   reasoning?: string | null;
   [key: string]: unknown;

@@ -179,14 +179,14 @@ export function SessionSummary({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card/60 p-3" data-testid="session-summary">
+    <div className="max-h-[clamp(4rem,calc(100dvh_-_20rem),30dvh)] shrink-0 overflow-y-auto rounded-lg border border-border bg-card/60 p-3 md:max-h-none md:overflow-visible" data-testid="session-summary">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-full">
           <h2 className="truncate text-sm font-semibold">{detail.session?.id || selectedSessionId}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             <span>{formatDate(detail.session?.timestamp)}</span>
-            <span>{detail.session?.cwd || 'Unknown cwd'}</span>
-            {listModel ? <span className="rounded border border-border px-1">🧠 {listModel}</span> : null}
+            <span className="min-w-0 break-all">{detail.session?.cwd || 'Unknown cwd'}</span>
+            {listModel ? <span className="min-w-0 break-all rounded border border-border px-1">🧠 {listModel}</span> : null}
             {total !== null ? (
               <span title="Wall-clock time from first to last message">⏱ Total: {formatDurationCompact(total)}</span>
             ) : null}
@@ -209,7 +209,7 @@ export function SessionSummary({
             <span>耗时分析看 Trace 视图</span>
           </div>
         </div>
-        <div className="flex items-start gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <button
             type="button"
             className={ACTION_BTN}
