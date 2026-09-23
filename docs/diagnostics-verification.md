@@ -57,3 +57,13 @@ The preceding private, already-inspected regression set had 30 sessions and 9,07
 - Existing aggregate statistics retain their original error-field semantics and may differ from diagnostic counts.
 - No physical iOS/Android device, Safari or software-keyboard certification is claimed. Other complex pages are not fully covered by the narrow-screen checks.
 - Existing lint findings and the Vite large-chunk warning remain; no claim of zero technical debt is made.
+
+## Release and hosted walkthrough follow-up
+
+The feature release is available as [v1.18.0](https://github.com/alloevil/AgentXRay/releases/tag/v1.18.0). Its [Publish run](https://github.com/alloevil/AgentXRay/actions/runs/35880348489) succeeded with a package tarball and provenance attached. An isolated installation from `https://registry.npmjs.org` returned CLI version `1.18.0`; the installed server served a synthetic OMP failure with normalized status and the bundled review UI. The initial registry query preceded npm processing and returned 404; success was recorded only after the registry and installation became available.
+
+A separate hosted-demo increment adds the explicitly synthetic `0199demo-diagnostics` session and a **Try diagnostics** entry, leaving the default Claude demo and previous samples intact. Raw parser output and bundled messages are asserted equal by tests; 216 total Node tests now pass (two additional hosted-fixture tests). The existing 214-test count above records the release acceptance, not the updated suite size.
+
+The hosted sample has 8 historical failures: one has a matching successful retry, leaving 7 pending records grouped into 2 events (6 edit failures and 1 nested search failure). A background start stays running. Six individual edit results, evidence jumps and browser-local review were verified; no backend API requests were made during the static walkthrough. Fixture regeneration produced identical bytes twice.
+
+The demo-only guide is height-limited on short screens. Expanded guide checks leave about 102px for messages at 360×640 and 224px at 360×800; at 740×360 landscape only 35px remains, so portrait use is recommended. This does not change the normal local application's layout or imply physical-device certification.

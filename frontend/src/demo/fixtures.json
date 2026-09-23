@@ -93,6 +93,34 @@
   ],
   "omp": [
    {
+    "id": "0199demo-diagnostics",
+    "timestamp": "2026-09-23T08:00:00.000Z",
+    "lastActivity": "2026-09-23T08:01:12.000Z",
+    "messageCount": 22,
+    "userCount": 1,
+    "assistantCount": 11,
+    "toolCallCount": 10,
+    "toolResultCount": 10,
+    "topTools": [
+     {
+      "name": "edit",
+      "count": 6
+     },
+     {
+      "name": "bash",
+      "count": 3
+     },
+     {
+      "name": "web_search",
+      "count": 1
+     }
+    ],
+    "firstUserMessage": "[Synthetic demo] Review repeated edit failures and a search failure. Inspect the evidence before recording a human revie",
+    "title": "[Synthetic] Failure review: 7 records → 2 events",
+    "cwd": "/demo/diagnostics",
+    "file": "2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl"
+   },
+   {
     "id": "0199demo-omp-spawn",
     "timestamp": "2026-08-15T10:00:00.000Z",
     "lastActivity": "2026-08-15T10:03:30.000Z",
@@ -1027,6 +1055,613 @@
     }
    ]
   },
+  "omp/0199demo-diagnostics": {
+   "session": {
+    "id": "0199demo-diagnostics",
+    "cwd": "/demo/diagnostics",
+    "timestamp": "2026-09-23T08:00:00.000Z",
+    "version": null,
+    "model": null
+   },
+   "messages": [
+    {
+     "id": "demo-review-user",
+     "timestamp": "2026-09-23T08:00:01.000Z",
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "[Synthetic demo] Review repeated edit failures and a search failure. Inspect the evidence before recording a human review. These logs are fictional; no tool commands were executed."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-test-first-call",
+     "timestamp": "2026-09-23T08:00:02.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-test-first",
+     "timestamp": "2026-09-23T08:00:02.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-test-first",
+     "toolName": "bash",
+     "details": {
+      "command": "npm test",
+      "cwd": "/demo/diagnostics"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-test-first-result",
+     "timestamp": "2026-09-23T08:00:03.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic test failure: expected 2, got 1."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-test-first",
+     "toolName": "bash",
+     "details": {
+      "exitCode": 1,
+      "wallTimeMs": 100
+     },
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true",
+       "details.exitCode=1"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-test-retry-call",
+     "timestamp": "2026-09-23T08:00:04.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-test-retry",
+     "timestamp": "2026-09-23T08:00:04.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-test-retry",
+     "toolName": "bash",
+     "details": {
+      "command": "npm test",
+      "cwd": "/demo/diagnostics"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-test-retry-result",
+     "timestamp": "2026-09-23T08:00:05.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic test retry passed. This does not verify the later edits."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-test-retry",
+     "toolName": "bash",
+     "details": {
+      "wallTimeMs": 100
+     },
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "details.wallTimeMs (OMP synchronous completion)",
+       "isError=false"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-edit-1-call",
+     "timestamp": "2026-09-23T08:00:10.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-edit-1",
+     "timestamp": "2026-09-23T08:00:10.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-1",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 10",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-edit-1-result",
+     "timestamp": "2026-09-23T08:00:11.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit failure 1: exact old text not found. Inspect the file before repeating this operation."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-1",
+     "toolName": "edit",
+     "details": null,
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-edit-2-call",
+     "timestamp": "2026-09-23T08:00:20.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-edit-2",
+     "timestamp": "2026-09-23T08:00:20.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-2",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 10",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-edit-2-result",
+     "timestamp": "2026-09-23T08:00:21.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit failure 2: exact old text still not found."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-2",
+     "toolName": "edit",
+     "details": null,
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-edit-3-call",
+     "timestamp": "2026-09-23T08:00:30.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-edit-3",
+     "timestamp": "2026-09-23T08:00:30.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-3",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 10",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-edit-3-result",
+     "timestamp": "2026-09-23T08:00:31.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit failure 3: no matching text; arguments have not changed."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-3",
+     "toolName": "edit",
+     "details": null,
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-edit-4-call",
+     "timestamp": "2026-09-23T08:00:40.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-edit-4",
+     "timestamp": "2026-09-23T08:00:40.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-4",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 10",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-edit-4-result",
+     "timestamp": "2026-09-23T08:00:41.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit failure 4: exact match missing; no edit was applied."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-4",
+     "toolName": "edit",
+     "details": null,
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-edit-5-call",
+     "timestamp": "2026-09-23T08:00:50.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-edit-5",
+     "timestamp": "2026-09-23T08:00:50.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-5",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 10",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-edit-5-result",
+     "timestamp": "2026-09-23T08:00:51.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit failure 5: expected old text absent."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-5",
+     "toolName": "edit",
+     "details": null,
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-edit-6-call",
+     "timestamp": "2026-09-23T08:01:00.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-edit-6",
+     "timestamp": "2026-09-23T08:01:00.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-6",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 10",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-edit-6-result",
+     "timestamp": "2026-09-23T08:01:01.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit failure 6: unchanged operation failed again. Grouping retains all six results; it does not prove a shared root cause."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-edit-6",
+     "toolName": "edit",
+     "details": null,
+     "isError": true,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "isError=true"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-search-call",
+     "timestamp": "2026-09-23T08:01:05.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-search",
+     "timestamp": "2026-09-23T08:01:05.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-search",
+     "toolName": "web_search",
+     "details": {
+      "query": "synthetic timeout configuration documentation"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-search-result",
+     "timestamp": "2026-09-23T08:01:06.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic search failed. OMP details.error records the failure even though the outer isError is false."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-search",
+     "toolName": "web_search",
+     "details": {
+      "error": "Synthetic provider failure: no search result available."
+     },
+     "isError": false,
+     "ompOutcome": {
+      "state": "failure",
+      "evidence": [
+       "details.error (non-empty)"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-background-call",
+     "timestamp": "2026-09-23T08:01:10.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-background",
+     "timestamp": "2026-09-23T08:01:10.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-background",
+     "toolName": "bash",
+     "details": {
+      "command": "npm run verify-config",
+      "cwd": "/demo/diagnostics",
+      "async": true
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-background-result",
+     "timestamp": "2026-09-23T08:01:11.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic verification was backgrounded. There is no completion result in this sample."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-background",
+     "toolName": "bash",
+     "details": {
+      "async": {
+       "state": "running",
+       "jobId": "synthetic-background"
+      }
+     },
+     "isError": false,
+     "ompOutcome": {
+      "state": "running",
+      "evidence": [
+       "details.async.state=running"
+      ],
+      "warnings": []
+     }
+    },
+    {
+     "id": "demo-review-summary",
+     "timestamp": "2026-09-23T08:01:12.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic review exercise: inspect the six edit results and the search error, then record a follow-up note with evidence. The earlier test success does not validate the edits; a running background job is not a success. This static sample does not append live results."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    }
+   ]
+  },
   "omp/0199demo-omp-spawn": {
    "session": {
     "id": "0199demo-omp-spawn",
@@ -1140,7 +1775,15 @@
      "toolCallId": "omp-t2",
      "toolName": "read",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "omp-r1",
@@ -1158,7 +1801,15 @@
      "toolCallId": "omp-t1",
      "toolName": "task",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "omp-a2",
@@ -1213,7 +1864,15 @@
      "toolCallId": "omp-t3",
      "toolName": "edit",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "omp-a3",
@@ -1284,7 +1943,15 @@
      "toolCallId": "omp-t4",
      "toolName": "edit",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "omp-r5",
@@ -1302,7 +1969,14 @@
      "toolCallId": "omp-t5",
      "toolName": "bash",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "unknown",
+      "evidence": [
+       "details (missing bash completion evidence)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "omp-a4",
@@ -1438,7 +2112,15 @@
      "toolCallId": "dw-t1",
      "toolName": "grep",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "dw-r2",
@@ -1456,7 +2138,15 @@
      "toolCallId": "dw-t2",
      "toolName": "grep",
      "details": null,
-     "isError": false
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     },
     {
      "id": "dw-a2",
@@ -1608,10 +2298,10 @@
    "trend": []
   },
   "omp": {
-   "totalSessions": 1,
-   "totalMessages": 10,
-   "totalToolCalls": 5,
-   "errorRate": 0,
+   "totalSessions": 2,
+   "totalMessages": 32,
+   "totalToolCalls": 15,
+   "errorRate": 0.4667,
    "totalCost": 0,
    "tokenUsage": {
     "input": 13000,
@@ -1621,10 +2311,17 @@
    "toolStats": [
     {
      "name": "edit",
-     "calls": 2,
-     "errors": 0,
-     "errorRate": 0,
+     "calls": 8,
+     "errors": 6,
+     "errorRate": 0.75,
      "avgDurationMs": 0
+    },
+    {
+     "name": "bash",
+     "calls": 4,
+     "errors": 1,
+     "errorRate": 0.25,
+     "avgDurationMs": 50
     },
     {
      "name": "task",
@@ -1641,20 +2338,119 @@
      "avgDurationMs": 0
     },
     {
-     "name": "bash",
+     "name": "web_search",
      "calls": 1,
      "errors": 0,
      "errorRate": 0,
      "avgDurationMs": 0
     }
    ],
-   "errorClusters": [],
+   "errorClusters": [
+    {
+     "pattern": "Synthetic test failure: expected 2, got 1.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "bash",
+       "snippet": "Synthetic test failure: expected 2, got 1.",
+       "messageId": "demo-test-first-result",
+       "timestamp": "2026-09-23T08:00:03.000Z"
+      }
+     ]
+    },
+    {
+     "pattern": "Synthetic edit failure 1: exact old text not found. Inspect the file before repeating this operation.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "edit",
+       "snippet": "Synthetic edit failure 1: exact old text not found. Inspect the file before repeating this operation.",
+       "messageId": "demo-edit-1-result",
+       "timestamp": "2026-09-23T08:00:11.000Z"
+      }
+     ]
+    },
+    {
+     "pattern": "Synthetic edit failure 2: exact old text still not found.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "edit",
+       "snippet": "Synthetic edit failure 2: exact old text still not found.",
+       "messageId": "demo-edit-2-result",
+       "timestamp": "2026-09-23T08:00:21.000Z"
+      }
+     ]
+    },
+    {
+     "pattern": "Synthetic edit failure 3: no matching text; arguments have not changed.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "edit",
+       "snippet": "Synthetic edit failure 3: no matching text; arguments have not changed.",
+       "messageId": "demo-edit-3-result",
+       "timestamp": "2026-09-23T08:00:31.000Z"
+      }
+     ]
+    },
+    {
+     "pattern": "Synthetic edit failure 4: exact match missing; no edit was applied.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "edit",
+       "snippet": "Synthetic edit failure 4: exact match missing; no edit was applied.",
+       "messageId": "demo-edit-4-result",
+       "timestamp": "2026-09-23T08:00:41.000Z"
+      }
+     ]
+    },
+    {
+     "pattern": "Synthetic edit failure 5: expected old text absent.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "edit",
+       "snippet": "Synthetic edit failure 5: expected old text absent.",
+       "messageId": "demo-edit-5-result",
+       "timestamp": "2026-09-23T08:00:51.000Z"
+      }
+     ]
+    },
+    {
+     "pattern": "Synthetic edit failure 6: unchanged operation failed again. Grouping retains all six results; it does not prove a shared root cause.",
+     "count": 1,
+     "examples": [
+      {
+       "sessionId": "0199demo-diagnostics",
+       "toolName": "edit",
+       "snippet": "Synthetic edit failure 6: unchanged operation failed again. Grouping retains all six results; it does not prove a shared root cause.",
+       "messageId": "demo-edit-6-result",
+       "timestamp": "2026-09-23T08:01:01.000Z"
+      }
+     ]
+    }
+   ],
    "trend": [
     {
      "date": "2026-08-15",
      "sessions": 1,
      "errors": 0,
      "toolCalls": 5,
+     "cost": 0
+    },
+    {
+     "date": "2026-09-23",
+     "sessions": 1,
+     "errors": 7,
+     "toolCalls": 10,
      "cost": 0
     }
    ]
@@ -1743,8 +2539,8 @@
   },
   "omp": {
    "platform": "omp",
-   "totalSessions": 1,
-   "totalPrompts": 1,
+   "totalSessions": 2,
+   "totalPrompts": 2,
    "groups": [
     {
      "directory": "/demo/api-service",
@@ -1761,6 +2557,28 @@
         {
          "text": "[Synthetic demo] Add rate limiting to the public /v1/search endpoint: 60 req/min per API key, 429 with Retry-After when exceeded. Spawn a subagent to survey how our other services do it before touching code.",
          "timestamp": "2026-08-15T10:00:02.000Z"
+        }
+       ]
+      }
+     ],
+     "sessionCount": 1,
+     "promptCount": 1
+    },
+    {
+     "directory": "/demo/diagnostics",
+     "sessions": [
+      {
+       "id": "0199demo-diagnostics",
+       "file": "2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl",
+       "timestamp": "2026-09-23T08:00:00.000Z",
+       "lastActivity": "2026-09-23T08:01:12.000Z",
+       "slug": null,
+       "title": "[Synthetic] Failure review: 7 records → 2 events",
+       "promptCount": 1,
+       "prompts": [
+        {
+         "text": "[Synthetic demo] Review repeated edit failures and a search failure. Inspect the evidence before recording a human review. These logs are fictional; no tool commands were executed.",
+         "timestamp": "2026-09-23T08:00:01.000Z"
         }
        ]
       }

@@ -224,3 +224,38 @@ test('embedded calls and separate child transcripts preserve event boundaries', 
   assert.equal(parent.events[0].userTurn, 0);
   assert.equal(child.events.length, 0);
 });
+
+test('hosted synthetic walkthrough yields two events and preserves seven failure results', async () => {
+  const { parseOmpSessionFile } = require('../lib/platforms/omp');
+  const sample = path.join(
+    __dirname,
+    '../frontend/demo/sample-logs/omp/-demo-diagnostics/2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl'
+  );
+  const detail = await parseOmpSessionFile(sample);
+  const report = diagnoseSession(detail.messages);
+  assert.equal(report.failureCount, 8);
+  assert.equal(report.recoveredCount, 1);
+  assert.equal(report.failures.length, 7);
+  assert.deepEqual(
+    report.events.map((event) => event.failures.length),
+    [6, 1]
+  );
+  assert.equal(report.events[0].spanMs, 50000);
+  assert.equal(report.events[1].toolName, 'web_search');
+  assert.equal(report.events[1].failures[0].message.isError, false);
+  assert.equal(detail.messages.find((message) => message.id === 'demo-background-result').ompOutcome.state, 'running');
+  coverage(report);
+});
+
+test('bundled hosted walkthrough matches its real parser output', async () => {
+  const { parseOmpSessionFile } = require('../lib/platforms/omp');
+  const sample = path.join(
+    __dirname,
+    '../frontend/demo/sample-logs/omp/-demo-diagnostics/2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl'
+  );
+  const detail = await parseOmpSessionFile(sample);
+  const fixtures = JSON.parse(readFileSync(path.join(__dirname, '../frontend/src/demo/fixtures.json'), 'utf8'));
+  assert.deepEqual(fixtures.details['omp/0199demo-diagnostics']?.messages, detail.messages);
+  assert.ok(fixtures.sessions.omp.some((session) => session.id === '0199demo-diagnostics'));
+  assert.ok(Object.keys(fixtures.details).some((key) => key.includes('synthetic-feature-dark-mode')));
+});

@@ -26,6 +26,8 @@ export default function App() {
   useVersionPoller();
   const view = useAppStore((s) => s.view);
   const setView = useAppStore((s) => s.setView);
+  const platform = useAppStore((state) => state.platform);
+  const selectedSession = useAppStore((state) => state.selectedSessionId);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const navigationPanel = useRef<HTMLDivElement>(null);
@@ -69,8 +71,20 @@ export default function App() {
     <TooltipProvider delayDuration={300}>
       <div className="flex h-full flex-col overflow-hidden">
         {DEMO ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-b border-[#e3b341]/40 bg-[#e3b341]/15 px-3 py-1.5 text-center text-xs text-[#e3b341]">
-            <span>🧪 Demo mode — synthetic sample data (not real user sessions). Inspect your own agent logs:</span>
+          <div className="flex max-h-[24dvh] shrink-0 flex-wrap items-center justify-center gap-2 overflow-y-auto border-b border-[#e3b341]/40 bg-[#e3b341]/15 px-3 py-1.5 text-center text-xs text-[#e3b341] md:max-h-none [@media(max-height:500px)]:max-h-10">
+            <span>🧪 Demo — synthetic data, not real sessions.</span>
+            <button type="button"
+              className="min-h-9 rounded border border-[#e3b341]/60 bg-black/20 px-2 py-1 font-medium hover:bg-black/40"
+              onClick={() => {
+                const store = useAppStore.getState();
+                store.setPlatform('omp');
+                store.setSelectedSessionId('0199demo-diagnostics');
+                store.setSessionView('messages');
+                store.setView('sessions');
+                returnToContent();
+              }}>
+              体验失败复核 / Try diagnostics
+            </button>
             <button
               type="button"
               title="Copy install command"
@@ -93,6 +107,15 @@ export default function App() {
             >
               GitHub
             </a>
+            {platform === 'omp' && selectedSession === '0199demo-diagnostics' && view === 'sessions' ? (
+              <details className="w-full max-w-3xl text-left leading-5" data-testid="diagnostics-demo-guide">
+                <summary className="cursor-pointer text-center">演示步骤 / Guide: 7 failure records → 2 events</summary>
+                <p>6 次同参 edit 失败 + 1 次搜索失败。点击首条、末条或全部证据，再写一条人工复核依据。早先测试通过只恢复了那次测试，不验证后续修改。</p>
+                <p>Inspect the first/last/all evidence, then record a human review. Notes stay in this browser; the automatic result does not change. This static sample does not append live results.</p>
+                <a href="https://github.com/alloevil/AgentXRay/blob/master/docs/diagnostics.md" target="_blank" rel="noreferrer"
+                  className="underline underline-offset-2">本机使用与判定边界 / Local walkthrough and limits</a>
+              </details>
+            ) : null}
           </div>
         ) : null}
         <PlatformBar />
