@@ -95,16 +95,16 @@
    {
     "id": "0199demo-diagnostics",
     "timestamp": "2026-09-23T08:00:00.000Z",
-    "lastActivity": "2026-09-23T08:01:12.000Z",
-    "messageCount": 22,
+    "lastActivity": "2026-09-23T08:01:16.000Z",
+    "messageCount": 24,
     "userCount": 1,
-    "assistantCount": 11,
-    "toolCallCount": 10,
-    "toolResultCount": 10,
+    "assistantCount": 12,
+    "toolCallCount": 11,
+    "toolResultCount": 11,
     "topTools": [
      {
       "name": "edit",
-      "count": 6
+      "count": 7
      },
      {
       "name": "bash",
@@ -1659,6 +1659,62 @@
      "toolName": null,
      "details": null,
      "isError": false
+    },
+    {
+     "id": "demo-related-edit-call",
+     "timestamp": "2026-09-23T08:01:15.000Z",
+     "role": "assistant",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-related-edit",
+     "timestamp": "2026-09-23T08:01:15.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-related-edit",
+     "toolName": "edit",
+     "details": {
+      "path": "/demo/diagnostics/config.ts",
+      "oldText": "timeout: 15",
+      "newText": "timeout: 30"
+     },
+     "isError": false
+    },
+    {
+     "id": "demo-related-edit-result",
+     "timestamp": "2026-09-23T08:01:16.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit completed with a different oldText argument. The file path matches the failed edits, but this is only a related operation, not proof that the original task passed."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-related-edit",
+     "toolName": "edit",
+     "details": null,
+     "isError": false,
+     "ompOutcome": {
+      "state": "success",
+      "evidence": [
+       "isError=false",
+       "content (tool result, not task acceptance)"
+      ],
+      "warnings": []
+     }
     }
    ]
   },
@@ -2299,9 +2355,9 @@
   },
   "omp": {
    "totalSessions": 2,
-   "totalMessages": 32,
-   "totalToolCalls": 15,
-   "errorRate": 0.4667,
+   "totalMessages": 34,
+   "totalToolCalls": 16,
+   "errorRate": 0.4375,
    "totalCost": 0,
    "tokenUsage": {
     "input": 13000,
@@ -2311,9 +2367,9 @@
    "toolStats": [
     {
      "name": "edit",
-     "calls": 8,
+     "calls": 9,
      "errors": 6,
-     "errorRate": 0.75,
+     "errorRate": 0.6666666666666666,
      "avgDurationMs": 0
     },
     {
@@ -2450,7 +2506,7 @@
      "date": "2026-09-23",
      "sessions": 1,
      "errors": 7,
-     "toolCalls": 10,
+     "toolCalls": 11,
      "cost": 0
     }
    ]
@@ -2571,7 +2627,7 @@
        "id": "0199demo-diagnostics",
        "file": "2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl",
        "timestamp": "2026-09-23T08:00:00.000Z",
-       "lastActivity": "2026-09-23T08:01:12.000Z",
+       "lastActivity": "2026-09-23T08:01:16.000Z",
        "slug": null,
        "title": "[Synthetic] Failure review: 7 records → 2 events",
        "promptCount": 1,

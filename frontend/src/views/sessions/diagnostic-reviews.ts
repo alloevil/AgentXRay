@@ -48,11 +48,19 @@ export async function createReviewIdentity(scope: string, event: FailureEvent): 
   }
   const first = event.failures[0];
   const identity = [scope, event.toolName, args, event.userTurn, first.index, first.message.id, first.message.toolCallId];
+  const evidence: unknown[] = [1, identity, event.failures.map((failure) => ({
+    index: failure.index, reason: failure.reason, message: failure.message,
+  }))];
+  if (event.relatedOperations?.length) {
+    evidence.push(event.relatedOperations.map((operation) => ({
+      index: operation.index, callIndex: operation.callIndex, userTurn: operation.userTurn,
+      relation: operation.relation, state: operation.state, toolName: operation.toolName,
+      argumentsText: operation.argumentsText, message: operation.message,
+    })));
+  }
   const [key, fingerprint] = await Promise.all([
     digest(identity),
-    digest([1, identity, event.failures.map((failure) => ({
-      index: failure.index, reason: failure.reason, message: failure.message,
-    }))]),
+    digest(evidence),
   ]);
   return { storageKey: `${REVIEW_PREFIX}${key}`, fingerprint };
 }

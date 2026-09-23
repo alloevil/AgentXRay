@@ -58,6 +58,20 @@ Hosted walkthrough acceptance: 216 tests pass, including raw-to-bundled fixture 
 
 Portability acceptance: 17 new transfer tests and 103 focused tests pass. Browser tests exercised an actual 2-record download/import into an isolated browser, a different-origin restore, stale and cross-tab preview invalidation, no-overwrite conflicts, schema/size rejection, literal HTML notes and partial write failure/retry. Prepare v1.19.0 and verify the actual registry package and Pages deployment after protected checks, without mutating the prior v1.18.0 release.
 
+## Follow-up evidence candidates (approved 2026-09-24)
+
+- Add two explainable candidate relations, not semantic recovery: same tool with only top-level `i` differing; or a later explicit edit/write of the same recorded file in the same call-origin user turn.
+- Candidates must have a recorded result and a call started after the event's last pending failure. Exclude pre-existing parallel calls, same-signature repeats, orphan/missing arguments and unrecognized modification tools. Record order, not wall-clock guessing, determines "later".
+- Same-file tools are `edit`, `Edit`, `write`, `Write`, `MultiEdit`; support `path`/`file_path` only when unambiguous. Compare paths literally; require absolute paths or identical explicit absolute working directories for relative paths. Preserve cwd/workdir/working_directory distinctions. No filesystem resolution, symlink guessing, command parsing, cross-turn same-file links or cross-session/child joins.
+- Only-i candidates may cross user turns within the currently viewed transcript; label their call turn. Compare every other argument value, not just a text preview. Do not strip `i` from the original automatic recovery rules.
+- Each candidate shows the exact relation, call/result positions, five-state result status with its source fields, an output excerpt and a jump to the original result. Running/unknown/cancelled never display as successful verification. Show five initially, with all remaining candidates reachable and no silent success-only filtering.
+- Failure/event/recovery counts and event membership must remain byte-for-byte equivalent on the frozen 15-session/2,024-result audit. Candidate success does not close an event, prove causality or certify the task.
+- New/changed candidate evidence invalidates human review fingerprints for affected events; storage keys remain stable. Events with no candidates retain the previous fingerprint input to avoid unrelated invalidation. Transfer still contains only hashes and human notes, not raw candidate evidence.
+- Validate synthetic counterexamples and the frozen real-log prefixes; preserve raw logs privately, output only sample numbers, relation/status counts and line numbers. Real data previously inspected is regression evidence, not a blind accuracy or time-saving benchmark.
+- Update the isolated walkthrough and documentation. Do not introduce dependencies, model calls, new APIs, automatic commands, arbitrary error parsing, or change platform adapters.
+
+Acceptance results: 255 tests and 125 focused checks pass. The frozen 15-session/2,024-result regression retains every original failure/event member and all counts. Strict matching finds three only-i candidates (failure/running/success); no same-file candidate qualifies in that real set because paths lack explicit directory context or turns differ. Synthetic same-file and five-state browser checks, load-more, result jumps and candidate-triggered review staleness pass. Prepare v1.20.0 via the authorized protected PR/release workflow, verify registry installation and public Pages before claiming release completion; do not publish private logs or raw evaluation artifacts.
+
 ## Non-goals
 
 - No new platform, dependency, model call, account, telemetry, cloud log storage or automatic command execution.
