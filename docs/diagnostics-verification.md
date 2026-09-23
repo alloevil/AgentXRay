@@ -67,3 +67,19 @@ A separate hosted-demo increment adds the explicitly synthetic `0199demo-diagnos
 The hosted sample has 8 historical failures: one has a matching successful retry, leaving 7 pending records grouped into 2 events (6 edit failures and 1 nested search failure). A background start stays running. Six individual edit results, evidence jumps and browser-local review were verified; no backend API requests were made during the static walkthrough. Fixture regeneration produced identical bytes twice.
 
 The demo-only guide is height-limited on short screens. Expanded guide checks leave about 102px for messages at 360×640 and 224px at 360×800; at 740×360 landscape only 35px remains, so portrait use is recommended. This does not change the normal local application's layout or imply physical-device certification.
+
+## Review portability acceptance
+
+The next increment adds explicit current-session export/import, not whole-history backup. Run `node --test test/review-transfer.test.js` for its 17 cases; the combined focused diagnostic/review suite contains 103 tests and the full suite contains 233 tests. Earlier counts above record earlier releases, not the current suite size.
+
+Verified using synthetic notes and isolated browser contexts only:
+
+- Actual JSON download contains only allowed hash/status/note/time fields. Unrelated browser storage, raw tool output, command arguments and paths are not copied. Acknowledgment is required before downloading or importing.
+- Two notes migrate to an empty browser after a no-write preview and persist after refresh. Re-import is classified as identical and skipped; a different local note is a conflict and retained.
+- An HTML-shaped note displays literally and does not execute. Unknown fields, malformed JSON, duplicate records, invalid identifiers, files over 1 MiB and lists over 500 records are rejected.
+- Adding a failure while a preview is open disables confirmation. Re-preview imports the one still-matching event and skips the stale one. A different session skips both records.
+- An independent `localhost` origin accepts the matching review exported on `127.0.0.1`; another tab writing first invalidates the preview and preserves that local note.
+- A simulated quota failure on the second write reports **1 imported / 0 skipped / 1 failed**. Re-preview reports **1 imported / 1 skipped / 0 failed** on retry, preserving the first import. No atomic rollback is claimed.
+- Browser migration sent zero backend write requests; automatic failure/recovery counts remained unchanged. At 360px, the transfer panel had no horizontal overflow.
+
+This does not verify real-device file pickers, simultaneous cross-tab transaction safety or actual productivity gains. The file is unencrypted human text, not signed evidence; only current exact matches can be restored. Detailed local run artifacts remain ignored and are not published.

@@ -3,6 +3,7 @@ import type { SessionMessage } from '@/api/types';
 import { diagnoseSession, type FailureDiagnostic, type FailureEvent } from './diagnostics';
 import { formatDate, messageAnchorId } from './lib';
 import { DiagnosticReview, useEventReviews } from './DiagnosticReview';
+import { ReviewTransferPanel } from './ReviewTransferPanel';
 import { REVIEW_LABELS, reviewState, type EventReview, type ReviewState, type ReviewStatus } from './diagnostic-reviews';
 
 const REASONS = {
@@ -144,6 +145,7 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
         </p>
       ) : null}
       {notice?.events === report.events ? <p role="status" className="mt-2 text-muted-foreground">{notice.text}</p> : null}
+      <ReviewTransferPanel entries={reviews.entries} ready={reviews.loaded && !reviews.error} onImported={reviews.refresh} />
       {report.events.length ? (
         <>
           <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="复核队列筛选">
