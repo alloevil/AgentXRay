@@ -70,10 +70,12 @@ export function CmdkDialog({
   open,
   onOpenChange,
   seedQuery,
+  onNavigate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   seedQuery: string;
+  onNavigate?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
@@ -140,6 +142,7 @@ export function CmdkDialog({
   const openHit = async (row: HitRow) => {
     if (!row.clickable) return; // history-only hit: original session was cleaned up
     onOpenChange(false);
+    onNavigate?.();
     const store = useAppStore.getState();
     const plat = row.result.platform as Platform;
     const agent = row.result.agent || '';

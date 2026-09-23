@@ -2,13 +2,14 @@
 
 > Moved from issue #4 on 2026-09-04. Issues are for bug reports and feature requests; the roadmap lives here. To pick up an item, open an issue referencing it.
 
-## Where we are (v1.12)
+## Where we are
 
-- **5 platforms** — OpenClaw, Codex, Claude Code, Hermes (SQLite) and OMP, parsed from their native log formats
+- **7 platforms** — OpenClaw, Codex, Claude Code, Hermes (SQLite), OMP, DeepSeek Harness and Gemini CLI, parsed from their native log formats
 - **Session browser** with tool-call inspection, trace/waterfall view, spawn tracking and message timeline
 - **Prompt tooling** — extraction (noise filtered), template clustering with outcome attribution, Claude-powered rewrites, and a prompt library that installs entries as native slash commands
 - **Global search** across all platforms, insights dashboard, incremental session backup
-- **React + Vite frontend** served by an Express backend; 130 tests on Node's built-in runner (`npm test`, 2026-09-12), CI on Node 22
+- **React + Vite frontend** served by an Express backend; 214 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
+- **Evidence-backed failure events and local review** with full-result invalidation, evidence navigation and narrow-screen session layout
 
 ## Roadmap
 

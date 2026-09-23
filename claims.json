@@ -1,8 +1,8 @@
 {
-  "$comment": "Receipts for every number AgentXRay publishes in prose: the README first screen, the hero figure caption, the FAQ, the roadmap and the CI description. Each claim carries the command that recomputes it from committed artifacts (scripts/claims-receipts.mjs derives the figures from the platform registry, lib/config.js, package.json, the workflow, the demo sample log and the test fixtures) or check.manual with the reason no command can. No claim asserts a package version: package.json is 1.17.2 while npm still serves 1.17.1 and this machine has no npm token, so a version-consistency claim would be permanently red; instead readme-no-version pins the deliberate absence of a version in the README. .github/workflows/claims.yml runs the lot weekly and on every push.",
+  "$comment": "Receipts for every number AgentXRay publishes in prose: the README first screen, the hero figure caption, the FAQ, the roadmap and the CI description. Each claim carries the command that recomputes it from committed artifacts (scripts/claims-receipts.mjs derives the figures from the platform registry, lib/config.js, package.json, the workflow, the demo sample log and the test fixtures) or check.manual with the reason no command can. The readme-no-version receipt keeps version-specific installation details in release notes rather than the README. .github/workflows/claims.yml runs the lot weekly and on every push.",
   "project": "AgentXRay",
   "repository": "https://github.com/alloevil/AgentXRay",
-  "updated": "2026-09-13",
+  "updated": "2026-09-23",
   "claims": [
     {
       "id": "platform-registry",
@@ -102,16 +102,16 @@
     },
     {
       "id": "test-count",
-      "claim": "130 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
-      "value": "130",
-      "metric": "passing node:test cases (# tests 130 / # pass 130 / # fail 0)",
-      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('130 tests on Node's built-in runner (`npm test`, 2026-09-12)') is verified by the run, not read back from the prose.",
+      "claim": "214 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
+      "value": "214",
+      "metric": "passing node:test cases (# tests 214 / # pass 214 / # fail 0)",
+      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('214 tests on Node's built-in runner (`npm test`, 2026-09-23)') is verified by the run, not read back from the prose.",
       "repro": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
       "evidence": "docs/ROADMAP.md",
       "as_of": "2026-09-13",
       "check": {
         "cmd": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
-        "expect": { "contains": ["# tests 130", "# pass 130", "# fail 0"] },
+        "expect": { "contains": ["# tests 214", "# pass 214", "# fail 0"] },
         "timeout": 120
       }
     },
@@ -238,7 +238,7 @@
       "check": {
         "cmd": "node scripts/claims-receipts.mjs tests-node-only",
         "expect": {
-          "equals": "12 files in test/ · 11 distinct requires: 9 node builtins, 2 relative, 0 third-party"
+          "equals": "16 files in test/ · 14 distinct requires: 11 node builtins, 3 relative, 0 third-party"
         },
         "timeout": 60
       }
@@ -248,7 +248,7 @@
       "claim": "The README publishes no version number of its own — the npm release badge is the only version shown — so no committed prose can go stale against the registry.",
       "value": "0 version strings",
       "metric": "semver-looking strings in README.md, excluding the 127.0.0.1 in the host example",
-      "method": "README.md is scanned for standalone x.y.z tokens (not part of an IP address). package.json's own version is deliberately not claimed anywhere: it is 1.17.2 while npm still serves 1.17.1, and there is no npm token on this machine to reconcile the two, so a version-consistency claim would be permanently red.",
+      "method": "README.md is scanned for standalone x.y.z tokens (not part of an IP address). Version-specific installation instructions belong to release notes; this receipt does not assert registry availability.",
       "repro": "node scripts/claims-receipts.mjs readme-no-version",
       "evidence": "README.md",
       "as_of": "2026-09-13",
@@ -263,8 +263,8 @@
       "claim": "master requires the `test` check to pass before a pull request can merge, so the workflow above is a gate and not just a notification.",
       "value": "required check: test",
       "metric": "the required status checks on the master branch",
-      "method": "Branch protection is GitHub repository state, not a committed file: no command in this repository can read it, and this machine has no token that could query the protection API (the same absence that makes the published-version comparison manual). The committed half — that test.yml defines exactly one job, named test — is machine-checked by ci-test-workflow.",
-      "repro": "gh api repos/alloevil/AgentXRay/branches/master/protection --jq '.required_status_checks.contexts'",
+      "method": "Branch protection and rulesets are GitHub repository state, not committed files; inspect them with an authenticated GitHub API request. The committed half — that test.yml defines exactly one job, named test — is machine-checked by ci-test-workflow.",
+      "repro": "gh api repos/alloevil/AgentXRay/rulesets (then inspect the active default-branch ruleset by ID)",
       "evidence": ".github/workflows/test.yml",
       "as_of": "2026-09-13",
       "check": {

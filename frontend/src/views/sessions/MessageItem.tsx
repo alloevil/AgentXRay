@@ -72,17 +72,20 @@ function MessageHead({
 
 function Collapse({
   anchorId,
+  evidenceId,
   header,
   error,
   children,
 }: {
   anchorId: string;
+  evidenceId?: string;
   header: React.ReactNode;
   error?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <details
+      id={evidenceId}
       data-link-id={anchorId}
       className={cn(
         'group my-1 rounded-md border',
@@ -147,6 +150,22 @@ export function ToolCallPart({ part }: { part: MessageContentPart }) {
   );
 }
 
+const OMP_STATUS = {
+  success: '✅ 成功',
+  failure: '❌ 失败',
+  running: '⏳ 执行中',
+  cancelled: '⏹ 已取消 / 停止',
+  unknown: '❔ 未知',
+};
+
+function resultFailed(message: SessionMessage): boolean {
+  return message.ompOutcome ? message.ompOutcome.state === 'failure' : message.isError;
+}
+
+function resultLabel(message: SessionMessage): string {
+  return message.ompOutcome ? OMP_STATUS[message.ompOutcome.state] : message.isError ? '❌' : '✅';
+}
+
 function ToolResultBlock({ message }: { message: SessionMessage }) {
   const text = getTextContent(message.content);
   const lines = text.split('\n');
@@ -158,16 +177,27 @@ function ToolResultBlock({ message }: { message: SessionMessage }) {
   return (
     <Collapse
       anchorId={message.toolCallId || message.id}
-      error={message.isError}
+      evidenceId={messageAnchorId(message) ? `diagnostic-result-${messageAnchorId(message)}` : undefined}
+      error={resultFailed(message)}
       header={
         <>
           <span>
-            {message.isError ? '❌' : '✅'} {message.toolName || 'tool result'}
+            {resultLabel(message)} {message.toolName || 'tool result'}
           </span>
           <span className="text-muted-foreground">{details.join(' · ')}</span>
         </>
       }
     >
+      {message.ompOutcome ? (
+        <div className="mb-2 break-all text-[11px] text-muted-foreground">
+          <p>OMP 状态依据：{message.ompOutcome.evidence.join(' · ')}</p>
+          {message.ompOutcome.warnings.length ? (
+            <p className="text-amber-500">
+              观察项：{message.ompOutcome.warnings.join(' · ')}。执行成功不等于探测或任务验收通过。
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {message.details ? (
         <div className="mb-1 text-[10px] text-muted-foreground">
           {details.join(' · ') || JSON.stringify(message.details)}
@@ -195,13 +225,13 @@ function ToolResultBlock({ message }: { message: SessionMessage }) {
 export function GraphLane({ message }: { message: SessionMessage }) {
   const tip =
     message.role === 'toolResult'
-      ? `${message.isError ? '❌' : '✅'} ${message.toolName || 'tool'} · ${formatDate(message.timestamp)}`
+      ? `${resultLabel(message)} ${message.toolName || 'tool'} · ${formatDate(message.timestamp)}`
       : message.role === 'toolCall'
         ? `🔧 ${message.toolName || 'tool'} · ${formatDate(message.timestamp)}`
         : `${message.role} · ${formatDate(message.timestamp)}`;
   const cls =
     message.role === 'toolResult'
-      ? message.isError
+      ? resultFailed(message)
         ? 'bg-destructive'
         : 'bg-muted-foreground'
       : message.role === 'user'
@@ -319,13 +349,13 @@ export function MessageBubble({ message, timing }: { message: SessionMessage; ti
       id={`tool-result-${message.toolCallId || anchor}`}
       className={cn(
         'rounded-lg border p-2.5',
-        message.isError ? 'border-destructive/60 bg-destructive/10' : 'border-border bg-card'
+        resultFailed(message) ? 'border-destructive/60 bg-destructive/10' : 'border-border bg-card'
       )}
     >
       <MessageHead
         role={
-          <span className={cn('font-semibold', message.isError && 'text-destructive')}>
-            {message.isError ? 'Tool Error' : 'Tool Result'}
+          <span className={cn('font-semibold', resultFailed(message) && 'text-destructive')}>
+            {resultFailed(message) ? 'Tool Error' : 'Tool Result'}
           </span>
         }
         meta={<span className="text-muted-foreground">{message.toolName || 'tool result'}</span>}
