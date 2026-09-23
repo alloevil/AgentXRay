@@ -242,6 +242,9 @@ test('hosted synthetic walkthrough yields two events and preserves seven failure
   );
   assert.equal(report.events[0].spanMs, 50000);
   assert.equal(report.events[1].toolName, 'web_search');
+  assert.equal(report.events[0].relatedOperations.length, 1);
+  assert.equal(report.events[0].relatedOperations[0].relation, 'same-file');
+  assert.equal(report.events[0].relatedOperations[0].state, 'success');
   assert.equal(report.events[1].failures[0].message.isError, false);
   assert.equal(detail.messages.find((message) => message.id === 'demo-background-result').ompOutcome.state, 'running');
   coverage(report);

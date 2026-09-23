@@ -83,3 +83,15 @@ Verified using synthetic notes and isolated browser contexts only:
 - Browser migration sent zero backend write requests; automatic failure/recovery counts remained unchanged. At 360px, the transfer panel had no horizontal overflow.
 
 This does not verify real-device file pickers, simultaneous cross-tab transaction safety or actual productivity gains. The file is unencrypted human text, not signed evidence; only current exact matches can be restored. Detailed local run artifacts remain ignored and are not published.
+
+## Follow-up evidence acceptance
+
+The follow-up increment adds evidence-only relationships, not automatic recovery. There are 22 new tests in `test/follow-up-evidence.test.js`, 125 combined diagnostic/review tests, and 255 tests in the full suite. The ordinary and hosted-demo UI builds pass; earlier counts above are historical release receipts.
+
+Synthetic tests cover all five candidate states, only-top-level-`i` differences, complete argument comparison, exact tools, same-turn edit/write paths, explicit relative-path directories, missing/ambiguous fields, pre-existing parallel calls, missing results, call-turn vs result-turn, deduplication, full candidate output in review fingerprints, and unchanged exact-match recovery. The scripted demo `node scripts/demo-follow-up.cjs` exercises seven only-`i` candidates, one same-file candidate and excluded file/turn counterexamples. The browser checked all five labels, five-item initial display plus loading the rest, original result jumps, no page-navigation movement, stale review on newly appended candidate and no narrow-screen overflow.
+
+A fixed, previously inspected set of 15 real sessions (five each from OMP, Codex and Claude Code) with 2,024 tool results was re-read by frozen-length/hash verification. Automatic results stayed at **142 failures, 141 pending records, 76 events and 1 recovered record**, including unchanged event members. An independent relation enumeration agreed with every candidate. It found **3 only-`i` candidates in OMP: one failure, one running result and one success**; Codex/Claude had none under these strict rules. No same-file relation qualified in this set: relevant observed paths lacked explicit absolute context or the calls belonged to later user turns. The code did not weaken criteria to inflate matches.
+
+Storage keys stayed stable. Only the three events with added candidates acquired new review fingerprints; no-candidate events retained their previous fingerprint contract. No real review labels were persisted. Raw logs, parameters and detailed sample identifiers remain private; the regression is not an independent benchmark, global accuracy estimate or time-saving measurement.
+
+The hosted synthetic sample now includes one later successful edit of the same absolute file path with different arguments. It remains **2 events / 7 pending records / 1 recovered record**. Browser checks verified the relation caveat, source result, desktop/mobile rendering and zero static-demo API requests.

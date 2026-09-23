@@ -32,6 +32,37 @@ Run `npm start` from the built checkout. Select a session and open its **消息*
 
 Start with repeated operations, open the latest failure, and inspect the surrounding calls. A card is a reason to review the transcript—not an instruction to rerun a possibly destructive command. Equivalent commands, alternate verification and external fixes still require your judgment.
 
+## Follow-up evidence candidates
+
+When a failure event has matching later operations, expand **后续相关操作**. These are leads for your review, **not automatic recovery or proof that the original task passed**. Each candidate shows its relationship, call/result message positions, call's user turn, tool outcome and source evidence, arguments, and a jump to the original result. Five are shown initially; the rest can be loaded without filtering out unsuccessful results.
+
+Two relationships are supported:
+
+| Relationship | Required evidence | Not inferred |
+| --- | --- | --- |
+| Only top-level `i` differs | Same exact tool, equal non-empty remaining arguments, but different full arguments. Object key order is ignored; values and array order are retained. May cross user turns within this transcript. | That `i` is semantically irrelevant, or that the later call fixes the earlier problem. |
+| Same-file modification | Explicit `edit`, `Edit`, `write`, `Write` or `MultiEdit` calls, same call-origin user turn, changed parameters, and the same literal `path`/`file_path` plus recorded working-directory fields. | Paths hidden in shell commands/patches, different turns, symlinks, path normalization, or implicit directory changes. |
+
+Both require a recorded result and a call started **after the event's last pending failure**. Results from pre-existing parallel calls, orphan results, missing arguments and calls without results are excluded. Same-file matching requires absolute paths, or identical explicit absolute `cwd`/`workdir`/`working_directory` for relative paths; ambiguous fields are rejected. Different directory field names are not treated as aliases.
+
+Status labels distinguish **success (tool result), failure, running, cancelled/stopped and unknown**. Source fields are shown, not inferred from optimistic prose. A running background job is not success. Platform adapters and automatic failure/recovery matching remain unchanged, including preserving `i` in automatic retry comparison. A same-file edit that returned success may have changed something else entirely.
+
+New or changed candidate evidence requires human review again: the event's storage key remains stable, but the review fingerprint includes complete candidate results and arguments. Existing notes become stale only for affected events; events without candidates retain their old fingerprint contract. Review-transfer files still contain only hashes and handwritten notes, not raw candidate logs.
+
+### Try all five states locally
+
+From a built source checkout:
+
+```sh
+node scripts/demo-follow-up.cjs
+```
+
+Select its OMP `[Synthetic]` session. The first bash failure has seven only-`i` candidates covering the five outcome states; an edit failure has one same-file candidate. An unrelated file and a different user turn are excluded. **Three automatic failure events remain**, even when a candidate is successful. Save a review and type `n` in the terminal to append another candidate: that review becomes stale, without changing automatic failure/recovery counts. Type `q` or Ctrl-C to stop the isolated demo.
+
+The hosted **Try diagnostics** sample also includes a successful same-file edit with changed arguments. Its existing seven pending failure records and two events do not disappear. Both demos are synthetic; no logged command is executed.
+
+![Synthetic follow-up evidence](../screenshots/follow-up-evidence.png)
+
 ## Local review workflow
 
 The automatic result and your judgment are separate. The header always reports automatic events and pending failure records. The review filters show which of those events you have inspected:
@@ -122,6 +153,7 @@ These checks cover navigation, session messages and the review workflow—not co
 node --test test/diagnostic-events.test.js test/diagnostics.test.js test/omp-outcome.test.js
 node --test test/diagnostic-reviews.test.js
 node --test test/review-transfer.test.js
+node --test test/follow-up-evidence.test.js
 npm test
 npm run build:ui
 npm run lint
@@ -180,6 +212,18 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 不同浏览器、端口可迁移，但目录配置或原始会话/证据变化会拒绝匹配，不自动改写路径。没有原始日志时不能用文件重建事件。已恢复、过期或未加载事件不在导出范围；这不是整库备份。多标签页只做写入前复查，不提供跨标签页事务锁。操作均在浏览器本地完成，没有新增上传或同步服务。
 
 本轮的 373 个真实冻结事件只使用**内存中的合成测试标记**检验隔离与失效，没有替你判断真实事件，也没有把这些测试标记写成真实复核。完整证据见 [本机复核验收](diagnostics-verification.md)。
+
+## 后续相关操作
+
+失败事件下若有候选，可展开“后续相关操作”，查看匹配依据、五类状态、调用/结果位置、参数摘要及原始结果。**它不自动关闭事件，不代表任务已通过。**
+
+- “仅 i 不同”：同工具，只有顶层 `i` 不同，其余完整参数相同，可跨当前会话内的用户轮次；不等于认定 `i` 无语义影响。
+- “同文件修改”：仅限明确 edit/write/MultiEdit 工具、同调用轮次、相同记录路径及显式工作目录；允许不同修改参数，不推断它们是同一修复。
+- 都必须在事件最后一次失败之后发起且已有结果。此前已启动的并行调用、无结果、缺参数、孤立结果不参与。
+- 相对路径必须有相同的显式绝对工作目录；没有就不猜。不同字段名、隐式 cwd、软链、跨轮次修改、命令里的文件名都不自动关联。
+- 成功、失败、执行中、取消、未知均有标签和字段依据。候选新增或变化会使受影响旧复核过期；不会改变自动失败/恢复计数，也不会把原始日志加入迁移文件。
+
+源码运行 `node scripts/demo-follow-up.cjs` 可体验五类状态、无关文件反例和实时追加候选。页面里保存复核后，终端输入 `n` 验证重审；`q` 退出。在线 Demo 的合成诊断案例也有一条同文件成功修改，但仍保留原来的失败事件。
 
 ## 窄屏操作
 

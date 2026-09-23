@@ -4,6 +4,7 @@ import { diagnoseSession, type FailureDiagnostic, type FailureEvent } from './di
 import { formatDate, messageAnchorId } from './lib';
 import { DiagnosticReview, useEventReviews } from './DiagnosticReview';
 import { ReviewTransferPanel } from './ReviewTransferPanel';
+import { RelatedOperations } from './RelatedOperations';
 import { REVIEW_LABELS, reviewState, type EventReview, type ReviewState, type ReviewStatus } from './diagnostic-reviews';
 
 const REASONS = {
@@ -96,6 +97,7 @@ function EventCard({ event, onJump, review, ready, onReview }: {
           ))}
         </ol>
       ) : null}
+      {event.relatedOperations.length ? <RelatedOperations operations={event.relatedOperations} onJump={onJump} /> : null}
       <DiagnosticReview key={review?.identity.fingerprint ?? 'loading'} entry={review} ready={ready}
         onUpdate={onReview} />
     </li>
@@ -132,6 +134,8 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
           错误内容可能不同，也可能包含并行调用；分组不代表相同根因或串行重试。时间跨度不是执行耗时或浪费时间。
           恢复仍只匹配失败之后发起的同参成功调用，不限定用户轮次。命令执行须有明确零退出码，OMP 也采用原生完成字段；
           执行中、取消和未知状态不算成功，其他工具须有未报错结果。不推断等价命令、隐式工作目录或后台任务关联。
+          后续候选只按“仅 i 不同”或“同轮次同文件的编辑/写入”关联；相对路径缺少明确绝对工作目录不匹配，
+          无结果或在最后一次失败之前发起的调用不列入。候选不关闭事件，新增或变化的候选证据会使旧人工复核过期。
         </p>
       </details>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
