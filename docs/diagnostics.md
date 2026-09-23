@@ -6,6 +6,8 @@ This guide covers the React UI. The synthetic terminal walkthrough uses a source
 
 ## Try it without sharing your logs
 
+For a no-install tour, open the [hosted demo](https://alloevil.github.io/AgentXRay/) and click **体验失败复核 / Try diagnostics**. Its synthetic sample has 7 pending failure records in 2 events (6 repeated edits and 1 search failure), plus an earlier automatically recovered test failure. Open the first/last/all evidence and record a browser-local review note. This is a static sample: no live results are appended and no actual tool commands run. The terminal walkthrough below is a separate, larger fixture for live updates.
+
 From the repository root, after installing the root and frontend dependencies:
 
 ```sh
@@ -107,6 +109,8 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 ## 中文使用指南
 
 **目标：先找到值得复查的重复操作，再追溯证据，而不是把几百条失败强行解释成几个根因。**
+
+免安装体验：[在线 Demo](https://alloevil.github.io/AgentXRay/)，点击“体验失败复核 / Try diagnostics”。这个独立合成案例将 7 条待复查记录聚为 2 个事件（6 次同参 edit 失败、1 次搜索失败），并展示一次早先测试失败的自动恢复。可查看全部证据、填写本浏览器的人工复核；它是静态示例，不追加真实结果。下面的本机终端演示则使用更大的合成日志来验证实时变化。
 
 从源码仓库运行 `npm run build:ui`，再运行 `node scripts/demo-diagnostics.cjs`。打开终端打印的地址，选择 OMP 的 `[Synthetic]` 会话：
 

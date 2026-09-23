@@ -31,6 +31,20 @@ The user explicitly requested commit, publish, then continued improvement. This 
 
 The active `protect-default` ruleset requires a pull request and the `test` check. The user subsequently authorized autonomous branch/PR creation, publication and roadmap changes. Follow the protected-branch workflow; do not bypass the ruleset.
 
+## Hosted diagnostics walkthrough (next increment)
+
+- Add one hand-written synthetic OMP session to the existing sample-log directory and regenerate bundled fixtures with the real backend.
+- Keep the existing default demo session and all prior samples. Add a demo-only entry action that opens the diagnostic sample from any current tab or child transcript.
+- The sample must produce 7 pending failure records in 2 events: 6 same-argument edit failures and 1 nested search failure; one earlier bash failure has a matching successful retry. A background bash start is not successful completion.
+- Display a compact, clearly synthetic walkthrough with the actual counts, evidence/review instructions and a link to local usage. It does not upload notes, add model calls, or simulate live recovery in the static demo.
+- Test the raw sample through the real parser and diagnostic rules, and assert the generated fixture matches it. Verify the hosted entry, evidence jump and browser-local review on desktop and narrow screens.
+- Update the roadmap around measurable acceptance: public walkthrough first, safe review portability next, then owner dogfooding with explicit review outcomes. No star-count/adoption promise, no fabricated demand rankings, and no date promises.
+- Publish through a separate protected PR/Pages deployment after the v1.18.0 release; do not mutate or republish the existing npm version.
+
+Release receipt: PR #48 merged as `c882564`; v1.18.0 Publish run `35880348489` succeeded. The official npm registry reports latest=1.18.0, and a fresh temporary installation returned that CLI version and served the bundled review UI plus a synthetic OMP result. Registry processing delay was observed before successful installation; no global npm registry configuration was changed.
+
+Hosted walkthrough acceptance: 216 tests pass, including raw-to-bundled fixture parity; regeneration is deterministic. Desktop and 360px browser checks cover the entry from another view/navigation, all six edit evidence links and local review with zero API requests. A height cap fixes the guide hiding the transcript on short screens; 740×360 remains cramped and is documented rather than called full mobile support.
+
 ## Non-goals
 
 - No new platform, dependency, model call, account, telemetry, cloud log storage or automatic command execution.

@@ -8,15 +8,28 @@
 - **Session browser** with tool-call inspection, trace/waterfall view, spawn tracking and message timeline
 - **Prompt tooling** — extraction (noise filtered), template clustering with outcome attribution, Claude-powered rewrites, and a prompt library that installs entries as native slash commands
 - **Global search** across all platforms, insights dashboard, incremental session backup
-- **React + Vite frontend** served by an Express backend; 214 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
+- **React + Vite frontend** served by an Express backend; 216 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
 - **Evidence-backed failure events and local review** with full-result invalidation, evidence navigation and narrow-screen session layout
 
-## Roadmap
+## Current priorities
+
+The product direction is **review the coding-agent sessions you already have, with evidence**. First prove that a useful review can be completed locally; then make it easy to try and share. Stars, downloads and screenshots alone do not establish usefulness. This order replaces the earlier feature-first ordering below.
+
+| Priority | Outcome | Acceptance, not a promise |
+| --- | --- | --- |
+| P0 | Make the new workflow immediately testable | A demo-only entry opens a clearly synthetic case: 7 pending records in 2 events, all evidence accessible, local review does not rewrite automatic results. Preserve the existing default demo and samples. |
+| P1 | Make review work portable without exposing logs | Design explicit user-controlled review export/import, validate schema and evidence fingerprints, show a preview of exactly what leaves the browser, and reject stale/mismatched records. No automatic upload or raw-log export by default. |
+| P2 | Validate daily usefulness with the maintainer's own sessions | Record reviewed/follow-up/expected/alternative-verification counts and timed review tasks using a fixed rubric. Keep measurements local, separate unknowns and stale labels, and publish only consented aggregate evidence. Do not infer precision or time saved from event compression. |
+| P3 | Make releases reproducible for contributors | Keep clean-install tests, generated fixtures, documentation claims and release/package verification aligned. Add browser regression automation when it can run deterministically without personal logs. |
+
+No launch dates or star-count targets are promised. Progress is gated on these observable outcomes. Physical-device/keyboard coverage and complex Trace/analytics layouts remain separate work, not implied by the session-screen checks.
+
+## Existing backlog
 
 - [x] **Publish to npm** so `npx agent-xray` works without cloning — automated from GitHub releases (v1.14.0+)
 - [x] **Hosted live demo** on GitHub Pages with clearly-labeled synthetic session data, so people can try the UI before installing
 - [x] **Gemini CLI adapter** (`~/.gemini/tmp`) — shipped (#5)
-- [ ] **More platform adapters** — opencode and Aider are the most-requested log formats; the per-platform module layout in `lib/platforms/` is designed for this
+- [ ] **More platform adapters** — opencode and Aider are candidates, not a measured demand ranking. Require representative logs and parser acceptance tests before prioritizing them over the review workflow.
 - [x] **Session export & sharing** — render a session (with tool calls) to a standalone Markdown/HTML file you can attach to a bug report or blog post (#6)
 - [ ] **Cost & token analytics** — per-session and per-day token spend, broken down by model, building on the token counts we already parse for the summary panel
 - [ ] **Watch mode ergonomics** — highlight the currently-active session and surface "agent is waiting for input" state in the sidebar
