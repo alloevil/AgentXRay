@@ -29,7 +29,7 @@ The user explicitly requested commit, publish, then continued improvement. This 
 3. After release, add a clearly synthetic failure-event walkthrough to the existing hosted demo so visitors can try the new workflow without local logs. Use the existing fixture generator and keep the current default demo session intact.
 4. Keep version/lockfile, documented test counts and claims checks consistent. Never publish personal evaluation artifacts or credentials.
 
-The active `protect-default` ruleset requires a pull request and the `test` check. A local release commit can be prepared now; creating a new release branch requires explicit authorization before pushing and opening its PR. Do not bypass the ruleset.
+The active `protect-default` ruleset requires a pull request and the `test` check. The user subsequently authorized autonomous branch/PR creation, publication and roadmap changes. Follow the protected-branch workflow; do not bypass the ruleset.
 
 ## Non-goals
 
