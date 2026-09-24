@@ -68,6 +68,33 @@
   ],
   "codex": [
    {
+    "id": "01990000-0000-7000-8000-000000000199",
+    "timestamp": "2026-09-24T08:00:00.000Z",
+    "lastActivity": "2026-09-24T08:00:12.000Z",
+    "messageCount": 2,
+    "userCount": 1,
+    "assistantCount": 1,
+    "toolCallCount": 5,
+    "toolResultCount": 5,
+    "topTools": [
+     {
+      "name": "exec_command",
+      "count": 2
+     },
+     {
+      "name": "write_stdin",
+      "count": 2
+     },
+     {
+      "name": "edit",
+      "count": 1
+     }
+    ],
+    "firstUserMessage": "[Synthetic demo] Background process evidence: startup, polling and exit. No real commands were executed.",
+    "cwd": "/demo/process-evidence",
+    "file": "rollout-2026-09-24T08-00-00-01990000-0000-7000-8000-000000000199.jsonl"
+   },
+   {
     "id": "01991234-aaaa-7000-8000-syntheticdemo1",
     "timestamp": "2026-08-13T14:02:00.000Z",
     "lastActivity": "2026-08-13T14:03:29.000Z",
@@ -789,6 +816,208 @@
       "output_tokens": 230
      },
      "model": "claude-sonnet-4-5",
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    }
+   ]
+  },
+  "codex/01990000-0000-7000-8000-000000000199": {
+   "session": {
+    "id": "01990000-0000-7000-8000-000000000199",
+    "cwd": "/demo/process-evidence",
+    "timestamp": "2026-09-24T08:00:00.000Z",
+    "version": null,
+    "model": null
+   },
+   "messages": [
+    {
+     "id": null,
+     "timestamp": "2026-09-24T08:00:01.000Z",
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "[Synthetic demo] Background process evidence: startup, polling and exit. No real commands were executed."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": null,
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-process-launch",
+     "timestamp": "2026-09-24T08:00:02.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-launch",
+     "toolName": "exec_command",
+     "details": "{\"cmd\":\"npm test\",\"workdir\":\"/demo/process-evidence\"}",
+     "isError": false
+    },
+    {
+     "id": "demo-process-launch",
+     "timestamp": "2026-09-24T08:00:03.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Chunk ID: synthetic\nWall time: 1 seconds\nProcess running with session ID 42\nFinal output:\nSynthetic test started; no exit result yet."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-launch",
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-process-edit",
+     "timestamp": "2026-09-24T08:00:04.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-edit",
+     "toolName": "edit",
+     "details": "{\"path\":\"/demo/process-evidence/config.ts\",\"cwd\":\"/demo/process-evidence\",\"oldText\":\"before\",\"newText\":\"after\"}",
+     "isError": false
+    },
+    {
+     "id": "demo-process-edit",
+     "timestamp": "2026-09-24T08:00:05.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic edit completed while the earlier test process was still running."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-edit",
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-process-poll",
+     "timestamp": "2026-09-24T08:00:06.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-poll",
+     "toolName": "write_stdin",
+     "details": "{\"session_id\":42,\"chars\":\"\"}",
+     "isError": false
+    },
+    {
+     "id": "demo-process-poll",
+     "timestamp": "2026-09-24T08:00:07.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Chunk ID: synthetic\nWall time: 1 seconds\nProcess exited with code 0\nFinal output:\nSynthetic test process finished. Its launch preceded the edit, so this is not a post-edit test."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-poll",
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-process-pending",
+     "timestamp": "2026-09-24T08:00:08.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-pending",
+     "toolName": "exec_command",
+     "details": "{\"cmd\":\"pytest\",\"workdir\":\"/demo/process-evidence\"}",
+     "isError": false
+    },
+    {
+     "id": "demo-process-pending",
+     "timestamp": "2026-09-24T08:00:09.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Chunk ID: synthetic\nWall time: 1 seconds\nProcess running with session ID 43\nFinal output:\nSynthetic second process has no subsequent completion in this static sample."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-pending",
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": "demo-process-unlinked",
+     "timestamp": "2026-09-24T08:00:10.000Z",
+     "role": "toolCall",
+     "content": [],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-unlinked",
+     "toolName": "write_stdin",
+     "details": "{\"session_id\":99,\"chars\":\"\"}",
+     "isError": false
+    },
+    {
+     "id": "demo-process-unlinked",
+     "timestamp": "2026-09-24T08:00:11.000Z",
+     "role": "toolResult",
+     "content": [
+      {
+       "type": "text",
+       "text": "Chunk ID: synthetic\nWall time: 1 seconds\nProcess exited with code 0\nFinal output:\nSynthetic orphan poll: this transcript has no matching launch."
+      }
+     ],
+     "usage": null,
+     "model": null,
+     "provider": null,
+     "toolCallId": "demo-process-unlinked",
+     "toolName": null,
+     "details": null,
+     "isError": false
+    },
+    {
+     "id": null,
+     "timestamp": "2026-09-24T08:00:12.000Z",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Synthetic exercise: expand Codex process evidence to trace process 42 to its final poll. Process 43 remains last-recorded running, and the poll for process 99 has no launch. Process exit is not proof of task correctness; no live results are appended here."
+      }
+     ],
+     "usage": null,
+     "model": null,
      "provider": null,
      "toolCallId": null,
      "toolName": null,
@@ -2317,9 +2546,9 @@
    ]
   },
   "codex": {
-   "totalSessions": 1,
-   "totalMessages": 3,
-   "totalToolCalls": 5,
+   "totalSessions": 2,
+   "totalMessages": 5,
+   "totalToolCalls": 10,
    "errorRate": 0,
    "totalCost": 0,
    "tokenUsage": {
@@ -2338,6 +2567,27 @@
     {
      "name": "apply_patch",
      "calls": 2,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    },
+    {
+     "name": "exec_command",
+     "calls": 2,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    },
+    {
+     "name": "write_stdin",
+     "calls": 2,
+     "errors": 0,
+     "errorRate": 0,
+     "avgDurationMs": 0
+    },
+    {
+     "name": "edit",
+     "calls": 1,
      "errors": 0,
      "errorRate": 0,
      "avgDurationMs": 0
@@ -2566,8 +2816,8 @@
   },
   "codex": {
    "platform": "codex",
-   "totalSessions": 1,
-   "totalPrompts": 1,
+   "totalSessions": 2,
+   "totalPrompts": 2,
    "groups": [
     {
      "directory": "/demo/orders-service",
@@ -2584,6 +2834,28 @@
         {
          "text": "[Synthetic demo] Add a `--format csv` flag to the `orders export` CLI command. It currently only writes JSON. Keep the JSON path unchanged and add a test.",
          "timestamp": "2026-08-13T14:02:01.000Z"
+        }
+       ]
+      }
+     ],
+     "sessionCount": 1,
+     "promptCount": 1
+    },
+    {
+     "directory": "/demo/process-evidence",
+     "sessions": [
+      {
+       "id": "01990000-0000-7000-8000-000000000199",
+       "file": "rollout-2026-09-24T08-00-00-01990000-0000-7000-8000-000000000199.jsonl",
+       "timestamp": "2026-09-24T08:00:00.000Z",
+       "lastActivity": "2026-09-24T08:00:12.000Z",
+       "slug": null,
+       "title": null,
+       "promptCount": 1,
+       "prompts": [
+        {
+         "text": "[Synthetic demo] Background process evidence: startup, polling and exit. No real commands were executed.",
+         "timestamp": "2026-09-24T08:00:01.000Z"
         }
        ]
       }

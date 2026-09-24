@@ -381,6 +381,132 @@ export function summarizeSessionHealth(messages: SessionMessage[], report = diag
   };
 }
 
+export interface ProcessPoll {
+  callMessage: SessionMessage;
+  callIndex: number;
+  toolCallId: string | null;
+  resultMessage: SessionMessage | null;
+  resultIndex: number | null;
+  state: 'success' | 'failure' | 'running' | 'unknown' | 'no-result';
+  exitCode: number | null;
+  hasInput: boolean;
+}
+
+export interface CodexProcessEvidence {
+  processId: number;
+  launchMessage: SessionMessage;
+  launchIndex: number;
+  launchCallId: string | null;
+  launchResult: SessionMessage;
+  launchResultIndex: number;
+  polls: ProcessPoll[];
+  state: 'success' | 'failure' | 'running' | 'unknown';
+  exitCode: number | null;
+  finalMessage: SessionMessage | null;
+  finalIndex: number | null;
+  inputObserved: boolean;
+  issues: string[];
+}
+
+function codexTool(name: string): string {
+  return name.startsWith('functions.') ? name.slice('functions.'.length) : name;
+}
+
+function codexEnvelope(message: SessionMessage): { processId: number | null; exitCode: number | null } | null {
+  if (message.ompOutcome || message.isError) return null;
+  const text = resultText(message);
+  if (!/^(?:Chunk ID: [^\n]+\n)?Wall time: [\d.]+ seconds\n/.test(text)) return null;
+  const boundary = text.search(/^(?:Final output|Output):\s*$/m);
+  if (boundary < 0) return null;
+  const status = text.slice(0, boundary).split('\n').filter((line) => /^(?:Process (?:running|exited)|Exit code:)/.test(line));
+  if (status.length !== 1) return null;
+  const running = status[0].match(/^Process running with session ID (0|[1-9]\d*)$/);
+  const terminal = status[0].match(/^(?:Process exited with code |Exit code: )(-?\d+)$/);
+  if (running && Number.isSafeInteger(Number(running[1]))) {
+    if (message.details?.exitCode != null || message.details?.exit_code != null) return null;
+    return { processId: Number(running[1]), exitCode: null };
+  }
+  if (terminal && Number.isSafeInteger(Number(terminal[1]))) {
+    const code = Number(terminal[1]);
+    const recordedCode = message.details?.exitCode ?? message.details?.exit_code;
+    if (recordedCode != null && recordedCode !== code) return null;
+    return { processId: null, exitCode: code };
+  }
+  return null;
+}
+
+export function analyzeCodexProcesses(messages: SessionMessage[]) {
+  const { calls, byId } = collectCallEvidence(messages);
+  const resultSets = new Map<string, { message: SessionMessage; index: number }[]>();
+  messages.forEach((message, index) => {
+    if (message.role !== 'toolResult' || !message.toolCallId) return;
+    const rows = resultSets.get(message.toolCallId) || [];
+    rows.push({ message, index }); resultSets.set(message.toolCallId, rows);
+  });
+  const processes: CodexProcessEvidence[] = [];
+  const byProcess = new Map<number, CodexProcessEvidence[]>();
+  const unique = (entry: CallEvidence) => !!entry.id && byId.get(entry.id)?.length === 1;
+  for (const entry of calls) {
+    if (codexTool(entry.call.name) !== 'exec_command') continue;
+    const results = entry.id ? resultSets.get(entry.id) || [] : [];
+    const start = results.find((row) => row.index > entry.call.index && codexEnvelope(row.message)?.processId != null);
+    if (!start) continue;
+    const processId = codexEnvelope(start.message)!.processId!;
+    const issues = !unique(entry) || results.length !== 1 ? ['ambiguous-launch'] : [];
+    const process: CodexProcessEvidence = { processId, launchMessage: entry.message, launchIndex: entry.call.index,
+      launchCallId: entry.id, launchResult: start.message, launchResultIndex: start.index, polls: [],
+      state: 'running', exitCode: null, finalMessage: null, finalIndex: null, inputObserved: false, issues };
+    processes.push(process);
+    const group = byProcess.get(processId) || []; group.push(process); byProcess.set(processId, group);
+  }
+  for (const group of byProcess.values()) if (group.length > 1) for (const process of group) process.issues.push('reused-process-id');
+  let pollCalls = 0;
+  let linkedPolls = 0;
+  let ambiguousCalls = 0;
+  for (const entry of calls) {
+    if (codexTool(entry.call.name) !== 'write_stdin') continue;
+    pollCalls++;
+    const args = argumentObject(entry.call.args);
+    const id = args?.session_id;
+    const group = typeof id === 'number' && Number.isSafeInteger(id) && id >= 0 ? byProcess.get(id) : undefined;
+    if (!unique(entry)) {
+      ambiguousCalls++;
+      if (group?.length === 1) group[0].issues.push('ambiguous-poll');
+      continue;
+    }
+    if (group?.length !== 1 || group[0].issues.includes('ambiguous-launch') || entry.call.index <= group[0].launchResultIndex) continue;
+    const process = group[0];
+    const rows = resultSets.get(entry.id!) || [];
+    const result = rows.length === 1 && rows[0].index > entry.call.index ? rows[0] : undefined;
+    const parsed = result ? codexEnvelope(result.message) : null;
+    const hasInput = args?.chars != null && args.chars !== '';
+    const poll: ProcessPoll = { callMessage: entry.message, callIndex: entry.call.index, toolCallId: entry.id,
+      resultMessage: result?.message ?? null, resultIndex: result?.index ?? null, hasInput,
+      state: !rows.length ? 'no-result' : !parsed ? 'unknown' : parsed.exitCode !== null ? parsed.exitCode === 0 ? 'success' : 'failure' : 'running',
+      exitCode: parsed?.exitCode ?? null };
+    const previous = process.polls[process.polls.length - 1];
+    if (previous && (previous.resultIndex === null || previous.resultIndex >= entry.call.index)) process.issues.push('overlapping-polls');
+    if (process.finalMessage) process.issues.push('poll-after-terminal');
+    if (!result || !parsed) process.issues.push('unconfirmed-poll-result');
+    if (parsed?.processId != null && parsed.processId !== process.processId) process.issues.push('mismatched-process-id');
+    process.polls.push(poll); linkedPolls++;
+    process.inputObserved ||= hasInput;
+    if (parsed?.exitCode != null) {
+      process.finalMessage = result!.message;
+      process.finalIndex = result!.index;
+      process.exitCode = parsed.exitCode;
+      process.state = parsed.exitCode === 0 ? 'success' : 'failure';
+    }
+  }
+  for (const process of processes) {
+    process.issues = [...new Set(process.issues)];
+    if (process.issues.length) {
+      process.state = 'unknown'; process.exitCode = null; process.finalMessage = null; process.finalIndex = null;
+    }
+  }
+  return { processes, pollCalls, linkedPolls, unlinkedPolls: pollCalls - linkedPolls, ambiguousCalls };
+}
+
 export interface ExecutionEvidence {
   callMessage: SessionMessage;
   callIndex: number;
@@ -397,6 +523,7 @@ export interface ExecutionEvidence {
   basis?: 'runner-command' | 'script-name';
   commandMode?: 'direct' | 'directory-prefix' | 'compound-fragment';
   fragments?: string[];
+  processEvidence?: CodexProcessEvidence;
 }
 
 export interface ChronologyCheck {
@@ -481,7 +608,7 @@ function verificationCommand(call: RecordedCall): {
   command: string; basis: 'runner-command' | 'script-name'; commandMode: 'direct' | 'directory-prefix' | 'compound-fragment';
   fragments: string[]; explicitDirectory: string | null; usesInitialDirectory: boolean;
 } | null {
-  if (!['bash', 'Bash', 'shell', 'exec', 'exec_command', 'run_shell_command', 'execute_command', 'terminal'].includes(call.name)) return null;
+  if (!['bash', 'Bash', 'shell', 'exec', 'exec_command', 'run_shell_command', 'execute_command', 'terminal'].includes(codexTool(call.name))) return null;
   const args = argumentObject(call.args);
   if (!args) return null;
   const values = ['command', 'cmd'].filter((key) => key in args).map((key) => args[key]);
@@ -527,6 +654,7 @@ function executionEvidence(entry: CallEvidence, ambiguous: boolean): ExecutionEv
 
 export function analyzeVerificationChronology(messages: SessionMessage[]) {
   const { calls, byId } = collectCallEvidence(messages);
+  const processByLaunch = new Map(analyzeCodexProcesses(messages).processes.map((process) => [process.launchCallId, process]));
   const modificationResults: ExecutionEvidence[] = [];
   const checks: ExecutionEvidence[] = [];
   let unclassifiedShellCalls = 0;
@@ -547,6 +675,15 @@ export function analyzeVerificationChronology(messages: SessionMessage[]) {
     const recognized = verificationCommand(entry.call);
     if (recognized) {
       const evidence = executionEvidence(entry, ambiguous);
+      const process = processByLaunch.get(entry.id);
+      if (process && process.launchIndex === entry.call.index) {
+        evidence.processEvidence = process;
+        evidence.state = process.inputObserved ? 'unknown' : process.state;
+        evidence.resultMessage = process.finalMessage;
+        evidence.resultIndex = process.finalIndex;
+        evidence.evidence = `通过 exec_command 包装头进程标识 ${process.processId} 与 write_stdin.session_id 关联。${process.inputObserved ? '过程中发送过输入，不能视为未干预的检查结果。' : ''}\n` +
+          (process.finalMessage ? `最终进程退出码 ${process.exitCode}\n${resultText(process.finalMessage).slice(0, 400)}` : `未得到唯一可信的最终退出结果；${process.issues.join(', ') || '最后记录为执行中'}。`);
+      }
       const { explicitDirectory, usesInitialDirectory, ...command } = recognized;
       if (recognized.commandMode === 'compound-fragment') {
         checks.push({ ...evidence, ...command, state: evidence.state === 'no-result' ? 'no-result' : 'unknown',

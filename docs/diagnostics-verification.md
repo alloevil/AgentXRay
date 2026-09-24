@@ -118,3 +118,15 @@ Browser checks used synthetic fixtures only:
 - Call/result jumps resolve to actual source records without moving outer page navigation. At 390px the chronology panel has no horizontal overflow; static demo uses zero backend API requests.
 
 Use `node scripts/demo-verification.cjs` to replay the temporal example and `node scripts/demo-follow-up.cjs` for missing-result updates. The public hosted demo exposes the earlier-test/later-edit example under automatic health. Physical-device keyboards and every complex view are not certified. Existing lint findings (91 warnings / 159 infos) and bundle-size warnings remain.
+
+## Codex background-process acceptance
+
+This increment associates explicit Codex process IDs from launch result headers with later `write_stdin.session_id` calls. It does not rewrite the historical per-call state, failure counts, recovery or human review data. Process outcomes are a separate evidence chain; the original launch index is retained when chronology uses a final polling result.
+
+The full suite has **313 passing tests**. The **23 process-evidence tests** cover success/failure/running/missing results, output-text false positives, malformed/contradictory headers, noncanonical identifiers, duplicate calls/results, reused process IDs, overlap, post-terminal polls, input-sending calls, source references, qualified tool names and multiple launches in one message. Forty fixed transformations verify terminal-result append without inferring automatic recovery. The generated hosted sample is asserted equal to the real Codex parser output.
+
+The frozen real corpus was re-read under content hashes: all previous `diagnoseSession` and `summarizeSessionHealth` outputs match v1.21.0 exactly. In its Codex subset, 60 launch headers and 53 polling calls yielded **53 uniquely linked polls**, **48 successful process exits**, **1 failed exit**, and **11 launches whose last evidence is running**. Every process association and terminal result was checked against the recorded process ID and header boundary. No real commands, process IDs or detailed logs are published. These results do not establish live runtime state, test coverage, general accuracy or time savings.
+
+Synthetic browser checks validate the process summary, unlinked poll count, source-result navigation, a test launched before an edit remaining overlapping, a later failed check remaining visible and live completion changing terminal process count from 2 to 3 without changing historical failure events. At 390px the process panel has no horizontal overflow. `node scripts/demo-process-evidence.cjs` reproduces the example locally without executing transcript commands.
+
+Unknown/conflicting chains are not silently certified; callers who need live job control or cross-session task association still need stronger runtime evidence. Input is represented as a boolean in the process summary, though original call evidence remains accessible. Existing large-bundle and lint findings remain unchanged.

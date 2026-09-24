@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { SessionMessage } from '@/api/types';
-import { diagnoseSession, summarizeSessionHealth, analyzeVerificationChronology, type FailureDiagnostic, type FailureEvent } from './diagnostics';
+import { diagnoseSession, summarizeSessionHealth, analyzeVerificationChronology, analyzeCodexProcesses, type FailureDiagnostic, type FailureEvent } from './diagnostics';
 import { formatDate, messageAnchorId } from './lib';
 import { DiagnosticReview, useEventReviews } from './DiagnosticReview';
 import { ReviewTransferPanel } from './ReviewTransferPanel';
 import { RelatedOperations } from './RelatedOperations';
 import { SessionHealth } from './SessionHealth';
 import { VerificationChronology } from './VerificationChronology';
+import { CodexProcesses } from './CodexProcesses';
 import { REVIEW_LABELS, reviewState, type EventReview, type ReviewState, type ReviewStatus } from './diagnostic-reviews';
 
 const REASONS = {
@@ -115,6 +116,7 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
   const report = useMemo(() => diagnoseSession(messages), [messages]);
   const health = useMemo(() => summarizeSessionHealth(messages, report), [messages, report]);
   const chronology = useMemo(() => analyzeVerificationChronology(messages), [messages]);
+  const processes = useMemo(() => analyzeCodexProcesses(messages), [messages]);
   const [manual, setManual] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [filter, setFilter] = useState<ReviewState | 'all'>('unreviewed');
@@ -134,6 +136,7 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
         自动整理已加载日志中的事实，优先展示重复操作并保留证据。不评价任务成败，不把缺少结果等同于正在运行。
       </p>
       <SessionHealth health={health} onJump={onScrollToMessage} />
+      <CodexProcesses report={processes} onJump={onScrollToMessage} />
       <VerificationChronology chronology={chronology} onJump={onScrollToMessage} />
       <details className="mt-2 text-[11px] text-muted-foreground">
         <summary className="cursor-pointer">如何分组与判定</summary>

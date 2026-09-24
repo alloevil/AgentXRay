@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { analyzeVerificationChronology, ChronologyCheck, ExecutionEvidence } from './diagnostics';
 import { messageAnchorId } from './lib';
+import { ProcessEvidence } from './CodexProcesses';
 
 const STATES = { success: '成功返回', failure: '失败', running: '记录为执行中', cancelled: '取消 / 停止', unknown: '状态未知', 'no-result': '未记录结果' };
 
@@ -22,6 +23,7 @@ function OperationEvidence({ operation, onJump }: { operation: ExecutionEvidence
         {callAnchor ? <button type="button" className="min-h-9 rounded border border-border px-2 py-1 hover:border-primary" onClick={() => onJump(callAnchor)}>查看调用记录</button> : null}
         {anchor ? <button type="button" className="min-h-9 rounded border border-border px-2 py-1 hover:border-primary" onClick={() => onJump(`diagnostic-result-${anchor}`)}>查看结果记录</button> : null}
       </div>
+      {operation.processEvidence ? <ProcessEvidence process={operation.processEvidence} onJump={onJump} /> : null}
     </div>
   );
 }
