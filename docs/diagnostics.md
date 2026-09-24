@@ -24,6 +24,30 @@ Try `node scripts/demo-follow-up.cjs`: the fixture includes running, unknown and
 
 ![Synthetic automatic session health](../screenshots/automatic-health.png)
 
+## Codex background-process evidence
+
+The **Codex 后台进程证据** section links a recorded `exec_command` launch header (`Process running with session ID ...`) to later `write_stdin` calls with that exact numeric `session_id`. It shows launch and polling source records, whether input was sent, and an unambiguous terminal exit result where available.
+
+This is a separate unit from per-tool-call state: the historical launch still returned a running/unknown record, while the process may have finished through a later poll. Polling is not a second launch, and none of these links changes failure events, automatic retry recovery or saved review fingerprints.
+
+- Only supported Codex wrapper headers **before** `Output:` / `Final output:` are used, on exact `exec_command` / `write_stdin` tool names or their `functions.`-qualified forms. Matching text printed in stdout or read from a file is not process metadata.
+- Launch and poll call IDs must be unique in the currently viewed transcript. Process IDs must be nonnegative safe integers; string IDs and missing launch history are not guessed.
+- Reused process IDs, duplicate launch/poll records, mismatched returned IDs, missing or invalid polling results, overlapping polls or polls after a terminal result make completion ambiguous. The original records remain accessible, but no final result is adopted from the conflicting chain.
+- A last running record is not live process monitoring. Input-sending polls are marked without showing input text in the process summary. The raw call remains available if you choose to inspect it.
+- A recognized verification command can use its linked final process result, but retains its **original launch position**. A check launched before an edit and finished afterward still overlaps the edit; it is not post-edit verification. Input-fed processes and compound shell fragments keep an unknown check outcome even when the process exits zero.
+
+Use the hosted demo's **Codex** tab and select the `[Synthetic demo] Background process evidence` session. It contains two launches: one finishes through a poll, one has only a running record, plus an unlinked poll. The previous default demo remains unchanged.
+
+For live updates from a source checkout:
+
+```sh
+node scripts/demo-process-evidence.cjs
+```
+
+Select the Codex synthetic session. Three launches initially include a successful exit, a failed exit and a pending process; one poll has no matching launch. Enter `c` to append the missing completion and watch the process evidence update, or `q` to stop and clean up. No logged commands are executed.
+
+![Synthetic Codex process evidence](../screenshots/codex-process-evidence.png)
+
 ## Modification and verification chronology
 
 The **修改—检查时序** section asks a narrower, evidence-based question than “did the task pass?”:
@@ -208,6 +232,7 @@ node --test test/review-transfer.test.js
 node --test test/follow-up-evidence.test.js
 node --test test/session-health.test.js
 node --test test/verification-chronology.test.js
+node --test test/codex-process-evidence.test.js
 npm test
 npm run build:ui
 npm run lint
@@ -286,6 +311,16 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 不同浏览器、端口可迁移，但目录配置或原始会话/证据变化会拒绝匹配，不自动改写路径。没有原始日志时不能用文件重建事件。已恢复、过期或未加载事件不在导出范围；这不是整库备份。多标签页只做写入前复查，不提供跨标签页事务锁。操作均在浏览器本地完成，没有新增上传或同步服务。
 
 本轮的 373 个真实冻结事件只使用**内存中的合成测试标记**检验隔离与失效，没有替你判断真实事件，也没有把这些测试标记写成真实复核。完整证据见 [本机复核验收](diagnostics-verification.md)。
+
+## Codex 后台进程证据
+
+展开“Codex 后台进程证据”，可以沿着 `exec_command` 的包装头进程 ID，找到同一会话内 `write_stdin.session_id` 对应的轮询与最终退出结果。启动、每次轮询和结果均可跳转。
+
+它与“每条工具调用的最后记录状态”分开统计：历史启动结果不被改写，轮询也不是另一次启动。重复进程 ID、重复调用/结果、返回 ID 不符、交叠轮询、终止后继续轮询或缺少可靠结果时，完成状态保持未知。只认包装头，不把 stdout 中的示例文本当证据，不跨会话猜测。
+
+若这个进程运行的是可识别检查，时序视图可采用唯一关联的终止结果，但仍保留原始启动位置：修改前启动、修改后才返回的测试仍是“重叠”，不算修改后验证。发送过输入或执行复合命令的检查结果仍保持未知；整个进程退出零码不代表任务通过。
+
+在线 Demo 的 Codex 页有明确标记的合成案例；源码可运行 `node scripts/demo-process-evidence.cjs`，输入 `c` 为待完成进程追加结果，`q` 退出。当前只支持上述 Codex 输出契约，不宣称 OMP/Claude 后台任务链也已覆盖。
 
 ## 后续相关操作
 

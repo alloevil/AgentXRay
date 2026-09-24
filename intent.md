@@ -99,7 +99,18 @@ Real-log coverage refinement: the initial direct-only classifier recognized zero
 
 Validation: 290 tests pass, including 200 fixed health transformations and 120 temporal transformations without human labels. The frozen 15-session/2,024-result set retains exact v1.20 diagnostic output. It yields 59 check-containing calls, all with unknown fragment outcome; no check-coverage or task-success claim is made. Explicit edit/write tools return successfully 240 times; 112 have later check-containing calls and 128 do not. Browser checks cover default zero review-storage reads, optional-note preservation, live missing-result resolution, before/overlap/after chronology, source navigation and 390px rendering. Prepare the combined increment as v1.21.0 through the authorized protected PR/release path after final gates; keep the continuing project goal active, and do not claim real productivity or adoption from this release.
 
-## Continuing non-goals
+## Explicit Codex process evidence (2026-09-24)
+
+- Real frozen Codex logs contain 60 exec_command background-start envelopes and 53 write_stdin calls. Improve the missing cross-call lifecycle evidence instead of adding generic metrics. No SDK, new API or execution is needed.
+- Parse only recognized Codex wrapper headers before Output/Final output, on exec_command/write_stdin (including functions.* names). Do not interpret matching text in stdout or outputs of read tools. Require an unambiguous numeric process ID and unique call IDs within the loaded transcript; no cross-session/child joins.
+- Link write_stdin session_id to a single recorded launcher only after that launch result. Preserve every polling call/result, whether input was sent, and terminal exit code. A reused process ID, overlapping polls, mismatching wrapper ID, malformed/error result or conflicting terminal sequence cannot certify completion.
+- Show process lifecycle separately from per-tool-call last states: polling is not another launch. Never rewrite historical call results, existing failure/event/recovery rules or human review fingerprints. A process's last running observation is not a live status query.
+- Verification chronology may use a uniquely associated terminal result, but must retain the original launch index/time. A check started before a modification and finished through a later poll remains overlapping, not post-change verification. Compound shell fragments still have unknown check outcomes. Input sent to a running process weakens check certainty; it is not silently treated as a clean test run.
+- Add deterministic counterexamples and real frozen-log relationship checks before publication. Keep detailed process IDs, log text and commands private; public examples/screenshots are synthetic. Whole-process exit code is not subcommand coverage or task correctness.
+
+Validation results: the frozen corpus has 60 Codex starts and 53 uniquely linked polls: 48 successful process exits, 1 failed exit and 11 last-recorded running starts. All prior per-call health and failure/candidate/recovery outputs remain identical. The implementation adds 23 tests including 40 fixed terminal transformations and generated-demo/raw-parser parity. Synthetic browser checks cover terminal-result jumps, original-start overlap semantics, unlinked poll counts, live completion and 390px layout. Prepare v1.22.0 through the previously authorized protected PR/release workflow after final checks; no private evidence or logs are published.
+
+## Continuing boundaries
 
 - No new platform, dependency, model call, account, telemetry, cloud log storage or automatic command execution.
 - No automatic human judgments of real sessions, relaxed argument matching or fabricated accuracy/productivity/adoption claims.
