@@ -130,3 +130,17 @@ The frozen real corpus was re-read under content hashes: all previous `diagnoseS
 Synthetic browser checks validate the process summary, unlinked poll count, source-result navigation, a test launched before an edit remaining overlapping, a later failed check remaining visible and live completion changing terminal process count from 2 to 3 without changing historical failure events. At 390px the process panel has no horizontal overflow. `node scripts/demo-process-evidence.cjs` reproduces the example locally without executing transcript commands.
 
 Unknown/conflicting chains are not silently certified; callers who need live job control or cross-session task association still need stronger runtime evidence. Input is represented as a boolean in the process summary, though original call evidence remains accessible. Existing large-bundle and lint findings remain unchanged.
+
+## Offline inspect acceptance
+
+`agentxray inspect --platform <omp|codex|claude-code> <file> --json` adds a machine-consumable surface without a web server. The CommonJS rules are generated from the UI's TypeScript source, packaged under `lib/generated/`, compared against source in tests and checked for committed drift in CI. Historical UI diagnostic rules are unchanged.
+
+The full suite now has **332 passing tests**, including **19 inspect tests**. Tests verify deterministic JSON, exact source references, minimized outputs, policy exits, malformed/truncated input, invalid UTF-8, directories/missing/oversized files, wrong platform, changed-read metadata, missing flags, blank/CRLF physical lines and generated-rule parity. A runtime guard blocks Express/http/https/net/server imports while the CLI runs; input bytes and temporary HOME entries remain unchanged.
+
+Known Claude multi-result and text/result mixed records are tested as incomplete adapter coverage: JSON contains `complete:false`, raw/normalized counts and issue lines, and exit status is 1 even when a pending-failure gate was requested. This exposes an existing parser limitation instead of claiming it is fixed. Parsing failures output no partial report or sensitive line text.
+
+An actual npm tarball was unpacked to an isolated directory with no `node_modules`, frontend source or TypeScript compiler. Inspect produced the expected OMP synthetic report (7 pending records, 2 events) directly from that artifact. This tests standalone inspection, not the dashboard dependency requirements.
+
+The previously frozen 15 real sessions / 2,024 tool results were read only in memory. CLI report summaries matched UI rules exactly: 142 failures, 141 pending records, 76 events and 60 recorded Codex launches. **2,493 source references** were verified against the frozen original line/message mapping; repeated reports were byte-identical. No real raw text, commands, paths, process identifiers or human notes were emitted into public artifacts. This is rule/report parity, not real-world accuracy or evidence of time saved.
+
+Reports omit raw content by construction, but hashes, counts and associations may still be sensitive. The output is not anonymized, signed task proof or an autonomous safety decision. Exit 0 means valid report production; only the explicitly requested `pending-failures` policy returns 2. See [the offline contract](offline-inspect.md).
