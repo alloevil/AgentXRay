@@ -1,310 +1,126 @@
 # AgentXRay
 
-**AgentXRay** 是一个 local-first 的 Web 面板，直接读取并可视化 AI coding agent 已经写在你磁盘上的会话日志，面向想看清这些 agent 究竟做了什么的开发者。
+**看清 coding agent 执行了什么，以及日志究竟验证了什么。**
 
-[English](README.md) | 中文
+直接读取本机会话日志，把失败、后台退出和修改后的检查追溯到原始证据。无需接入 SDK、调用模型或人工标注。
 
-**[在线 Demo](https://alloevil.github.io/AgentXRay/)**（合成示例数据，非真实用户会话）
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="AgentXRay 执行证据：检查通过后又发生修改，下一次检查仍未知。概念时间线，不是任务通过的判定。">
+</p>
 
-## 这是什么
+[**在线体验**](https://alloevil.github.io/AgentXRay/) · [快速开始](#快速开始) · [证据与边界](#证据与边界) · [路线图](docs/ROADMAP.md) · [English](README.md)
 
-AI Agent 会话 X 光透视工具，支持 **OpenClaw**、**Codex**、**Claude Code**、**Hermes**、**OMP**、**DeepSeek Harness** 和 **Gemini CLI** —— 一个界面全搞定。
+[![测试](https://img.shields.io/github/actions/workflow/status/alloevil/AgentXRay/test.yml?label=tests)](https://github.com/alloevil/AgentXRay/actions/workflows/test.yml)
+[![npm](https://img.shields.io/npm/v/@alloevil/agent-xray)](https://www.npmjs.com/package/@alloevil/agent-xray)
+![Node.js](https://img.shields.io/badge/Node.js-22.13+-339933)
+[![MIT 协议](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-AgentXRay 由一个 Node.js + Express 服务和一套 React UI 组成：它读取这些 CLI 本来就写在你 home 目录下的 JSONL 会话日志（Hermes 是 SQLite），把七种格式归一化到同一个视图 —— 工具调用与结果自动配对、按轮次汇总 token 与花费、每轮耗时瀑布图、prompt 提取、跨平台全文搜索。零埋点、零接入，会话数据不出本机（仅有的外发请求，是你自行配置的 prompt 改写后端，以及按需触发的 Fabric 模式导入）。
+## 检查通过，不是故事的全部
 
-## 为什么是 AgentXRay
+一次会话可能同时记录了三件事：
 
-AgentXRay 是一个 **local-first 的查看器，看的是你已经拥有的 agent 会话**。
+1. 测试命令成功返回。
+2. **测试之后**，修改工具又成功返回。
+3. 没有记录到与这次修改关联的后续可识别检查。
 
-LangSmith、Langfuse 这类观测平台面向的是*你自己写的* agent：接入 SDK、埋点插桩，trace 上报到托管后端。做自研 agent 时它们很好用 —— 但 Claude Code、Codex、Gemini CLI 这些现成的 CLI coding agent 不是你的代码，没法插桩。它们本来就把完整会话日志写在你的磁盘上，AgentXRay 直接读这些日志：零接入、零配置，会话数据留在本机。
+AgentXRay 把这些记录放在一起，并提供原始调用与结果的跳转。它**不会**据此宣判代码有 bug、测试覆盖了修改文件，或任务已经完成。
 
-相比自己翻原始 JSONL，AgentXRay 把七种日志格式归一化到一个界面里：工具调用与结果自动配对、token 用量按会话汇总、跨平台全文搜索、prompt 提取、trace 时间线 —— 这些从一份 50MB 的会话日志里手工还原起来非常费劲。
+我们关注的不是有多少个绿色结果，而是支持结论的执行证据。
 
-如果你在生产环境构建和运营自己的 agent，请用 tracing 平台；如果你想看清 coding agent 到底干了什么，用 AgentXRay。
+## 快速开始
 
-![Main View](screenshots/main-view.png)
+**无需安装：**打开[在线 Demo](https://alloevil.github.io/AgentXRay/)，点击 **体验自动体检 / Try diagnostics**。合成案例把 **7 条待闭合失败记录归为 2 个事件**，每条原始证据仍可访问。示例不含真实用户会话。
 
-## 何时该用
+**查看自己的日志** — 需要 Node.js ≥ 22.13：
 
-- 你在用一个或多个 CLI coding agent，想复盘某次会话到底做了什么：调用了哪些工具、参数是什么、返回了什么、时间和 token 花在哪里。
-- 你想按用户轮次核算 token 与花费，而这些会话早已结束，当时并没有做任何埋点。
-- 你需要一次搜索全部 agent 平台，包括从 Claude Code 自身清理机制已删除的会话里恢复出来的 prompt。
-- 你希望会话数据只留在本机：不装 SDK、不注册账号；除非你自行配置改写后端或使用 Fabric 模式导入，否则不外传。
-- 你想把值得复用的 prompt 收集起来，并一键安装为 Claude Code、Codex 或 OMP 的原生 slash command。
-
-## 何时不该用
-
-- **你在做自己的 agent，需要生产级 tracing。** 那请用观测平台。AgentXRay 读的是已经落盘的日志文件，它不是埋点 SDK，没有托管后端、数据留存策略、告警和团队看板。
-- **你需要多人协作或远程托管的服务。** 它是单进程本地服务，设计上就跑在持有日志的那台机器上。
-- **你的 agent 不以受支持的格式落盘。** 目前只支持 `lib/platforms/index.js` 中注册的七个适配器，其他格式需要新写一个适配器（见 [开发](#开发)）。
-- **你无法使用 Node.js ≥ 22.13**，或需要在低于 22.15 的 Node 上读取压缩的 DeepSeek Harness 日志。
-- **你期待 `public/` 下的 legacy 原生 UI 继续加功能。** 它已冻结，仅接受安全修复。
-- **你期待 LLM prompt 改写开箱即用。** 该功能需要在 设置 → LLM 接口 配好 OpenAI 兼容端点，或者服务端 PATH 上有 `claude` CLI；两者都没有时，聚类与归因仍然可用，但改写会返回 HTTP 503。
-
-## 与 LangSmith / Langfuse 的区别
-
-| | AgentXRay | LangSmith / Langfuse |
-|---|---|---|
-| 面向 | 你磁盘上已有的 agent 会话 | 你自己写的 agent |
-| 接入方式 | 无需接入，直接读现有日志文件 | 接入 SDK，在代码里埋点 |
-| 能否覆盖现成 CLI agent（Claude Code、Codex、Gemini CLI） | 可以，它们本来就在落盘 | 不适用，这些代码不是你的，没法埋点 |
-| 数据存放 | 仅本机 | 托管后端（Langfuse 也可自托管） |
-
-一句话：在生产环境构建和运营自己的 agent，请用 tracing 平台；想看清 coding agent 到底干了什么，用 AgentXRay。本项目只与 LangSmith、Langfuse 作对比，不评价其他工具。
-
-## 功能特性
-
-- **离线证据 CLI** — `agentxray inspect --platform codex session.jsonl --json` 无需启动服务或调用模型，输出带输入/规则哈希和原始行号的结构化报告，供 Agent、脚本和 CI 使用。只读明确指定的 Codex、OMP、Claude Code JSONL；默认不输出日志正文和参数，门禁须显式开启。[自动化契约](docs/offline-inspect.md)。
-
-- **自动会话体检** — 默认自动整理失败、重复操作、后续候选和调用最后记录状态；执行中、未知及未记录结果可追溯证据。不依赖人工标注或模型调用，笔记与迁移改为可选，不影响自动事实展示。[口径与离线验证](docs/diagnostics.md#自动体检无需人工标注)。
-- **Codex 后台进程证据** — 用明确进程 ID 关联启动、`write_stdin` 轮询和退出结果，可逐步跳转原始证据。ID 重用、轮询交叠和冲突保持未知；不改写历史工具状态，不把进程退出当作任务通过。[关联边界](docs/diagnostics.md#codex-后台进程证据)。
-- **修改—检查时序** — 区分修改前成功的检查、与修改重叠的检查及后续最新结果；不把先前通过或管道整体成功当作修改后的验证。复杂命令片段执行状态保持未知。[识别边界](docs/diagnostics.md#修改与验证的先后顺序)。
-
-- **有证据的失败事件（React UI）** — 将同一调用所在用户轮次、同工具、完整同参数的待复查失败分组，重复最多的操作优先展示；可跳转首末及每条原始证据。同参成功切断分组，缺少参数不合并。执行成功采用明确零退出码或 OMP 原生完成证据；事件不等于根因或任务失败。本地规则，无 LLM。[合成演示与判定边界](docs/diagnostics.md#中文使用指南)。
-- **后续相关操作** — 展示仅 `i` 参数不同的调用，以及同轮次、明确同文件的后续修改；标明关系依据、五类结果状态并可跳转证据。候选不自动关闭事件、不代表原问题已修复。[匹配边界](docs/diagnostics.md#后续相关操作)。
-- **本机复核队列** — 用必填依据标记“需跟进”“预期失败”“其他验证已通过”，仅存当前浏览器；新证据使旧标记失效，人工判断不改写自动结果。无需账号或复核后端。[使用方式与存储边界](docs/diagnostics.md#本机复核闭环)。
-- **复核迁移** — 预览并导出当前会话的有效复核，导入只接受完整证据匹配且本地为空的记录；不覆盖已有笔记，跳过过期或不匹配记录。明文 JSON 含手写依据，不自动复制日志。[迁移边界](docs/diagnostics.md#迁移复核记录)。
-- **窄屏会话复核** — 小于 768px 时切换“会话列表 / 返回内容”，正文获得完整宽度，切换列表不清空当前复核草稿；平台栏横向滚动，证据跳转保留顶部导航，桌面继续双栏。[验收范围](docs/diagnostics.md#窄屏操作)。
-
-- **多平台支持** — 一个界面统一查看 OpenClaw、Codex、Claude Code、Hermes、OMP、DeepSeek Harness、Gemini CLI 的会话日志（dsh 的多帧 zstd 压缩日志透明解压；Gemini CLI 的 `/rewind` 回滚记录会先折叠，回滚掉的历史不会重复渲染）
-- **会话浏览** — 浏览 Agent 列表，搜索/过滤会话，查看消息历史
-- **工具调用检查** — 可展开的工具调用详情，包含参数和返回结果
-- **Trace 视图** — 每轮对话的耗时瀑布图：模型推理（蓝）与工具执行（绿，出错为红）一目了然，点击色条在侧栏查看该 span 详情（紫色条则加载派生出的子 Agent 对话）
-- **Prompt 提取** — 按 session 提取全部真人 prompt（自动过滤工具结果、斜杠命令、系统注入等噪音），按工作目录分组，支持搜索 / JSON 导出 / 复制
-- **Prompt 优化** — 相似 prompt 自动聚类成模板，结合 session 效果归因（轮次、工具调用、错误率），通过配置的 LLM 后端（设置 → LLM 接口）或本机 `claude` CLI 生成改写建议
-- **Prompt 资产库** — 把值得复用的 prompt 收进 `~/.agentxray/library`，支持标签 / 编辑 / 搜索，一键安装为 Claude Code、Codex、OMP 的原生 slash command（`$ARGUMENTS` 原样保留，在目标 CLI 里 `/名字 参数` 直接可用）
-- **全局搜索** — 一个搜索框同时搜七个平台，多关键词 AND 匹配，每条结果带平台色标 —— 包含从被 Claude Code 清理掉的会话里恢复出来的 prompt
-- **会话洞察** — 聚合分析面板：工具统计、错误聚类、每日趋势
-- **Spawn 追踪** — 检测并导航父子 Agent 之间的调用关系
-- **OMP 子 Agent** — OMP 会话派生的子 Agent 会在摘要区以标签列出，点击即可查看子 Agent 的完整对话
-- **消息时间线** — 可视化对话流程图，不同角色用不同颜色标识
-- **Resume 命令** — 一键复制该会话在原 CLI 中的续跑命令（`codex resume`、`claude --resume`、`omp --resume=`）
-- **摘要可折叠** — 需要更多阅读空间时可折叠会话摘要
-- **自动刷新** — 会话列表和消息实时更新
-- **设置面板** — 在页面上直接配置各平台目录，保存到 localStorage，无需重启
-- **会话备份** — 增量归档 Codex、Claude Code、OMP、DeepSeek Harness、Gemini CLI 的会话日志到 `~/.agentxray/archive`（Hermes 与 OpenClaw 不归档），在设置面板一键触发（也会每天自动执行），未变化的文件自动跳过
-- **键盘导航** — 使用方向键在会话之间切换
-
-## 截图预览
-
-### 会话浏览
-
-侧边栏浏览 Agent 和会话列表。每个会话卡片显示按角色分类的消息数（👤 用户、🤖 助手、🔧 工具）和 spawn 标记。主面板展示会话元数据、Token 用量和热门工具概览。
-
-![Main View](screenshots/main-view.png)
-
-### 工具调用检查
-
-展开任意工具调用可查看其参数和返回结果。折叠状态下按工具类型显示调用次数，方便快速扫视。
-
-![Tool Calls](screenshots/tool-calls.png)
-
-### Spawn 追踪
-
-含有子 Agent 的会话会标注 🔗 徽章。点击可导航父子 Agent 调用链。
-
-![Spawn Tracking](screenshots/spawn-tracking.png)
-
-### 多平台支持
-
-一键切换 OpenClaw、Codex、Claude Code、Hermes、OMP、DeepSeek Harness、Gemini CLI。每个平台的会话均从其原生日志格式解析。
-
-![Codex View](screenshots/codex-view.png)
-
-### 设置面板
-
-在页面上配置各平台目录，保存到 localStorage，无需重启服务。
-
-![Settings](screenshots/settings-panel.png)
-
-## 安装
-
-**方式一 — 通过 npm 使用 npx**
-
-```bash
-npx @alloevil/agent-xray            # 默认 http://localhost:3800
-npx @alloevil/agent-xray --port 3900 --host 127.0.0.1
+```sh
+npx @alloevil/agent-xray --host 127.0.0.1
 ```
 
-全局安装（`npm i -g @alloevil/agent-xray`）后可直接使用 `agentxray` 命令。
+打开 **http://localhost:3800**，选择平台与会话，查看自动会话体检。默认读取受支持平台的常用目录，可在设置中修改；无需先填写人工标签。[其他安装方式与配置 →](docs/usage.zh-CN.md#安装)
 
-**方式二 — 直接从 GitHub 运行 npx**（现在即可用，无需克隆）
+**供 Agent、脚本或 CI 使用** — 不启动看板，只检查一个文件：
 
-```bash
-npx github:alloevil/AgentXRay
+```sh
+npx @alloevil/agent-xray inspect --platform omp /path/to/session.jsonl --json
 ```
 
-首次运行会在本地构建 Web UI（约一分钟），之后会复用缓存。
+将路径替换为你的日志；平台也可选 `codex` 或 `claude-code`。`npx` 可能联网下载包，安装后的 `inspect` 本身不发网络或模型请求，也不执行日志中的命令。
 
-**方式三 — 源码运行**
+**退出码 0 表示报告生成成功，不代表任务通过。**[JSON 契约、覆盖检查与退出策略 →](docs/offline-inspect.md)
 
-```bash
-git clone https://github.com/alloevil/AgentXRay.git
-cd AgentXRay
-npm install               # 首次安装会自动构建 Web UI
-npm start
+## 直接看证据
+
+![AgentXRay 真实界面中的合成会话：修改—检查面板展示先前成功的测试、之后发生的修改，以及缺少可识别后续检查。](screenshots/verification-chronology.png)
+
+*真实界面，合成数据。展开的面板区分先前测试、与修改重叠的检查和修改记录。[查看原尺寸截图](screenshots/verification-chronology.png)，或[运行可交互的时序演示](docs/diagnostics.md#修改与验证的先后顺序)。*
+
+### 可以复现的报告
+
+在安装好依赖的源码仓库中，检查已提交的合成 OMP 案例：
+
+```sh
+node bin/agentxray.js inspect --platform omp \
+  frontend/demo/sample-logs/omp/-demo-diagnostics/2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl --json
 ```
 
-打开 http://localhost:3800
+实际生成的 JSON 节选（其他字段省略）：
 
-## 使用方法
-
-### 基本流程
-
-1. **选择平台** — 点击顶部 `OpenClaw`、`Codex`、`Claude Code`、`Hermes`、`OMP`、`DeepSeek Harness` 或 `Gemini CLI`
-2. **选择 Agent** — OpenClaw 平台下，从下拉菜单选择 Agent（如 `xiaot`、`mimo`）
-3. **浏览会话** — 会话按时间倒序排列，每张卡片显示：
-   - 时间戳和状态（`active` / `archived`）
-   - 消息计数：👤 用户、🤖 助手、🔧 工具调用
-   - 🔗 Spawn 标记（如果该会话产生了子 Agent）
-4. **查看消息** — 点击会话加载完整对话
-5. **检查工具调用** — 点击 `🔧 tool_name` 按钮展开参数/结果
-6. **导航 Spawn** — 点击 🔗 链接跳转到子 Agent 会话
-
-### Prompt 视图
-
-点击顶部 **Prompts** 标签（Sessions / Insights 旁），即可看到所有 session 的真人 prompt，按 session 所属工作目录分组。工具结果、斜杠命令回显、系统提醒、任务通知等噪音会被自动过滤。
-
-- **预览与展开** — 每个 session 行内直接预览首条 prompt，点击展开完整列表（markdown 渲染）
-- **搜索** — 实时过滤 prompt / 目录 / session
-- **Export JSON** — 导出全部提取的 prompt 用于离线处理
-- **分析优化** — 相似 prompt 聚类成模板，结合每个模板的 session 效果归因（平均轮次、工具调用、错误率），由配置的 LLM 后端（设置 → LLM 接口）生成模板改写建议；未配置端点时改由服务器 PATH 中的 [`claude` CLI](https://claude.com/claude-code) 生成。两者都没有时，聚类和归因仍然可用，接口会把缺失的后端报告为 `llmError`
-- **优化单条** — 悬停任意 prompt 点击「优化」，内联生成 LLM 改写版本（在 设置 → LLM 接口 配置后端，或 PATH 上有 `claude` CLI）
-
-### 键盘快捷键
-
-| 按键 | 操作 |
-|------|------|
-| `↑` / `↓` | 在会话间切换 |
-| `Enter` | 选中高亮的会话 |
-
-### 过滤与搜索
-
-- **搜索框** — 按 ID 或内容过滤会话
-- **包含已归档** — 切换显示/隐藏已归档（`.reset.*` / `.deleted.*`）会话
-- **自动刷新** — 自动轮询获取新会话和消息
-- **自动滚动** — 新内容到达时自动滚动到最新消息
-
-## 配置
-
-### 默认目录
-
-| 平台        | 默认路径                      |
-|-------------|-------------------------------|
-| OpenClaw    | `~/.openclaw/agents`          |
-| Codex       | `~/.codex/sessions`           |
-| Claude Code | `~/.claude/projects`          |
-| Hermes      | `~/.hermes`                   |
-| OMP         | `~/.omp/agent/sessions`       |
-| DeepSeek Harness | `~/.dsh/sessions`（同时识别 `DSH_HOME`） |
-| Gemini CLI  | `~/.gemini/tmp`               |
-
-### 自定义目录
-
-**通过页面设置：** 点击侧边栏的齿轮图标，为每个平台设置自定义路径。保存到 localStorage，无需重启服务。
-
-**通过环境变量：**
-
-```bash
-OPENCLAW_DIR=/custom/path/openclaw \
-CODEX_DIR=/custom/path/codex \
-CLAUDE_CODE_DIR=/custom/path/claude \
-HERMES_DIR=/custom/path/hermes \
-OMP_DIR=/custom/path/omp \
-DSH_DIR=/custom/path/dsh/sessions \
-GEMINI_DIR=/custom/path/gemini/tmp \
-npm start
+```json
+{
+  "summary": {
+    "failureRecords": 8,
+    "pendingRecords": 7,
+    "pendingEvents": 2,
+    "recoveredRecords": 1
+  }
+}
 ```
 
-**通过 API：** 在任意 API 请求后附加 `?dir=/absolute/path` 参数。
+这里有 **8 条历史失败**；其中 **7 条仍待闭合，归为 2 个事件**，另 **1 条已有匹配的后续成功证据**。完整报告还包含原始行号、调用状态和规则哈希。这是日志事实，不是“8 个失败任务”，也不是完成度评分。
 
-## API
+## 能检查什么
 
-| 接口 | 说明 |
-|------|------|
-| `GET /api/agents` | 获取 OpenClaw Agent 列表 |
-| `GET /api/agents/:name/sessions` | 获取指定 Agent 的会话列表 |
-| `GET /api/agents/:name/sessions/:id` | 获取会话消息详情 |
-| `GET /api/codex/sessions` | 获取 Codex 会话列表 |
-| `GET /api/codex/sessions/:id` | 获取 Codex 会话消息详情 |
-| `GET /api/claude-code/sessions` | 获取 Claude Code 会话列表 |
-| `GET /api/claude-code/sessions/:id` | 获取 Claude Code 会话消息详情 |
-| `GET /api/hermes/sessions` | 获取 Hermes 会话列表 |
-| `GET /api/hermes/sessions/:id` | 获取 Hermes 会话消息详情 |
-| `GET /api/omp/sessions` | 获取 OMP（oh-my-pi）会话列表 |
-| `GET /api/omp/sessions/:id` | 获取 OMP 会话消息详情 |
-| `GET /api/dsh/sessions` | 获取 DeepSeek Harness 会话列表 |
-| `GET /api/dsh/sessions/:id` | 获取 DeepSeek Harness 会话消息详情 |
-| `GET /api/gemini/sessions` | 获取 Gemini CLI 会话列表 |
-| `GET /api/gemini/sessions/:id` | 获取 Gemini CLI 会话消息详情 |
-| `GET /api/spawn-map` | 获取 Agent spawn 关系图 |
-| `GET /api/insights` | 聚合分析（工具统计、错误聚类、趋势） |
-| `GET /api/prompts` | 按目录分组的各 session 真人 prompt |
-| `GET /api/prompts/analyze` | 模板聚类 + 效果归因 + Claude 建议（`?refresh=1` 重算，`?skipLlm=1` 仅聚类） |
-| `POST /api/prompts/rewrite` | 通过配置的 LLM 后端改写单条 prompt（`{ "text": "..." }`；无可用后端时返回 503 及配置指引） |
-| `GET/PUT /api/settings/llm` | LLM 后端配置：OpenAI 兼容 `baseUrl`/`model`/`apiKey`,持久化在 `~/.agentxray/llm.json`（key 不回显） |
-| `GET /api/search` | 会话全文搜索（`?platform=all` 一次搜索全部平台，多关键词 AND） |
-| `GET /api/omp/sessions/:id/children` | 获取该 OMP 会话派生的子 Agent 列表 |
-| `GET /api/omp/sessions/:id/children/:name` | 获取指定子 Agent 的消息详情 |
-| `GET /api/library` | 获取资产库 prompt 列表（含各目标的安装状态） |
-| `POST /api/library` | 新建 prompt（`{ "name": "...", "content": "...", "description": "...", "tags": [...] }`） |
-| `PUT /api/library/:name` | 更新 / 重命名 prompt（`newName`、`content`、`description`、`tags`），已安装的副本同步刷新 |
-| `DELETE /api/library/:name` | 删除 prompt 及其已安装的 slash command |
-| `POST /api/library/:name/install` | 安装为 slash command（`{ "targets": ["claude", "codex", "omp"] }`） |
-| `POST /api/library/:name/uninstall` | 卸载已安装的 slash command（请求体同上） |
-| `POST /api/library/suggest-name` | 通过配置的 LLM 后端为 prompt 生成库内命名（`{ "text": "..." }`，无可用后端时返回 `null`） |
-| `POST /api/backup` | 执行一次增量备份到 `~/.agentxray/archive` |
-| `GET /api/backup/status` | 归档统计：文件数、总字节数、最近备份时间 |
+- **合并重复失败，不丢证据。**按工具、完整参数和用户轮次组织未闭合操作，保留每条原始结果；分组不等于根因诊断。
+- **后台任务是否有结束证据。**追踪受支持的 Codex 启动 → 轮询 → 退出记录；启动不等于完成，ID 冲突保持未知。
+- **修改前后的验证。**区分先前、重叠和后续检查；管道整体成功，不等于其中测试片段通过。
+- **哪些情况仍未知。**显式展示缺失、执行中、取消和有歧义的结果，不把不完整日志涂成绿色。
+- **完整会话上下文。**浏览工具参数、返回值、Trace 和子 Agent；跨平台搜索，按轮次查看 token 及日志已报告的费用。
+- **可选工具，不是使用门槛。**添加复核笔记、迁移精确匹配的复核、整理 prompt 或归档会话；不使用这些功能也能查看自动证据。
 
-所有列表和详情接口均支持 `?dir=` 参数来覆盖默认目录。
+[完整功能与截图集 →](docs/usage.zh-CN.md#功能特性) · [诊断规则及适用边界 →](docs/diagnostics.md)
 
-## 技术栈
+## 兼容范围
 
-- **后端：** Node.js + Express
-- **前端：** `frontend/` 下的 React + Vite + TypeScript（默认 UI，服务自 `frontend/dist`）
-- **Legacy UI：** `public/` 下的原版 vanilla HTML/CSS/JS 应用，服务于 `/legacy` —— **已冻结，仅接受安全修复**。新功能只进 React 应用；改动 React 渲染器无需触碰 `public/js/`。共享逻辑（格式化、trace 构建、markdown/转义管线）单一源在 `frontend/src/lib/pure.ts` 与 `frontend/src/lib/markdown.ts`,`public/js/pure.js` 由其生成（`npm run build:legacy-pure`,也包含在 `build:ui` 中）。
-- **数据：** 直接从磁盘读取 JSONL 会话文件 / SQLite 数据库
-- **零外部 CDN** — 完全自包含，离线可用
+**看板支持：**OpenClaw、Codex、Claude Code、Hermes、OMP、DeepSeek Harness、Gemini CLI。Hermes 使用 SQLite，其余六个适配器读取 JSONL 类日志。DeepSeek Harness 压缩日志需要 Node.js ≥ 22.15。
 
-## 支持的日志格式
+**离线 `inspect`：**仅支持 Codex、OMP、Claude Code；一次读取一个稳定的 UTF-8 JSONL 文件，上限 64 MiB。已知适配器信息丢失会报告覆盖不完整，不会假装结果干净。看板支持某种格式，不等于所有格式拥有同等诊断覆盖。
 
-| 平台 | 格式 | 路径模式 |
-|------|------|----------|
-| OpenClaw | JSONL | `~/.openclaw/agents/{agent}/sessions/{id}.jsonl` |
-| Codex | JSONL | `~/.codex/sessions/{YYYY}/{MM}/{DD}/rollout-{timestamp}-{uuid}.jsonl`（session id 是结尾的 UUID） |
-| Claude Code | JSONL | `~/.claude/projects/{project-slug}/{sessionId}.jsonl`（派生子 Agent 另有 `{sessionId}/subagents/agent-*.jsonl`） |
-| Hermes | SQLite | `~/.hermes/state.db` |
-| OMP | JSONL | `~/.omp/agent/sessions/*/{timestamp}_{id}.jsonl` |
-| DeepSeek Harness | JSONL / zstd 压缩 JSONL | `~/.dsh/sessions/{project}/{id}/session.jsonl[.zstd]` |
-| Gemini CLI | JSONL | `~/.gemini/tmp/{projectHash}/chats/session-*.jsonl` |
+[默认目录与覆盖配置](docs/usage.zh-CN.md#配置) · [日志格式与路径](docs/usage.zh-CN.md#支持的日志格式)
 
-dsh 的 `.jsonl.zstd` 日志是多个独立 Zstandard 帧的串联（每个持久化批次一帧）；AgentXRay 会扫描帧边界并逐帧解压，崩溃残留的尾部不完整帧会被容忍丢弃。读取压缩日志需要 Node.js ≥ 22.15（内置 zstd）；未压缩的 `session.jsonl` 在任何受支持的 Node 上都能读。
+## 证据与边界
 
-启用「包含已归档」后，OpenClaw 还会显示 `.jsonl.reset.*` 和 `.jsonl.deleted.*` 的归档会话；其他适配器只列出活跃的 `.jsonl` 文件。
+**已实现并有测试：**本地浏览、确定性的执行证据规则、离线报告。UI 与 CLI 共用诊断源码；测试覆盖证据行号、保守匹配及先后顺序反例。[CLI 测试](test/inspect.test.js) · [界面与样例验证](docs/diagnostics-verification.md) · [公开数字的复算依据](claims.json)
 
-## 开发
+**尚未证明：**提高真实 Agent 任务完成率、降低费用或节省开发者时间。[首轮合成实验](experiments/effectiveness-pilot/RESULTS.md)中，三组均通过 **12/12** 个任务，未证明 AgentXRay 优于机械摘要。实验代码位于 `experiments/`，不包含在 npm 安装包中，也不是产品默认行为。
 
-测试代码位于 `test/`，使用 Node 内置的测试运行器，无需额外依赖。先执行一次 `npm ci`，然后运行 `npm test`（即 `node --test test/*.test.js`）。测试会在随机端口上启动自己的服务实例，并把 `HOME` 及各平台目录都指向 `test/fixtures/home` 的临时副本，因此不会读取或修改你的真实会话日志。CI（`.github/workflows/test.yml`）在每次向 `master` 的 push 和 pull request 上以 Node 22 执行四个步骤：`npm ci`（其 `prepare` 脚本会构建 Web UI 并重新生成 `public/js/pure.js`）、漂移检查（`git diff --exit-code public/js/pure.js`）、`npx biome check .` 和 `npm test`。
+**不是完成判官：**不推断根因、不自动修复、不证明测试覆盖，也不实时探测进程。缺少记录只是缺少证据，不能证明某件事没有发生。如果你需要埋点式生产 tracing 或托管团队服务，本机日志查看器不是那类产品。
 
-**新增平台只需两个文件**：在 `lib/platforms/<name>.js` 写一个适配器（针对该日志格式的 list / find / parse / normalize，`lib/platforms/shared.js` 提供元数据缓存、归一化消息工厂和会话排序），再到 `lib/platforms/index.js` 的 `PLATFORMS` 注册表登记一条。通用会话路由、搜索、watch（SSE 实时跟踪）、洞察、Prompt 提取、工具体检、OTLP 与 Markdown/HTML 导出全部通过该注册表解析平台，无需改动其他文件。
+### 本地优先，明确外发边界
 
-## 常见问题
+核心日志浏览和 `inspect` 不把日志发给模型，UI 无外部 CDN 依赖。可选的 prompt 改写与建议会调用你配置的端点，或回退到可能访问远程服务的 `claude` CLI；Fabric 导入从 GitHub 下载内容，安装依赖可能访问包仓库。要求零模型外发时，请勿使用模型驱动的 prompt 功能。
 
-**AgentXRay 支持哪些 agent 和日志格式？**
-七个平台：OpenClaw、Codex、Claude Code、Hermes、OMP（oh-my-pi）、DeepSeek Harness 和 Gemini CLI。其中六个是 JSONL，Hermes 是位于 `~/.hermes/state.db` 的 SQLite。DeepSeek Harness 的日志可能是多帧 zstd 压缩的 `.jsonl.zstd`，AgentXRay 会逐帧解压，并容忍崩溃残留的尾部不完整帧。权威清单是 `lib/platforms/index.js` 里的 `PLATFORMS` 注册表，可用 `node -e 'console.log(Object.keys(require("./lib/platforms/index.js").PLATFORMS))'` 打印。
+单独运行的研究实验可使用通过门禁的脱敏副本调用远程模型，但不会随正常浏览或 `inspect` 启动。信息最小化和自动脱敏都**不是匿名保证**。[隐私与使用细节 →](docs/usage.zh-CN.md#常见问题)
 
-**AgentXRay 会把我的会话数据传到别处吗？**
-不会。它是一个读取你本机磁盘文件的本地 Node.js 服务，UI 完全自包含、零外部 CDN，因此离线也能用。有两个功能会产生外发请求，且只在你主动使用它们时：可选的 prompt 改写功能，把你要求改写的那段 prompt 文本发给你自己配置的 OpenAI 兼容端点，或本机的 `claude` CLI；以及 Prompt 资产库的 Fabric 导入，它按需从 `api.github.com` 下载模式列表、从 `raw.githubusercontent.com` 下载每个模式的 `system.md`（失败时回退到 contents API），并把模式列表在磁盘上缓存 24 小时。不配置端点、也不使用 Fabric 导入，就不会有任何数据外发。
+## 文档与贡献
 
-**需要改动我的 agent 或加埋点吗？**
-不需要。CLI coding agent 本来就把完整会话日志写在磁盘上，AgentXRay 只是读它们。你不需要在代码里接 SDK，也不需要用什么包装命令来启动 agent。默认安装同样无需配置，[配置](#配置) 一节列出的默认目录会直接生效，除非你在设置面板里改，或用 `CLAUDE_CODE_DIR` 之类的环境变量覆盖。
+- [使用、配置与 HTTP API](docs/usage.zh-CN.md) · [English reference](docs/usage.md)
+- [离线报告契约](docs/offline-inspect.md) · [自动证据与可选复核](docs/diagnostics.md)
+- [路线图与验收标准](docs/ROADMAP.md) · [实验评测协议](experiments/prospective-study/REMOTE.md)
+- [开发、测试与平台适配](docs/usage.zh-CN.md#开发) · [提交问题](https://github.com/alloevil/AgentXRay/issues)
 
-**不装任何东西能先试试吗？**
-可以，打开 <https://alloevil.github.io/AgentXRay/>。这个 GitHub Pages 部署就是真实的 React UI，由 `.github/workflows/pages.yml` 构建，跑在 `frontend/src/demo/fixtures.json` 上 —— 这些 API fixture 由 `scripts/build-demo-fixtures.mjs` 从仓库里提交的合成示例日志 `frontend/demo/sample-logs` 生成。它不含任何真实用户会话，所以请把它当作界面导览，而不是数据。
-
-**想支持一个没列出的日志格式怎么办？**
-两个文件：在 `lib/platforms/<name>.js` 写一个适配器，实现该格式的 list / find / parse / normalize，然后在 `lib/platforms/index.js` 的 `PLATFORMS` 表里登记一条。所有通用路由都通过该注册表解析平台，无需改动其他文件。详见 [开发](#开发)。
+反馈解析或证据问题时，请提供 CLI/版本、预期行为，以及**最小合成或谨慎脱敏的复现样本**。不要上传完整个人会话日志或凭据；可执行的复现比没有上下文的截图更有帮助。
 
 ## 开源协议
 
-MIT
+[MIT](LICENSE)

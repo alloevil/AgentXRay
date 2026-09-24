@@ -2,20 +2,22 @@
   "$comment": "Receipts for every number AgentXRay publishes in prose: the README first screen, the hero figure caption, the FAQ, the roadmap and the CI description. Each claim carries the command that recomputes it from committed artifacts (scripts/claims-receipts.mjs derives the figures from the platform registry, lib/config.js, package.json, the workflow, the demo sample log and the test fixtures) or check.manual with the reason no command can. The readme-no-version receipt keeps version-specific installation details in release notes rather than the README. .github/workflows/claims.yml runs the lot weekly and on every push.",
   "project": "AgentXRay",
   "repository": "https://github.com/alloevil/AgentXRay",
-  "updated": "2026-09-23",
+  "updated": "2026-09-24",
   "claims": [
     {
       "id": "platform-registry",
       "claim": "AgentXRay supports seven agent log formats — OpenClaw, Codex, Claude Code, Hermes, OMP, DeepSeek Harness and Gemini CLI — registered in one table.",
       "value": "7 platforms",
       "metric": "entries in the PLATFORMS registry in lib/platforms/index.js",
-      "method": "Object.keys(PLATFORMS) is printed directly. The registry is the single source of platform truth: the README's 'seven supported log formats', its format table and the hero's left column all describe this table, and every generic surface (session routes, search, watch, insights, prompts, tool audit, OTLP, Markdown/HTML export) resolves platforms through it.",
+      "method": "Object.keys(PLATFORMS) is printed directly. The registry is the single source of platform truth: the README compatibility list and the usage-reference format table describe this registry, and every generic surface (session routes, search, watch, insights, prompts, tool audit, OTLP, Markdown/HTML export) resolves platforms through it.",
       "repro": "node scripts/claims-receipts.mjs platform-registry",
       "evidence": "lib/platforms/index.js",
       "as_of": "2026-09-13",
       "check": {
         "cmd": "node scripts/claims-receipts.mjs platform-registry",
-        "expect": { "equals": "7 platforms: openclaw, codex, claude-code, omp, dsh, gemini, hermes" },
+        "expect": {
+          "equals": "7 platforms: openclaw, codex, claude-code, omp, dsh, gemini, hermes"
+        },
         "timeout": 60
       }
     },
@@ -36,49 +38,51 @@
     },
     {
       "id": "readme-platform-list",
-      "claim": "The README and its Chinese translation enumerate exactly the registered platforms, and the Supported Log Formats table has one row per platform.",
+      "claim": "Both READMEs enumerate the registered platforms; the usage reference has one Supported Log Formats row per platform.",
       "value": "7/7 in both READMEs",
       "metric": "registry labels found in each README, and data rows in the Supported Log Formats table",
-      "method": "Every PLATFORMS[].label is looked up in README.md and README.zh-CN.md, and the markdown table under '## Supported Log Formats' is counted with its header row dropped. The expected names come from the registry, not from the prose, so a rename in an adapter turns this red until the documentation follows.",
+      "method": "Look up PLATFORMS[].label in both READMEs; count the table under Supported Log Formats in docs/usage.md.",
       "repro": "node scripts/claims-receipts.mjs readme-platform-list",
-      "evidence": "README.md#supported-log-formats",
-      "as_of": "2026-09-13",
+      "evidence": "docs/usage.md#supported-log-formats",
+      "as_of": "2026-09-24",
       "check": {
         "cmd": "node scripts/claims-receipts.mjs readme-platform-list",
-        "expect": { "equals": "7/7 labels in README.md (7 format-table rows) · 7/7 in README.zh-CN.md" },
-        "timeout": 60
-      }
-    },
-    {
-      "id": "default-dirs",
-      "claim": "Each platform's default session directory comes from lib/config.js, and the README's Default directories table lists that same path for all seven.",
-      "value": "7/7 default dirs match the README table",
-      "metric": "each platform's defaultDir() resolved against HOME, compared with the `~/.…` paths in the README",
-      "method": "PLATFORMS[id].defaultDir() → path.relative(HOME, dir) → `~/<rel>`, and every one of those strings must appear in the Configuration table of README.md. The dirs are env-overridable (OPENCLAW_DIR, CODEX_DIR, … and DSH_HOME for dsh), which is what those env vars do at runtime.",
-      "repro": "node scripts/claims-receipts.mjs default-dirs",
-      "evidence": "lib/config.js",
-      "as_of": "2026-09-13",
-      "check": {
-        "cmd": "node scripts/claims-receipts.mjs default-dirs",
         "expect": {
-          "equals": "7/7 default dirs match README.md (~/.openclaw/agents ~/.codex/sessions ~/.claude/projects ~/.omp/agent/sessions ~/.dsh/sessions ~/.gemini/tmp ~/.hermes)"
+          "equals": "7/7 labels in README.md (7 format-table rows in docs/usage.md) · 7/7 in README.zh-CN.md"
         },
         "timeout": 60
       }
     },
     {
-      "id": "hero-per-turn-ledger",
-      "claim": "The hero figure caption is the real per-turn ledger of the committed synthetic Claude Code session: 16:30:00 → 16:31:33 in /demo/webapp, one user turn, 1m33s, 12,436 tokens, five tool calls (Glob, Read, Edit, Edit, Bash), 0 errors, cost not reported.",
-      "value": "1m33s / 12,436 tokens / 5 tool calls / 0 errors",
-      "metric": "wall-clock, tokens, tool calls and errors of the turn built from the demo sample log",
-      "method": "parseClaudeCodeSessionFile over frontend/demo/sample-logs/claude/-demo-webapp/synthetic-feature-dark-mode.jsonl, then buildTurnLedger — the UI's own function, required from the generated public/js/pure.js — and the same duration and token strings are looked for in assets/readme/hero.svg. The message timestamps give the 16:30:00 → 16:31:33 range and the cwd field gives /demo/webapp.",
-      "repro": "node scripts/claims-receipts.mjs hero-ledger",
-      "evidence": "assets/readme/hero.svg",
-      "as_of": "2026-09-13",
+      "id": "default-dirs",
+      "claim": "Each platform's default directory agrees with the Default directories table in docs/usage.md.",
+      "value": "7/7 default dirs match the usage reference",
+      "metric": "defaultDir() relative to HOME compared with the usage-reference paths",
+      "method": "PLATFORMS[id].defaultDir() is resolved relative to HOME and compared with docs/usage.md; README links to that configuration section.",
+      "repro": "node scripts/claims-receipts.mjs default-dirs",
+      "evidence": "lib/config.js",
+      "as_of": "2026-09-24",
       "check": {
-        "cmd": "node scripts/claims-receipts.mjs hero-ledger",
+        "cmd": "node scripts/claims-receipts.mjs default-dirs",
         "expect": {
-          "equals": "1 turn · 1m33s · 12,436 tok · cost not reported · 5 tool calls (Glob, Read, Edit, Edit, Bash) · 0 errors · 16:30:00→16:31:33 · /demo/webapp · hero.svg agrees"
+          "equals": "7/7 default dirs match docs/usage.md (~/.openclaw/agents ~/.codex/sessions ~/.claude/projects ~/.omp/agent/sessions ~/.dsh/sessions ~/.gemini/tmp ~/.hermes)"
+        },
+        "timeout": 60
+      }
+    },
+    {
+      "id": "readme-diagnostic-example",
+      "claim": "Both README excerpts show the actual offline report for the committed synthetic OMP walkthrough.",
+      "value": "8 historical failures / 7 pending records / 2 events / 1 matching recovery",
+      "metric": "summary fields from createReport on the committed synthetic OMP log",
+      "method": "Generate the report using lib/inspect.js and compare all four fields with parsed JSON excerpts in both READMEs. Counts describe log records, not task failures or productivity.",
+      "repro": "node scripts/claims-receipts.mjs diagnostic-example",
+      "evidence": "frontend/demo/sample-logs/omp/-demo-diagnostics/2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl",
+      "as_of": "2026-09-24",
+      "check": {
+        "cmd": "node scripts/claims-receipts.mjs diagnostic-example",
+        "expect": {
+          "equals": "8 historical failures · 7 pending records · 2 events · 1 matching recovery · complete=true · both README excerpts agree"
         },
         "timeout": 60
       }
