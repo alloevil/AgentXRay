@@ -8,6 +8,7 @@
       "scripts/**",
       "public/js/**",
       "test/**/*.js",
+      "!!output",
       "!public/js/pure.js",
       "!lib/generated"
     ]

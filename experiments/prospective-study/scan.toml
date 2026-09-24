@@ -1,0 +1,9 @@
+title = "AgentXRay disclosure gate"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated placeholders only; source containing this prefix is rejected"
+regexTarget = "secret"
+regexes = ['''^/?AXR_REDACTED_[0-9]{6}$''']

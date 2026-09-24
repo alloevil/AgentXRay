@@ -27,6 +27,7 @@ const require = createRequire(path.join(ROOT, 'package.json'));
 const SELF = fileURLToPath(import.meta.url);
 const README = 'README.md';
 const README_ZH = 'README.zh-CN.md';
+const GUIDE = 'docs/usage.md';
 
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const readJson = (rel) => JSON.parse(read(rel));
@@ -65,19 +66,6 @@ function blockKeys(yaml, anchor) {
   return keys;
 }
 
-function toolCallNames(messages) {
-  const names = [];
-  for (const message of messages) {
-    if (!Array.isArray(message.content)) continue;
-    for (const part of message.content) {
-      if (part && (part.type === 'toolCall' || part.type === 'tool_use')) names.push(part.name || part.toolName);
-    }
-  }
-  return names;
-}
-
-const clock = (timestamp) => new Date(timestamp).toISOString().slice(11, 19);
-
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 const receipts = {
@@ -100,9 +88,9 @@ const receipts = {
   'readme-platform-list': () => {
     const labels = Object.values(platforms()).map((platform) => platform.label);
     const found = (rel) => labels.filter((label) => read(rel).includes(label)).length;
-    const rows = tableRows(read(README), '## Supported Log Formats').length;
+    const rows = tableRows(read(GUIDE), '## Supported Log Formats').length;
     const missing = labels.filter((label) => !read(README).includes(label));
-    return `${found(README)}/${labels.length} labels in ${README} (${rows} format-table rows${missing.length ? `, missing ${missing.join(', ')}` : ''}) · ${found(README_ZH)}/${labels.length} in ${README_ZH}`;
+    return `${found(README)}/${labels.length} labels in ${README} (${rows} format-table rows in ${GUIDE}${missing.length ? `, missing ${missing.join(', ')}` : ''}) · ${found(README_ZH)}/${labels.length} in ${README_ZH}`;
   },
 
   // README "Default directories" table vs the dirs the code actually resolves.
@@ -110,39 +98,23 @@ const receipts = {
     const home = fromRepo('lib/config.js').HOME;
     const all = platforms();
     const rows = Object.keys(all).map((id) => `~/${path.relative(home, all[id].defaultDir())}`);
-    const missing = rows.filter((row) => !read(README).includes(row));
-    if (missing.length) return `default dirs missing from ${README}: ${missing.join(', ')}`;
-    return `${rows.length}/${rows.length} default dirs match ${README} (${rows.join(' ')})`;
+    const missing = rows.filter((row) => !read(GUIDE).includes(row));
+    if (missing.length) return `default dirs missing from ${GUIDE}: ${missing.join(', ')}`;
+    return `${rows.length}/${rows.length} default dirs match ${GUIDE} (${rows.join(' ')})`;
   },
 
-  // Hero figure caption: the numbers printed over the ledger strip in
-  // assets/readme/hero.svg and in the README alt text.
-  'hero-ledger': async () => {
-    const pure = fromRepo('public/js/pure.js');
-    const file = 'frontend/demo/sample-logs/claude/-demo-webapp/synthetic-feature-dark-mode.jsonl';
-    const { session, messages } = await fromRepo('lib/platforms/claude.js').parseClaudeCodeSessionFile(
-      path.join(ROOT, file)
-    );
-    const ledger = pure.buildTurnLedger(messages);
-    const row = ledger.rows[0];
-    const tokens = formatNumber(ledger.totals.tokens);
-    const stamps = messages
-      .map((message) => message.timestamp)
-      .filter(Boolean)
-      .sort();
-    const svg = read('assets/readme/hero.svg');
-    const agrees = svg.includes(pure.formatDurationCompact(row.durationMs)) && svg.includes(`${tokens} tok`);
-    return [
-      `${ledger.rows.length} turn`,
-      pure.formatDurationCompact(row.durationMs),
-      `${tokens} tok`,
-      ledger.hasCost ? `cost ${pure.formatCost(ledger.totals.cost)}` : 'cost not reported',
-      `${row.toolCalls} tool calls (${toolCallNames(messages).join(', ')})`,
-      `${row.toolErrors} errors`,
-      `${clock(stamps[0])}→${clock(stamps.at(-1))}`,
-      session.cwd,
-      `hero.svg ${agrees ? 'agrees' : 'DISAGREES'}`,
-    ].join(' · ');
+  'diagnostic-example': async () => {
+    const file = 'frontend/demo/sample-logs/omp/-demo-diagnostics/2026-09-23T08-00-00-000Z_0199demo-diagnostics.jsonl';
+    const report = await fromRepo('lib/inspect.js').createReport(Buffer.from(read(file)), 'omp');
+    const keys = ['failureRecords', 'pendingRecords', 'pendingEvents', 'recoveredRecords'];
+    const agrees = [README, README_ZH].every((name) => {
+      const blocks = [...read(name).matchAll(/```json\n([\s\S]*?)\n```/g)];
+      return blocks.some((match) => {
+        const excerpt = JSON.parse(match[1]);
+        return keys.every((key) => excerpt.summary?.[key] === report.summary[key]);
+      });
+    });
+    return `${report.summary.failureRecords} historical failures · ${report.summary.pendingRecords} pending records · ${report.summary.pendingEvents} events · ${report.summary.recoveredRecords} matching recovery · complete=${report.complete} · both README excerpts ${agrees ? 'agree' : 'DISAGREE'}`;
   },
 
   // README "Per-turn ledger": one row per user turn, wall-clock time, tokens =
