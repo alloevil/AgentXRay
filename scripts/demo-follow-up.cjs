@@ -54,6 +54,12 @@ async function main() {
     })
   );
   records.push(...operation('other-turn', 'edit', { ...editArgs, newText: 'next turn' }, 'success'));
+  records.push(
+    message('no-result-call', {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'no-result', name: 'bash', arguments: { command: 'synthetic pending check' } }],
+    })
+  );
   try {
     await fs.mkdir(directory, { recursive: true });
     await fs.writeFile(file, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
@@ -65,8 +71,10 @@ async function main() {
   console.log(`Session API: ${server.base}/api/omp/sessions/${id}`);
   console.log('OMP 合成会话：3 个自动事件；初始 bash 事件有 7 条不同状态候选，edit 事件有 1 条同文件候选。');
   console.log('输入 n：追加仅 i 不同的成功候选，使旧复核过期；q 或 Ctrl-C 清理退出。');
+  console.log('自动体检无需笔记：另有 1 条无结果调用。输入 c 为它追加成功结果，结果缺口应减少，原失败事件不变。');
   const input = readline.createInterface({ input: process.stdin });
   let appended = 0;
+  let completed = false;
   const stop = async () => {
     input.close();
     await server.stop();
@@ -74,6 +82,27 @@ async function main() {
   };
   input.on('line', async (line) => {
     if (line.trim() === 'q') return stop();
+    if (line.trim() === 'c' && !completed) {
+      completed = true;
+      try {
+        const finished = message('no-result-finished', {
+          role: 'toolResult',
+          toolCallId: 'no-result',
+          toolName: 'bash',
+          isError: false,
+          details: { exitCode: 0 },
+          content: [{ type: 'text', text: 'Synthetic pending check completed; not task acceptance.' }],
+        });
+        await fs.appendFile(file, `${JSON.stringify(finished)}\n`);
+        console.log(
+          'PASS: appended result for pending call; no-result count should be zero, automatic failures unchanged.'
+        );
+      } catch (error) {
+        console.error(error.message);
+        await stop();
+      }
+      return;
+    }
     if (line.trim() !== 'n') return;
     appended++;
     try {

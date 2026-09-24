@@ -297,3 +297,299 @@ export function diagnoseSession(messages: SessionMessage[]) {
     events,
   };
 }
+
+export interface CompletionGap {
+  message: SessionMessage;
+  index: number;
+  toolCallId: string | null;
+  toolName: string;
+  state: 'running' | 'unknown' | 'no-result';
+  reason: 'ambiguous-id' | 'last-result' | 'no-result';
+  evidence: string;
+}
+
+interface CallEvidence {
+  id: string | null;
+  message: SessionMessage;
+  call: RecordedCall;
+  result?: { message: SessionMessage; index: number };
+}
+
+function collectCallEvidence(messages: SessionMessage[]) {
+  const calls: CallEvidence[] = [];
+  const byId = new Map<string, typeof calls>();
+  let userTurn = 0;
+  messages.forEach((message, index) => {
+    if (message.role === 'user') userTurn++;
+    function record(id: string | null | undefined, name: string | null | undefined, value: unknown) {
+      const entry = { id: id || null, message, call: { name: name || '未知工具', args: parseArguments(value),
+        key: null, onlyIKey: null, fileKey: null, index, userTurn } };
+      calls.push(entry);
+      if (id) { const list = byId.get(id) || []; list.push(entry); byId.set(id, list); }
+    }
+    if (message.role === 'toolCall') record(message.toolCallId || message.id, message.toolName, message.details);
+    if (message.role === 'assistant') for (const part of message.content || []) {
+      if (part.type === 'toolCall') record(part.id, part.name, part.arguments ?? part.input);
+    }
+  });
+  let orphanResults = 0;
+  let unassignedResults = 0;
+  let toolResultCount = 0;
+  messages.forEach((message, index) => {
+    if (message.role !== 'toolResult') return;
+    toolResultCount++;
+    const matches = message.toolCallId ? byId.get(message.toolCallId) : undefined;
+    if (!matches?.length || matches.every((entry) => entry.call.index >= index)) { orphanResults++; return; }
+    if (matches.length !== 1) { unassignedResults++; return; }
+    matches[0].result = { message, index };
+  });
+  return { calls, byId, orphanResults, unassignedResults, toolResultCount };
+}
+
+export function summarizeSessionHealth(messages: SessionMessage[], report = diagnoseSession(messages)) {
+  const { calls, byId, orphanResults, unassignedResults, toolResultCount } = collectCallEvidence(messages);
+  const callStates = { success: 0, failure: 0, running: 0, cancelled: 0, unknown: 0, 'no-result': 0 };
+  const gaps: CompletionGap[] = [];
+  let ambiguousCalls = 0;
+  for (const entry of calls) {
+    const ambiguous = !entry.id || (byId.get(entry.id)?.length ?? 0) !== 1;
+    const state = ambiguous ? 'unknown' : entry.result ? relatedState(entry.result.message, entry.call) : 'no-result';
+    callStates[state]++;
+    if (ambiguous) ambiguousCalls++;
+    if (state !== 'running' && state !== 'unknown' && state !== 'no-result') continue;
+    const result = !ambiguous ? entry.result : undefined;
+    gaps.push({ message: result?.message || entry.message, index: result?.index ?? entry.call.index,
+      toolCallId: entry.id, toolName: entry.call.name, state,
+      reason: ambiguous ? 'ambiguous-id' : result ? 'last-result' : 'no-result',
+      evidence: ambiguous ? '调用标识缺失或重复，无法唯一关联结果。' : result
+        ? relatedEvidence(result.message, entry.call, state === 'no-result' ? 'unknown' : state)
+        : '截至当前已加载日志，没有记录到此调用的结果；不代表任务失败或进程仍在运行。',
+    });
+  }
+  const candidates = new Map<number, RelatedOperation>();
+  for (const event of report.events) for (const operation of event.relatedOperations) candidates.set(operation.index, operation);
+  const candidateStates = { success: 0, failure: 0, running: 0, cancelled: 0, unknown: 0 };
+  for (const operation of candidates.values()) candidateStates[operation.state]++;
+  const repeated = report.events.filter((event) => event.failures.length > 1);
+  return {
+    callCount: calls.length, toolResultCount, callStates, orphanResults, unassignedResults, ambiguousCalls, gaps,
+    failureRecords: report.failureCount, pendingRecords: report.failures.length, pendingEvents: report.events.length,
+    recoveredRecords: report.recoveredCount, repeatedEvents: repeated.length,
+    repeatedRecords: repeated.reduce((total, event) => total + event.failures.length, 0),
+    candidateEvents: report.events.filter((event) => event.relatedOperations.length > 0).length,
+    candidateResults: candidates.size, candidateStates,
+  };
+}
+
+export interface ExecutionEvidence {
+  callMessage: SessionMessage;
+  callIndex: number;
+  toolCallId: string | null;
+  toolName: string;
+  resultMessage: SessionMessage | null;
+  resultIndex: number | null;
+  state: RelatedOperation['state'] | 'no-result';
+  evidence: string;
+  directory: string | null;
+  directoryConflict: boolean;
+  target?: string;
+  command?: string;
+  basis?: 'runner-command' | 'script-name';
+  commandMode?: 'direct' | 'directory-prefix' | 'compound-fragment';
+  fragments?: string[];
+}
+
+export interface ChronologyCheck {
+  operation: ExecutionEvidence;
+  scope: 'same-recorded-directory' | 'unknown';
+}
+
+export interface ModificationChronology {
+  operation: ExecutionEvidence;
+  priorSuccess: ChronologyCheck | null;
+  laterChecks: ChronologyCheck[];
+  latestLater: ChronologyCheck | null;
+  latestOrderAmbiguous: boolean;
+  overlappingChecks: ChronologyCheck[];
+  excludedScopeChecks: number;
+}
+
+interface CommandToken { value: string; quoted: boolean }
+interface CommandSegment { tokens: CommandToken[]; separator: string }
+
+function literalSegments(command: string): CommandSegment[] | null {
+  if (/[`$\\(){}\0]|<<|\|\||\r/.test(command) || command.length > 20000) return null;
+  const segments: CommandSegment[] = [];
+  let tokens: CommandToken[] = [];
+  let value = '';
+  let quoted = false;
+  let quote = '';
+  const token = () => { if (value || quoted) tokens.push({ value, quoted }); value = ''; quoted = false; };
+  for (let index = 0; index < command.length; index++) {
+    const char = command[index];
+    if (quote) {
+      if (char === quote) quote = '';
+      else value += char;
+      continue;
+    }
+    if (char === '"' || char === "'") { quote = char; quoted = true; continue; }
+    if (char === '#') return null;
+    if (char === ' ' || char === '\t') { token(); continue; }
+    if (char === '\n' || char === ';' || char === '|' || char === '&') {
+      token();
+      let separator = char;
+      if (char === '&') { if (command[index + 1] !== '&') return null; separator = '&&'; index++; }
+      if (tokens.length) segments.push({ tokens, separator });
+      else if (separator !== '\n') return null;
+      tokens = [];
+      continue;
+    }
+    if (char === '>' || char === '<') {
+      token();
+      let redirect = char;
+      if (command[index + 1] === '>') { redirect += '>'; index++; }
+      if (command[index + 1] === '&' && /[0-9]/.test(command[index + 2] || '')) {
+        redirect += `&${command[index + 2]}`; index += 2;
+      }
+      tokens.push({ value: redirect, quoted: false });
+      continue;
+    }
+    value += char;
+  }
+  if (quote) return null;
+  token();
+  if (tokens.length) segments.push({ tokens, separator: '' });
+  else if (segments.length && ['&&', '|'].includes(segments[segments.length - 1].separator)) return null;
+  if (segments.some((segment) => ['if', 'then', 'else', 'elif', 'fi', 'for', 'while', 'do', 'done', 'case', 'esac', 'function', 'until', '!'].includes(segment.tokens[0]?.value))) return null;
+  return segments;
+}
+
+function checkTokens(tokens: string[]): 'runner-command' | 'script-name' | null {
+  if (tokens.some((token) => /^(?:--(?:help|version|watch(?:All)?|collect-only|collectonly|co|list-tests|listTests|list|dry-run|prefix|cwd|directory)|-[hVwCc])(?:=|$)/i.test(token))) return null;
+  const runner = tokens[0] === 'pytest' || (['python', 'python3'].includes(tokens[0]) && tokens[1] === '-m' && tokens[2] === 'pytest') ||
+    (tokens[0] === 'node' && tokens[1] === '--test');
+  if (runner) return 'runner-command';
+  const manager = tokens[0];
+  if (!['npm', 'pnpm', 'yarn'].includes(manager)) return null;
+  const scriptPosition = tokens[1] === 'run' ? 2 : 1;
+  if (!['test', 'build', 'lint', 'typecheck'].includes(tokens[scriptPosition])) return null;
+  if (manager === 'npm' && scriptPosition === 1 && tokens[1] !== 'test') return null;
+  return 'script-name';
+}
+
+function verificationCommand(call: RecordedCall): {
+  command: string; basis: 'runner-command' | 'script-name'; commandMode: 'direct' | 'directory-prefix' | 'compound-fragment';
+  fragments: string[]; explicitDirectory: string | null; usesInitialDirectory: boolean;
+} | null {
+  if (!['bash', 'Bash', 'shell', 'exec', 'exec_command', 'run_shell_command', 'execute_command', 'terminal'].includes(call.name)) return null;
+  const args = argumentObject(call.args);
+  if (!args) return null;
+  const values = ['command', 'cmd'].filter((key) => key in args).map((key) => args[key]);
+  if (!values.length || values.some((value) => typeof value !== 'string' || value !== values[0])) return null;
+  const command = values[0] as string;
+  const segments = literalSegments(command);
+  if (!segments?.length) return null;
+  const recognized = segments.flatMap((segment, index) => {
+    if (segment.tokens[0]?.quoted) return [];
+    const tokens = segment.tokens.map((item) => item.value);
+    const basis = checkTokens(tokens);
+    return basis ? [{ index, basis, fragment: tokens.join(' ') }] : [];
+  });
+  if (!recognized.length) return null;
+  const simple = (segment: CommandSegment) => segment.tokens.every((item) => !/[<>]/.test(item.value));
+  const cd = segments[0];
+  const direct = segments.length === 1 && simple(segments[0]);
+  const hasDirectoryPrefix = cd.separator === '&&' && cd.tokens.length === 2 &&
+    cd.tokens[0].value === 'cd' && !cd.tokens[0].quoted && /^\//.test(cd.tokens[1].value) &&
+    recognized.length === 1 && recognized[0].index === 1;
+  const directoryPrefix = hasDirectoryPrefix && segments.length === 2 && simple(segments[1]);
+  return { command, basis: recognized[0].basis, fragments: recognized.map((entry) => entry.fragment),
+    commandMode: direct ? 'direct' : directoryPrefix ? 'directory-prefix' : 'compound-fragment',
+    explicitDirectory: hasDirectoryPrefix ? cd.tokens[1].value : null,
+    usesInitialDirectory: recognized.length === 1 && recognized[0].index === 0 };
+}
+
+function executionEvidence(entry: CallEvidence, ambiguous: boolean): ExecutionEvidence {
+  const args = argumentObject(entry.call.args);
+  const directories = args ? ['cwd', 'workdir', 'working_directory'].filter((key) => key in args).map((key) => args[key]) : [];
+  const directoryConflict = directories.some((value) => typeof value !== 'string' || !value) || new Set(directories).size > 1;
+  const directory = !directoryConflict && typeof directories[0] === 'string' && /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(directories[0]) ? directories[0] : null;
+  const result = ambiguous ? undefined : entry.result;
+  const state = ambiguous ? 'unknown' : result ? relatedState(result.message, entry.call) : 'no-result';
+  return {
+    callMessage: entry.message, callIndex: entry.call.index, toolCallId: entry.id, toolName: entry.call.name,
+    resultMessage: result?.message ?? null, resultIndex: result?.index ?? null, state, directory, directoryConflict,
+    evidence: ambiguous ? '调用标识缺失或重复，无法唯一关联结果。' : result
+      ? relatedEvidence(result.message, entry.call, state === 'no-result' ? 'unknown' : state)
+      : '未记录到此调用的结果；不推断实际进程状态。',
+  };
+}
+
+export function analyzeVerificationChronology(messages: SessionMessage[]) {
+  const { calls, byId } = collectCallEvidence(messages);
+  const modificationResults: ExecutionEvidence[] = [];
+  const checks: ExecutionEvidence[] = [];
+  let unclassifiedShellCalls = 0;
+  let unclassifiedModificationCalls = 0;
+  for (const entry of calls) {
+    const args = argumentObject(entry.call.args);
+    const ambiguous = !entry.id || (byId.get(entry.id)?.length ?? 0) !== 1;
+    if (['edit', 'Edit', 'write', 'Write', 'MultiEdit'].includes(entry.call.name)) {
+      const paths = args ? ['path', 'file_path'].filter((key) => key in args).map((key) => args[key]) : [];
+      if (!paths.length || paths.some((value) => typeof value !== 'string' || !value.trim() || value.includes('\0') || value !== paths[0])) {
+        unclassifiedModificationCalls++;
+      } else {
+        modificationResults.push({ ...executionEvidence(entry, ambiguous), target: paths[0] as string });
+      }
+    } else if (['apply_patch', 'apply_diff', 'NotebookEdit'].includes(entry.call.name)) {
+      unclassifiedModificationCalls++;
+    }
+    const recognized = verificationCommand(entry.call);
+    if (recognized) {
+      const evidence = executionEvidence(entry, ambiguous);
+      const { explicitDirectory, usesInitialDirectory, ...command } = recognized;
+      if (recognized.commandMode === 'compound-fragment') {
+        checks.push({ ...evidence, ...command, state: evidence.state === 'no-result' ? 'no-result' : 'unknown',
+          directory: explicitDirectory ?? (usesInitialDirectory ? evidence.directory : null),
+          directoryConflict: explicitDirectory ? false : evidence.directoryConflict,
+          evidence: `命令文本包含检查片段；无法确认片段是否执行或通过，不能使用整个命令的退出码判定。\n${evidence.evidence}` });
+      } else if (recognized.commandMode === 'directory-prefix') {
+        checks.push({ ...evidence, ...command, directory: explicitDirectory, directoryConflict: false,
+          state: evidence.state === 'failure' ? 'unknown' : evidence.state,
+          evidence: `记录的目录前缀：cd 后通过 && 连接检查。${evidence.state === 'failure' ? '整体失败可能发生在 cd，检查状态未知。' : ''}\n${evidence.evidence}` });
+      } else checks.push({ ...evidence, ...command });
+    }
+    else if (isExecution(entry.call, entry.message)) unclassifiedShellCalls++;
+  }
+  const modifications: ModificationChronology[] = [];
+  for (const operation of modificationResults) {
+    if (operation.state !== 'success' || operation.resultIndex === null) continue;
+    const prior: ChronologyCheck[] = [], laterChecks: ChronologyCheck[] = [], overlappingChecks: ChronologyCheck[] = [];
+    let excludedScopeChecks = 0;
+    for (const check of checks) {
+      if (operation.directoryConflict || check.directoryConflict || (operation.directory && check.directory && operation.directory !== check.directory)) {
+        excludedScopeChecks++;
+        continue;
+      }
+      const relation: ChronologyCheck = { operation: check,
+        scope: operation.directory && check.directory ? 'same-recorded-directory' : 'unknown' };
+      if (check.callIndex > operation.resultIndex) laterChecks.push(relation);
+      else if (check.resultIndex !== null && check.resultIndex < operation.callIndex) {
+        if (check.state === 'success') prior.push(relation);
+      } else if (check.resultIndex === null || check.resultIndex >= operation.callIndex) overlappingChecks.push(relation);
+    }
+    prior.sort((left, right) => (left.operation.resultIndex ?? -1) - (right.operation.resultIndex ?? -1));
+    const latest = laterChecks[laterChecks.length - 1];
+    const latestOrderAmbiguous = !!latest && laterChecks.filter((entry) => entry.operation.callIndex === latest.operation.callIndex).length > 1;
+    modifications.push({ operation, priorSuccess: prior[prior.length - 1] ?? null, laterChecks,
+      latestLater: latestOrderAmbiguous ? null : latest ?? null, latestOrderAmbiguous, overlappingChecks, excludedScopeChecks });
+  }
+  return {
+    modificationCalls: modificationResults.length, successfulModifications: modifications.length,
+    unconfirmedModifications: modificationResults.length - modifications.length,
+    unclassifiedModificationCalls, unclassifiedShellCalls, checks, modifications,
+    withLaterCheck: modifications.filter((row) => row.laterChecks.length).length,
+    withoutLaterCheck: modifications.filter((row) => !row.laterChecks.length).length,
+    changedAfterLastPassedCheck: modifications.filter((row) => row.priorSuccess && !row.laterChecks.length).length,
+  };
+}

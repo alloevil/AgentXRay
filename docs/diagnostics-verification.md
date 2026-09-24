@@ -95,3 +95,26 @@ A fixed, previously inspected set of 15 real sessions (five each from OMP, Codex
 Storage keys stayed stable. Only the three events with added candidates acquired new review fingerprints; no-candidate events retained their previous fingerprint contract. No real review labels were persisted. Raw logs, parameters and detailed sample identifiers remain private; the regression is not an independent benchmark, global accuracy estimate or time-saving measurement.
 
 The hosted synthetic sample now includes one later successful edit of the same absolute file path with different arguments. It remains **2 events / 7 pending records / 1 recovered record**. Browser checks verified the relation caveat, source result, desktop/mobile rendering and zero static-demo API requests.
+
+## Automatic health and chronology acceptance
+
+The next increment makes automatic facts the default. Saved manual labels do not hide automatic events, and the review store is not read or hashed until **人工笔记与迁移（可选）** is opened. Existing notes and transfers remain available. Refresh or returning to automatic mode shows all events again.
+
+The test suite now has **290 passing Node tests**. `test/session-health.test.js` contains 11 cases including **200 fixed transformations** over 20 synthetic bases; `test/verification-chronology.test.js` contains 24 cases including **120 temporal transformations** over 20 bases. All known outcomes, evidence partitions and call-state accounting invariants pass without a model judge or human labels. These counts are regression coverage, not measured real-world accuracy or user time saved.
+
+Health pairs only unique, ordered call IDs; it summarizes the last recorded state and separates unknown/no-result/running from failure and cancellation. Reused or absent IDs do not supply success evidence. One candidate referenced by multiple events is counted once by result position. Tests verify source messages are not modified.
+
+Chronology distinguishes successful modification-tool results, prior successful checks, overlapping checks and later attempts. A later failure stays visible even if an earlier attempt passed; simultaneously initiated checks do not get an invented uniquely latest order. Known-different explicit directories are excluded and missing directory context is explicit. Tool success does not prove bytes changed; conventional script names do not prove contents or test coverage.
+
+The initial direct-command recognizer found **zero checks** in the frozen real-log set. A bounded lexer was added for explicit command segments instead of hiding that coverage gap. It recognizes **59 calls containing checks** (52 OMP, 7 Claude Code), all with **unknown check outcome** because the commands are compound; a pipeline's successful exit is not assigned to its test fragment. Substitutions, heredocs, control flow and quoted mentions are not interpreted as executed checks. The Codex subset had no recognized checks or explicit edit/write records under this scope, so no conclusion about its verification quality follows.
+
+The same 15 frozen sessions / 2,024 tool results retained exactly the v1.20.0 diagnostic output: 142 failures, 141 pending records, 76 events and 1 recovery. Explicit modification tools returned successfully 240 times; 112 had later recognized check-call/fragment records and 128 did not. **These are temporal relations only**—none establish that the modified file was tested, and unclassified commands may contain validation. The dataset was previously inspected, includes old sessions and is not a blind benchmark. Raw data and detailed sample IDs remain private.
+
+Browser checks used synthetic fixtures only:
+
+- Automatic mode works with review-storage reads denied; zero review-key reads occur before opt-in. Optional manual filtering returns to the complete event set on exit, and notes persist without becoming mandatory.
+- A no-result call gains a recorded result without a reload; gaps fall from 3 to 2 while unrelated failures remain unchanged.
+- A check passes before a modification; a second check overlaps it and a third uses another directory. None is reported as post-change validation. Appending a failed later check then a successful one updates the latest result and retains both attempts.
+- Call/result jumps resolve to actual source records without moving outer page navigation. At 390px the chronology panel has no horizontal overflow; static demo uses zero backend API requests.
+
+Use `node scripts/demo-verification.cjs` to replay the temporal example and `node scripts/demo-follow-up.cjs` for missing-result updates. The public hosted demo exposes the earlier-test/later-edit example under automatic health. Physical-device keyboards and every complex view are not certified. Existing lint findings (91 warnings / 159 infos) and bundle-size warnings remain.

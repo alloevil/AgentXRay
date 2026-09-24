@@ -102,16 +102,16 @@
     },
     {
       "id": "test-count",
-      "claim": "255 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
-      "value": "255",
-      "metric": "passing node:test cases (# tests 255 / # pass 255 / # fail 0)",
-      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('255 tests on Node's built-in runner (`npm test`, 2026-09-23)') is verified by the run, not read back from the prose.",
+      "claim": "290 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
+      "value": "290",
+      "metric": "passing node:test cases (# tests 290 / # pass 290 / # fail 0)",
+      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('290 tests on Node's built-in runner (`npm test`, 2026-09-23)') is verified by the run, not read back from the prose.",
       "repro": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
       "evidence": "docs/ROADMAP.md",
       "as_of": "2026-09-13",
       "check": {
         "cmd": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
-        "expect": { "contains": ["# tests 255", "# pass 255", "# fail 0"] },
+        "expect": { "contains": ["# tests 290", "# pass 290", "# fail 0"] },
         "timeout": 120
       }
     },
@@ -238,7 +238,7 @@
       "check": {
         "cmd": "node scripts/claims-receipts.mjs tests-node-only",
         "expect": {
-          "equals": "18 files in test/ · 14 distinct requires: 11 node builtins, 3 relative, 0 third-party"
+          "equals": "20 files in test/ · 14 distinct requires: 11 node builtins, 3 relative, 0 third-party"
         },
         "timeout": 60
       }

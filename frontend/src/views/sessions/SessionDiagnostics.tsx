@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import type { SessionMessage } from '@/api/types';
-import { diagnoseSession, type FailureDiagnostic, type FailureEvent } from './diagnostics';
+import { diagnoseSession, summarizeSessionHealth, analyzeVerificationChronology, type FailureDiagnostic, type FailureEvent } from './diagnostics';
 import { formatDate, messageAnchorId } from './lib';
 import { DiagnosticReview, useEventReviews } from './DiagnosticReview';
 import { ReviewTransferPanel } from './ReviewTransferPanel';
 import { RelatedOperations } from './RelatedOperations';
+import { SessionHealth } from './SessionHealth';
+import { VerificationChronology } from './VerificationChronology';
 import { REVIEW_LABELS, reviewState, type EventReview, type ReviewState, type ReviewStatus } from './diagnostic-reviews';
 
 const REASONS = {
@@ -38,12 +40,13 @@ function EvidenceButton({ failure, label, onJump }: {
   ) : <span className="text-muted-foreground">日志缺少定位标识</span>;
 }
 
-function EventCard({ event, onJump, review, ready, onReview }: {
+function EventCard({ event, onJump, review, ready, onReview, manual }: {
   event: FailureEvent;
   onJump: (id: string) => void;
   review: EventReview | undefined;
   ready: boolean;
   onReview: (status: ReviewStatus | null, note?: string) => void;
+  manual: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const first = event.failures[0];
@@ -68,8 +71,8 @@ function EventCard({ event, onJump, review, ready, onReview }: {
       ) : null}
       <p className="mt-2 leading-5">{REASONS[latest.reason]}</p>
       <p className="mt-1 text-[11px] text-muted-foreground">
-        复查提示：{repeated ? '重复操作' : latest.reason === 'missing-call' ? '信息缺失' : '验证缺口'}
-        {' · '}{reviewState(review) === 'unreviewed' ? '待复核' : `人工：${REVIEW_LABELS[reviewState(review) as ReviewStatus]}`}
+        记录线索：{repeated ? '重复操作' : latest.reason === 'missing-call' ? '信息缺失' : '验证缺口'}
+        {manual ? ` · ${reviewState(review) === 'unreviewed' ? '待复核' : `人工：${REVIEW_LABELS[reviewState(review) as ReviewStatus]}`}` : ''}
       </p>
       <p className="mt-2 text-[11px] font-medium">{repeated ? '最近一次失败证据' : '失败证据'}</p>
       <pre className="mt-1 whitespace-pre-wrap break-all text-[11px] text-muted-foreground">{latest.evidence}</pre>
@@ -98,8 +101,8 @@ function EventCard({ event, onJump, review, ready, onReview }: {
         </ol>
       ) : null}
       {event.relatedOperations.length ? <RelatedOperations operations={event.relatedOperations} onJump={onJump} /> : null}
-      <DiagnosticReview key={review?.identity.fingerprint ?? 'loading'} entry={review} ready={ready}
-        onUpdate={onReview} />
+      {manual ? <DiagnosticReview key={review?.identity.fingerprint ?? 'loading'} entry={review} ready={ready}
+        onUpdate={onReview} /> : null}
     </li>
   );
 }
@@ -110,23 +113,28 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
   onScrollToMessage: (id: string) => void;
 }) {
   const report = useMemo(() => diagnoseSession(messages), [messages]);
+  const health = useMemo(() => summarizeSessionHealth(messages, report), [messages, report]);
+  const chronology = useMemo(() => analyzeVerificationChronology(messages), [messages]);
+  const [manual, setManual] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [filter, setFilter] = useState<ReviewState | 'all'>('unreviewed');
   const [notice, setNotice] = useState<{ events: FailureEvent[]; text: string } | null>(null);
-  const reviews = useEventReviews(reviewScope, report.events);
-  const matching = report.events.filter((event) => filter === 'all' || reviewState(reviews.entries[event.id]) === filter);
+  const reviews = useEventReviews(reviewScope, report.events, manual);
+  const matching = report.events.filter((event) => !manual || filter === 'all' || reviewState(reviews.entries[event.id]) === filter);
   const hiddenCount = Math.max(0, matching.length - visibleCount);
   const unreadableCount = Object.values(reviews.entries).filter((entry) => entry.error).length;
   return (
-    <section aria-label="失败后验证诊断" className="mb-3 min-w-0 rounded-lg border border-border bg-card/60 p-3 text-xs"
+    <section aria-label="自动会话体检" className="mb-3 min-w-0 rounded-lg border border-border bg-card/60 p-3 text-xs"
       data-testid="session-diagnostics">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-semibold">失败后验证 · {report.events.length} 个自动诊断事件</h3>
-        <span className="text-muted-foreground">{report.failures.length} 条自动待复查记录 · {report.recoveredCount} 条已有同参成功记录</span>
+        <h3 className="font-semibold">自动会话体检 · {report.events.length} 个失败后验证事件</h3>
+        <span className="text-muted-foreground">{report.failureCount} 条失败记录 · 无需人工标注或模型调用</span>
       </div>
       <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-        优先展示重复最多的操作，保留全部证据。仅描述已加载日志，不代表任务失败或验收通过。
+        自动整理已加载日志中的事实，优先展示重复操作并保留证据。不评价任务成败，不把缺少结果等同于正在运行。
       </p>
+      <SessionHealth health={health} onJump={onScrollToMessage} />
+      <VerificationChronology chronology={chronology} onJump={onScrollToMessage} />
       <details className="mt-2 text-[11px] text-muted-foreground">
         <summary className="cursor-pointer">如何分组与判定</summary>
         <p className="mt-1 leading-5">
@@ -138,6 +146,11 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
           无结果或在最后一次失败之前发起的调用不列入。候选不关闭事件，新增或变化的候选证据会使旧人工复核过期。
         </p>
       </details>
+      <button type="button" aria-pressed={manual} className={`${BUTTON_CLASS} mt-3 min-h-9`}
+        onClick={() => { setManual(!manual); setFilter('all'); setVisibleCount(PAGE_SIZE); setNotice(null); }}>
+        {manual ? '返回自动体检' : '人工笔记与迁移（可选）'}
+      </button>
+      {manual ? <>
       <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
         人工复核仅存当前浏览器，未加密、不上传。换端口、浏览器或清除站点数据后可能不可见；证据变化会重新待复核。
       </p>
@@ -150,9 +163,10 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
       ) : null}
       {notice?.events === report.events ? <p role="status" className="mt-2 text-muted-foreground">{notice.text}</p> : null}
       <ReviewTransferPanel entries={reviews.entries} ready={reviews.loaded && !reviews.error} onImported={reviews.refresh} />
+      </> : null}
       {report.events.length ? (
         <>
-          <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="复核队列筛选">
+          {manual ? <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="复核队列筛选">
             {Object.entries(REVIEW_FILTERS).map(([value, label]) => {
               const count = value === 'all' ? report.events.length : report.events.filter((event) => reviewState(reviews.entries[event.id]) === value).length;
               return (
@@ -163,10 +177,10 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
                 </button>
               );
             })}
-          </div>
+          </div> : null}
           <ol className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto" aria-label="待复查失败事件">
             {matching.slice(0, visibleCount).map((event) => (
-              <EventCard key={event.id} event={event} onJump={onScrollToMessage} review={reviews.entries[event.id]}
+              <EventCard key={event.id} event={event} manual={manual} onJump={onScrollToMessage} review={reviews.entries[event.id]}
                 ready={reviews.loaded && !reviews.error && !!reviews.entries[event.id]}
                 onReview={(status, note) => {
                   reviews.update(event.id, status, note);
@@ -176,7 +190,7 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
           </ol>
           {!matching.length ? <p className="mt-3 text-muted-foreground">此复核队列为空；自动诊断事件仍可在“全部”中查看，不代表任务通过。</p> : null}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <span>当前队列已展示 {Math.min(visibleCount, matching.length)} / {matching.length} 个事件 · 共 {report.failureCount} 条失败记录</span>
+            <span>{manual ? '当前复核队列' : '自动事件'}已展示 {Math.min(visibleCount, matching.length)} / {matching.length} 个事件 · 共 {report.failureCount} 条失败记录</span>
             {hiddenCount ? (
               <button type="button" className={BUTTON_CLASS} onClick={() => setVisibleCount(visibleCount + PAGE_SIZE)}>
                 再显示 {Math.min(PAGE_SIZE, hiddenCount)} 个事件（剩余 {hiddenCount}）
