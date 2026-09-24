@@ -1,12 +1,64 @@
 # Evidence-backed failure events
 
-**Find repeated failed operations without losing the evidence.** AgentXRay groups recorded failures for review; it does not decide whether the agent finished your task correctly.
+**Get an automatic, evidence-backed session check without labelling events.** AgentXRay summarizes recorded failures, related operations and result gaps; it does not decide whether the agent finished your task correctly. Human notes remain optional.
+
+## Automatic session health
+
+The default **自动会话体检** view requires no human labels, review storage access or model calls. It displays all automatic events even if you previously marked some as expected or verified elsewhere.
+
+- **Failure follow-up evidence:** failure-record count, remaining event count and recorded same-argument successful retries. Candidate success does not count as automatic recovery.
+- **Repeated operations:** unresolved events with multiple failures, plus the number of failure records in those events. This does not include already recovered episodes or estimate time wasted.
+- **Later related results:** candidate result positions are deduplicated across events, with separate success/failure/running/cancelled/unknown counts. Event links and original result jumps remain available.
+- **Call-result gaps:** each recorded call is associated with its last recorded result by ID and order. Running, unknown and missing-result calls are listed with evidence. A missing result does not mean the process is still running; an old running record is not a live status check. Cancelled/stopped calls are counted separately, not treated as gaps.
+- Missing/reused call IDs are ambiguous, not guessed. Orphan or pre-call results and unassignable results are counted separately. No detected failures is not a task-success verdict.
+
+Open **人工笔记与迁移（可选）** only if you want to save notes, filter by manual labels or transfer reviews. This enables the existing local-review workflow without deleting prior notes. **返回自动体检** restores every automatic event; refresh returns to the automatic view. Review-storage denial does not block the default view.
+
+### Offline evaluation without human labels
+
+`node --test test/session-health.test.js` checks 200 deterministic transformations across 20 fixed synthetic bases: append/remove a matching success, change command/cwd/i, insert a pre-started parallel call, and supply running/cancelled/unknown results. Each uses explicit expected recovery counts, complete event-evidence membership and a call-state partition invariant. Separate cases cover latest-result updates, missing/orphan/reused IDs, embedded calls and shared candidate deduplication.
+
+These are **known-case tests**, not human judgments or a real-world precision benchmark. Computation time is not time saved by a person. The existing frozen-log regression is also checked against the preceding implementation without changing its diagnostic output.
+
+Try `node scripts/demo-follow-up.cjs`: the fixture includes running, unknown and no-result calls. Enter `c` to append the missing result; the gap count falls without changing unrelated failures. No labels are needed. Enter `q` to clean up the isolated server.
+
+![Synthetic automatic session health](../screenshots/automatic-health.png)
+
+## Modification and verification chronology
+
+The **修改—检查时序** section asks a narrower, evidence-based question than “did the task pass?”:
+
+> Did a check return successfully before a modification tool returned successfully, and what check commands are recorded afterward?
+
+It shows each explicit modification-tool success, the nearest earlier successful check, all overlapping checks, the later check calls and the latest later outcome. A passed check from before an edit cannot certify that edit. A check started before the edit completed is not post-change validation, even if its result arrived later. A failed later check is not hidden because an earlier check passed.
+
+**Recognition scope:**
+
+- Modifications are `edit`, `Edit`, `write`, `Write` and `MultiEdit` with an unambiguous literal `path`/`file_path` and a uniquely paired successful tool result. This is a tool-result fact, not proof that bytes changed. Failed/incomplete mutation calls and unsupported patch/parameter formats are counted separately.
+- Direct test runners include `pytest`, `python[3] -m pytest` and `node --test`. `npm test` and named `test/build/lint/typecheck` scripts under npm/pnpm/yarn are recognized as **script-name conventions**, not verified script contents. Help/watch/list-only/dry-run modes are excluded.
+- A sole literal absolute `cd ... && check` can provide directory context. If that whole command fails, the failure may be in `cd`, so the check outcome is unknown.
+- A bounded lexer recognizes check command segments in more complex `&&`, `;`, newline or pipeline commands without executing anything. A fragment inside `npm test | tail ...` is **not known to have run or passed** from the wrapper exit code, even when the wrapper succeeds. Quoted text inside echo/python arguments is not treated as an executable command. Substitutions, heredocs and shell control syntax are not interpreted.
+- Only same-transcript record order is compared. Known-different/conflicting explicit directories are excluded. Missing directory context is labelled unknown. No filesystem lookup, implicit directory tracking, source coverage or cross-session causality is inferred.
+
+Every displayed modification/check links to its original call and, when present, result. Unclassified execution calls remain counted, so “no later recognized check” never means “no testing occurred”. The original failure/candidate rules and human-note fingerprints remain unchanged.
+
+Try the controlled sequence in a source checkout:
+
+```sh
+node scripts/demo-verification.cjs
+```
+
+The OMP synthetic session begins with a passed check, a completed edit, an overlapping check, and a different-directory check. No relevant later check is recorded. Enter `f` to append a failed post-edit check, then `s` for a successful check: the UI updates automatically and retains both attempts. Enter `q` or Ctrl-C to clean up. No command from the synthetic transcript is executed.
+
+The static hosted sample likewise has an earlier passed test followed by a later same-file edit. Its background `verify-config` script is intentionally outside the current naming allowlist; do not confuse “unclassified” with “failed”.
+
+![Synthetic modification/check chronology](../screenshots/verification-chronology.png)
 
 This guide covers the React UI. The synthetic terminal walkthrough uses a source checkout; package installation and published versions are listed in GitHub Releases.
 
 ## Try it without sharing your logs
 
-For a no-install tour, open the [hosted demo](https://alloevil.github.io/AgentXRay/) and click **体验失败复核 / Try diagnostics**. Its synthetic sample has 7 pending failure records in 2 events (6 repeated edits and 1 search failure), plus an earlier automatically recovered test failure. Open the first/last/all evidence and record a browser-local review note. This is a static sample: no live results are appended and no actual tool commands run. The terminal walkthrough below is a separate, larger fixture for live updates.
+For a no-install tour, open the [hosted demo](https://alloevil.github.io/AgentXRay/) and click **体验自动体检 / Try diagnostics**. Its synthetic sample has 7 pending failure records in 2 events (6 repeated edits and 1 search failure), plus an earlier automatically recovered test failure. Open the first/last/all evidence or optionally record a browser-local review note. This is a static sample: no live results are appended and no actual tool commands run. The terminal walkthrough below is a separate, larger fixture for live updates.
 
 From the repository root, after installing the root and frontend dependencies:
 
@@ -28,7 +80,7 @@ The synthetic “66 → 1” example is a fixture, not an accuracy or productivi
 
 ## Use your existing logs
 
-Run `npm start` from the built checkout. Select a session and open its **消息** view. The “失败后验证” panel uses the currently loaded transcript; selecting a child session analyzes the child, not the parent's combined history. No SDK, new log instrumentation or model call is required for these rules.
+Run `npm start` from the built checkout. Select a session and open its **消息** view. The “自动会话体检” panel uses the currently loaded transcript; selecting a child session analyzes the child, not the parent's combined history. No SDK, new log instrumentation or model call is required for these rules.
 
 Start with repeated operations, open the latest failure, and inspect the surrounding calls. A card is a reason to review the transcript—not an instruction to rerun a possibly destructive command. Equivalent commands, alternate verification and external fixes still require your judgment.
 
@@ -65,7 +117,7 @@ The hosted **Try diagnostics** sample also includes a successful same-file edit 
 
 ## Local review workflow
 
-The automatic result and your judgment are separate. The header always reports automatic events and pending failure records. The review filters show which of those events you have inspected:
+Human review is optional: first open **人工笔记与迁移（可选）**. The automatic result and your judgment are separate. The header always reports automatic events and pending failure records. In optional mode, the review filters show which events you have inspected:
 
 | Queue | Meaning |
 | --- | --- |
@@ -95,7 +147,7 @@ Storage limits:
 
 ## Transfer reviews between browsers
 
-Open **迁移当前会话复核 / Export & import** in the diagnostics panel. This is a local, explicit file transfer—not a server backup or authenticated proof that a task passed.
+Open **人工笔记与迁移（可选）**, then **迁移当前会话复核 / Export & import** in the diagnostics panel. This is a local, explicit file transfer—not a server backup or authenticated proof that a task passed.
 
 1. On the source browser, open the session you reviewed and select **预览导出**. The full JSON is shown before downloading. Only reviews whose identity and full-evidence fingerprint still match the **currently loaded automatic events** are included; the selected review filter does not limit the export.
 2. Inspect the notes, acknowledge the plaintext warning, then select **下载复核 JSON**. The filename is always `agentxray-reviews.json`, without a session ID or path. Store it safely: notes you typed may include secrets even though the app does not copy logs into the file.
@@ -154,6 +206,8 @@ node --test test/diagnostic-events.test.js test/diagnostics.test.js test/omp-out
 node --test test/diagnostic-reviews.test.js
 node --test test/review-transfer.test.js
 node --test test/follow-up-evidence.test.js
+node --test test/session-health.test.js
+node --test test/verification-chronology.test.js
 npm test
 npm run build:ui
 npm run lint
@@ -163,9 +217,29 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 
 ## 中文使用指南
 
+### 自动体检无需人工标注
+
+默认进入“自动会话体检”，直接展示失败后完成证据、重复失败操作、去重后的后续相关结果，以及调用最后记录状态。全部自动事件都可见，不因旧人工标签而隐藏；不开启笔记时不会读取复核存储。
+
+“调用结果缺口”列出记录为执行中、未知、未记录结果的调用，并可跳转证据。这里说的是日志最后状态，不是实时进程；未知不等于失败，未记录结果也不代表任务未完成。重复/候选数字都有明确单位，不提供笼统健康分。
+
+人工笔记保留为可选：点击“人工笔记与迁移（可选）”才打开旧队列及迁移功能，旧笔记不删除；“返回自动体检”恢复所有事件。刷新默认回到自动模式。
+
+无需人工参与的验收：`node --test test/session-health.test.js` 在 20 个固定合成基例上运行 200 个规则变换，检查已知恢复结果、证据分组和调用状态总数，不靠模型自评或人打标签。它证明规则对这些用例的行为，不等同真实准确率或节省时间。
+
+### 修改与验证的先后顺序
+
+自动体检中的“修改—检查时序”展示：修改工具何时成功返回、此前最近的成功检查、重叠检查、之后出现的检查，以及最新结果。**测试在修改之前通过，不代表修改之后通过；并行检查晚返回，也不算修改后的验证。**
+
+直接测试运行器和约定命名的 test/build/lint/typecheck 脚本分开标识。有限解析器能看见 `cd ... && npm test` 等命令片段，但复合命令的整体退出码不能证明测试片段执行或通过，尤其是接 `tail` 等管道时。未知范围和未归类命令都会显示，不把“未识别”解释成“没测试”。
+
+这里比较当前会话的记录顺序，已知不同工作目录不关联、目录缺失显示未知；不判断文件测试覆盖、不执行日志命令、不宣判任务成功。所有原始调用/结果可以点击查看。修改仅识别明确 edit/write/MultiEdit 工具，shell/patch 修改等暂不解析。
+
+运行 `node scripts/demo-verification.cjs`，在合成会话中输入 `f` / `s` 分别追加修改后的失败/成功检查，观察结果自动更新；`q` 退出。另有 120 个固定时序变换测试，覆盖先后、重叠、缺结果等反例，无需人工参与。
+
 **目标：先找到值得复查的重复操作，再追溯证据，而不是把几百条失败强行解释成几个根因。**
 
-免安装体验：[在线 Demo](https://alloevil.github.io/AgentXRay/)，点击“体验失败复核 / Try diagnostics”。这个独立合成案例将 7 条待复查记录聚为 2 个事件（6 次同参 edit 失败、1 次搜索失败），并展示一次早先测试失败的自动恢复。可查看全部证据、填写本浏览器的人工复核；它是静态示例，不追加真实结果。下面的本机终端演示则使用更大的合成日志来验证实时变化。
+免安装体验：[在线 Demo](https://alloevil.github.io/AgentXRay/)，点击“体验自动体检 / Try diagnostics”。这个独立合成案例将 7 条待复查记录聚为 2 个事件（6 次同参 edit 失败、1 次搜索失败），并展示一次早先测试失败的自动恢复。可查看全部证据、填写本浏览器的人工复核；它是静态示例，不追加真实结果。下面的本机终端演示则使用更大的合成日志来验证实时变化。
 
 从源码仓库运行 `npm run build:ui`，再运行 `node scripts/demo-diagnostics.cjs`。打开终端打印的地址，选择 OMP 的 `[Synthetic]` 会话：
 
@@ -174,7 +248,7 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 - 保持自动刷新，在终端输入 `r` 并回车，追加合成成功结果；页面自动变为 **6 个事件、6 条待复查记录、67 条已有同参成功记录**。
 - 输入 `q` 或 Ctrl-C 退出并清理。演示使用临时 HOME 和合成日志，不读取你的真实会话、不执行日志里的命令。
 
-日常使用：构建后运行 `npm start`，选择你的会话，在“消息”视图查看“失败后验证”。子会话独立分析；优先读最新失败和前后操作，不要不加判断地重跑原命令。
+日常使用：构建后运行 `npm start`，选择你的会话，在“消息”视图查看“自动会话体检”。子会话独立分析；优先读最新失败和前后操作，不要不加判断地重跑原命令。
 
 **边界：**只合并同调用轮次、同工具、完整同参数的记录，不忽略 `i` 或工作目录；成功结果切断分组，缺少参数不合并。事件可含并行调用和不同错误，不等于同一根因或串行重试。首末间隔不是耗时或浪费时间。执行中、取消和未知不算成功验证；其他方式修复、等价命令、后台任务链仍需人工判断。
 
@@ -184,7 +258,7 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 
 ## 本机复核闭环
 
-先从“待复核”开始，打开事件证据，点击“记录人工复核”，选择：
+这是可选功能，不是使用前提。先打开“人工笔记与迁移（可选）”，再查看事件证据、点击“记录人工复核”，选择：
 
 - **需跟进**：写清楚下一步检查什么、哪里仍不确定。
 - **预期失败**：写清楚为什么这个失败是合理的，例如负向探测无匹配。
@@ -200,7 +274,7 @@ The local frozen regression set contained 30 sessions and 9,076 tool results. Gr
 
 ## 迁移复核记录
 
-在诊断面板展开“迁移当前会话复核 / Export & import”：
+先打开“人工笔记与迁移（可选）”，再展开“迁移当前会话复核 / Export & import”：
 
 1. **源浏览器**打开已有复核的会话，点击“预览导出”，检查将下载的完整 JSON，勾选明文提醒后下载。仅导出当前自动事件中仍有效的复核，筛选队列不影响范围。
 2. **目标浏览器**打开相同平台、配置目录、会话及子会话，选择文件。预览逐条展示依据、时间与处理决定，尚不写入数据。

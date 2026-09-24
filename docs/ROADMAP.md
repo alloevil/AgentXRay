@@ -8,18 +8,20 @@
 - **Session browser** with tool-call inspection, trace/waterfall view, spawn tracking and message timeline
 - **Prompt tooling** — extraction (noise filtered), template clustering with outcome attribution, Claude-powered rewrites, and a prompt library that installs entries as native slash commands
 - **Global search** across all platforms, insights dashboard, incremental session backup
-- **React + Vite frontend** served by an Express backend; 255 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
+- **React + Vite frontend** served by an Express backend; 290 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
 - **Evidence-backed failure events and local review** with full-result invalidation, evidence navigation and narrow-screen session layout
 
 ## Current priorities
 
-The product direction is **review the coding-agent sessions you already have, with evidence**. First prove that a useful review can be completed locally; then make it easy to try and share. Stars, downloads and screenshots alone do not establish usefulness. This order replaces the earlier feature-first ordering below.
+The product direction is **local execution evidence for the coding agents you already use**: what actually ran, which results support a conclusion, and what the log cannot establish. Automatic facts come first; human labels are optional. Native agents increasingly include dashboards, usage metrics and workflow progress, so generic statistics are not the differentiator. Stars, downloads and screenshots alone do not establish usefulness.
+
+External grounding: official guidance emphasizes [executable verification](https://code.claude.com/docs/en/best-practices#give-claude-a-way-to-verify-its-work), [background subagent workflows](https://code.claude.com/docs/en/workflows) and [coordination/resume limits](https://code.claude.com/docs/en/agent-teams). These are capabilities and engineering constraints, not market-size evidence. User issue reports and vendor-fixed bugs are research inputs, not proof of permanent product gaps.
 
 | Priority | Outcome | Acceptance, not a promise |
 | --- | --- | --- |
 | P0 | Make the new workflow immediately testable | A demo-only entry opens a clearly synthetic case: 7 pending records in 2 events, all evidence accessible, local review does not rewrite automatic results. Preserve the existing default demo and samples. |
 | P1 | Current-session review portability implemented | Preview-only import and explicit plaintext download; exact identity/evidence matching, no overwrites, bounded schema and partial-failure reporting. Validate with synthetic migration and publish after CI; whole-history backup and path remapping remain out of scope. |
-| P2 | Explain what happened after a failure, then measure usefulness | Show only-i and same-turn/same-file follow-up candidates with explicit status and evidence, never automatic recovery. Validate unchanged diagnostic outcomes on frozen logs. Then measure owner review tasks using a fixed rubric; separate unknowns and stale labels, and do not infer precision or time saved from candidate counts. |
+| P2 | Execution/verification evidence, not another statistics dashboard | Automatic health and modification/check chronology: distinguish before/overlap/after and latest outcomes, show unsupported command coverage, keep optional notes independent. Deterministic transformations and frozen-log regressions verify association rules, not file coverage, human time saved or universal accuracy. Next investigate explicit per-step check outcomes and task/child linkage before relaxing ambiguous shell assumptions. |
 | P3 | Make releases reproducible for contributors | Keep clean-install tests, generated fixtures, documentation claims and release/package verification aligned. Add browser regression automation when it can run deterministically without personal logs. |
 
 No launch dates or star-count targets are promised. Progress is gated on these observable outcomes. Physical-device/keyboard coverage and complex Trace/analytics layouts remain separate work, not implied by the session-screen checks.

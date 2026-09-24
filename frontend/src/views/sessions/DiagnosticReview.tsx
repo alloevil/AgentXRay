@@ -12,10 +12,11 @@ interface ReviewSnapshot {
   error: string;
 }
 
-export function useEventReviews(scope: string, events: FailureEvent[]) {
+export function useEventReviews(scope: string, events: FailureEvent[], enabled = true) {
   const [snapshot, setSnapshot] = useState<ReviewSnapshot | null>(null);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    if (!enabled) { setSnapshot(null); return; }
     let generation = 0;
     let cancelled = false;
     async function load() {
@@ -46,9 +47,9 @@ export function useEventReviews(scope: string, events: FailureEvent[]) {
     void load();
     window.addEventListener('storage', onStorage);
     return () => { cancelled = true; window.removeEventListener('storage', onStorage); };
-  }, [scope, events, revision]);
+  }, [scope, events, revision, enabled]);
 
-  const loaded = snapshot?.scope === scope && snapshot.events === events;
+  const loaded = enabled && snapshot?.scope === scope && snapshot.events === events;
   const entries = loaded ? snapshot.entries : {};
   const error = loaded ? snapshot.error : '';
 

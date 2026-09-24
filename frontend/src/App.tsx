@@ -83,7 +83,7 @@ export default function App() {
                 store.setView('sessions');
                 returnToContent();
               }}>
-              体验失败复核 / Try diagnostics
+              体验自动体检 / Try diagnostics
             </button>
             <button
               type="button"
@@ -110,8 +110,8 @@ export default function App() {
             {platform === 'omp' && selectedSession === '0199demo-diagnostics' && view === 'sessions' ? (
               <details className="w-full max-w-3xl text-left leading-5" data-testid="diagnostics-demo-guide">
                 <summary className="cursor-pointer text-center">演示步骤 / Guide: 7 failure records → 2 events</summary>
-                <p>6 次同参 edit 失败 + 1 次搜索失败。点击首条、末条或全部证据，再写一条人工复核依据。早先测试通过只恢复了那次测试，不验证后续修改。</p>
-                <p>Inspect the first/last/all evidence, then record a human review. Notes stay in this browser; the automatic result does not change. This static sample does not append live results.</p>
+                <p>自动整理重复失败、后续候选和调用结果缺口，无需人工标注。6 次同参 edit 失败 + 1 次搜索失败；早先测试通过只恢复那次测试，不验证后续修改。</p>
+                <p>Inspect the automatic facts and original evidence. Human notes are optional and never change the automatic result. This static sample does not append live results.</p>
                 <a href="https://github.com/alloevil/AgentXRay/blob/master/docs/diagnostics.md" target="_blank" rel="noreferrer"
                   className="underline underline-offset-2">本机使用与判定边界 / Local walkthrough and limits</a>
               </details>
