@@ -176,6 +176,12 @@ Remote integration receipt: six valid synthetic runs pass their four hidden case
 
 The capture smoke exposed a real lint integration failure: Biome discovers the frozen copy of its root configuration under output. A single `!!output` exclusion mirrors the already-ignored artifact directory, leaves all 69 previously checked source files in scope and preserves snapshots unchanged. The regression reproduces failure without the exclusion. Final validation: 29 experiment tests and 332 product tests pass; lint exits zero with its existing warnings. Evidence is in `experiments/prospective-study/REMOTE.md` and ignored local receipts. Continue against qualifying real tasks under the approved policy without asking for each operational step; no usefulness/adoption claim or new release follows from this smoke.
 
+## Patch release v1.23.1 (user authorized)
+
+- Publish the merged evidence-first bilingual README and documentation as a patch release. No new installed runtime feature, platform or productivity claim. Research protocols and scripts remain repository-only; the npm file allowlist continues to exclude experiments and all private output/configuration.
+- Update package and lockfile versions together, build the shipped UI/shared artifacts, run product tests and lint, inspect and install the packed package with isolated HOME and synthetic inputs. Merge through a protected release PR, then publish a GitHub Release to trigger the existing npm/provenance workflow.
+- Completion requires the official npm registry to report the new version, a fresh temporary install to return the expected CLI version and synthetic inspect counts, and the release workflow to succeed. Do not infer publication from a tag alone or mutate an existing npm version.
+
 - No new platform, dependency, model call, account, telemetry, cloud log storage or automatic command execution.
 - No automatic human judgments of real sessions, relaxed argument matching or fabricated accuracy/productivity/adoption claims.
 - No changes to the frozen legacy UI, unrelated repository infrastructure or user's running services.
