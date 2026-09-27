@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // CLI entry: parse --port/--host, export them, then boot the server.
 const argv = process.argv.slice(2);
-if (argv[0] === 'inspect') {
-  void require('./inspect').main(argv.slice(1));
+if (['inspect', 'evidence'].includes(argv[0])) {
+  void require('./inspect').main(argv.slice(1), argv[0]);
 } else {
   let port = process.env.PORT;
   let host = process.env.HOST;
@@ -21,6 +21,7 @@ if (argv[0] === 'inspect') {
     } else if (flag === '--help' || flag === '-h') {
       console.log('Usage: agentxray [--port <port>] [--host <host>] [--version]');
       console.log('Offline evidence: agentxray inspect --help');
+      console.log('Explicit raw evidence: agentxray evidence --help');
       process.exit(0);
     } else {
       console.error(`agentxray: unknown option '${arg}'`);

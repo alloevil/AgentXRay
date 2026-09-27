@@ -8,7 +8,7 @@
 - **Session browser** with tool-call inspection, trace/waterfall view, spawn tracking and message timeline
 - **Prompt tooling** — extraction (noise filtered), template clustering with outcome attribution, Claude-powered rewrites, and a prompt library that installs entries as native slash commands
 - **Global search** across all platforms, insights dashboard, incremental session backup
-- **React + Vite frontend** served by an Express backend; 332 tests on Node's built-in runner (`npm test`, 2026-09-23), CI on Node 22
+- **React + Vite frontend** served by an Express backend; 348 tests on Node's built-in runner (`npm test`, 2026-09-27), CI on Node 22
 - **Evidence-backed failure events and local review** with full-result invalidation, evidence navigation and narrow-screen session layout
 
 ## Current priorities
@@ -26,7 +26,7 @@ External grounding: official guidance emphasizes [executable verification](https
 
 ### Machine-consumable evidence
 
-The next integration surface is a read-only offline CLI, not a new agent runtime or hosted service. `inspect` emits versioned facts and source references using the same generated rules as the UI. This lets an agent or CI step consume evidence without manual tagging, a browser or model scoring. Explicit exit policies and coverage failures must never become a generic "task passed" claim. Current scope is one stable Codex/OMP/Claude Code JSONL file; logs remain on the machine.
+The integration surface is a read-only offline CLI, not MCP, a new agent runtime or a hosted service. `inspect` emits versioned facts and source references using the same generated rules as the UI. Version 1.24.0 provides `--summary --json`, explicit hash-checked and byte-bounded `evidence`, and structured JSON failures. Full successful reports stay compatible; consumers must account for the new error envelope. Explicit exit policies and coverage failures must never become a generic "task passed" claim. Current scope is one stable Codex/OMP/Claude Code JSONL file; no automatic discovery or command execution. Raw evidence expansion is opt-in and may reveal sensitive content. [Layered contract](offline-inspect.md#layered-cli-summary-first-evidence-on-demand).
 
 No launch dates or star-count targets are promised. Progress is gated on these observable outcomes. Physical-device/keyboard coverage and complex Trace/analytics layouts remain separate work, not implied by the session-screen checks.
 

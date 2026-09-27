@@ -1,8 +1,8 @@
 # AgentXRay
 
-**看清 coding agent 执行了什么，以及日志究竟验证了什么。**
+**看清 coding agent 的执行经过，找到支持结论的原始证据。**
 
-直接读取本机会话日志，把失败、后台退出和修改后的检查追溯到原始证据。无需接入 SDK、调用模型或人工标注。
+直接读取本机已有会话日志，把工具调用、后台退出和修改后的检查关联到原始记录。无需埋点、调用模型或人工标注。
 
 <p align="center">
   <img src="assets/readme/hero.svg" width="100%" alt="AgentXRay 执行证据：检查通过后又发生修改，下一次检查仍未知。概念时间线，不是任务通过的判定。">
@@ -49,11 +49,27 @@ npx @alloevil/agent-xray inspect --platform omp /path/to/session.jsonl --json
 
 **退出码 0 表示报告生成成功，不代表任务通过。**[JSON 契约、覆盖检查与退出策略 →](docs/offline-inspect.md)
 
+**分层 CLI：**[先摘要、按哈希展开证据、结构化 JSON 错误](docs/offline-inspect.md#layered-cli-summary-first-evidence-on-demand)。完整成功报告保持兼容；显式展开的原文可能包含敏感信息。JSON 模式失败时现在返回错误对象，不再是空 stdout；请检查 `kind`、`error.code` 和退出码。
+
+## 真实会话核查：4.33 MB 日志中的后台任务
+
+对一份此前研究过、已冻结的 Codex 会话（**771 条记录**），AgentXRay 与独立原始记录解析在 **36 条后台进程链**上得到一致结果：**28 条记录为成功退出**，**8 条最后记录为运行中**。本次调查前选定的三个问题均得到一致答案，有对应记录时可追溯启动、轮询和终止行号；未找到可唯一关联的非零终止进程。
+
+这验证的是**单个真实快照的关联一致性**，不是普遍准确率、进程实时状态或节省时间的证明。私人日志不公开，读者无法仅凭仓库复现该样本。[问题、证据与取证成本 →](docs/session-forensics.md)
+
+### 根据问题选择入口
+
+- **概览会话：**用 `inspect --summary --json` 查看计数和部分证据引用；它不是完整证据列表。
+- **查最后一次启动、全部退出或是否存在某类结果：**用 `inspect --json` 查看完整 `processes.entries`，不要从短摘要推断“没有发生”。
+- **核实一个结论：**用 `evidence`，传入报告中的原始日志哈希和物理行号；记录被分页时，按 `nextOffset` 继续读取。
+
+这些命令可通过安装后的 `agentxray` 使用。[完整命令、必填参数与边界 →](docs/session-forensics.md#existing-cli-workflow)
+
 ## 直接看证据
 
 ![AgentXRay 真实界面中的合成会话：修改—检查面板展示先前成功的测试、之后发生的修改，以及缺少可识别后续检查。](screenshots/verification-chronology.png)
 
-*真实界面，合成数据。展开的面板区分先前测试、与修改重叠的检查和修改记录。[查看原尺寸截图](screenshots/verification-chronology.png)，或[运行可交互的时序演示](docs/diagnostics.md#修改与验证的先后顺序)。*
+*真实界面，合成演示数据，不是上面私人 Codex 案例的截图。展开的面板区分先前测试、与修改重叠的检查和修改记录。[查看原尺寸截图](screenshots/verification-chronology.png)，或[运行可交互的时序演示](docs/diagnostics.md#修改与验证的先后顺序)。*
 
 ### 可以复现的报告
 
@@ -102,7 +118,7 @@ node bin/agentxray.js inspect --platform omp \
 
 **已实现并有测试：**本地浏览、确定性的执行证据规则、离线报告。UI 与 CLI 共用诊断源码；测试覆盖证据行号、保守匹配及先后顺序反例。[CLI 测试](test/inspect.test.js) · [界面与样例验证](docs/diagnostics-verification.md) · [公开数字的复算依据](claims.json)
 
-**尚未证明：**提高真实 Agent 任务完成率、降低费用或节省开发者时间。[首轮合成实验](experiments/effectiveness-pilot/RESULTS.md)中，三组均通过 **12/12** 个任务，未证明 AgentXRay 优于机械摘要。实验代码位于 `experiments/`，不包含在 npm 安装包中，也不是产品默认行为。
+**真实日志证据：**上述单个快照中的进程关联和原始行号与独立解析一致。**尚未证明：**提高 Agent 任务完成率、降低模型成本或缩短人工排查时间。受控合成实验尚未证明整体 Agent 性能优势。[首轮实验](experiments/effectiveness-pilot/RESULTS.md) · [完整报告与分层 CLI 对照](experiments/layered-comparison/RESULTS.md) · [无工具与调用策略对照](experiments/invocation-policy/RESULTS.md)。实验仅在源码仓库中，不包含在 npm 包内，也不会默认运行。
 
 **不是完成判官：**不推断根因、不自动修复、不证明测试覆盖，也不实时探测进程。缺少记录只是缺少证据，不能证明某件事没有发生。如果你需要埋点式生产 tracing 或托管团队服务，本机日志查看器不是那类产品。
 

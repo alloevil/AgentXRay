@@ -2,7 +2,7 @@
   "$comment": "Receipts for every number AgentXRay publishes in prose: the README first screen, the hero figure caption, the FAQ, the roadmap and the CI description. Each claim carries the command that recomputes it from committed artifacts (scripts/claims-receipts.mjs derives the figures from the platform registry, lib/config.js, package.json, the workflow, the demo sample log and the test fixtures) or check.manual with the reason no command can. The readme-no-version receipt keeps version-specific installation details in release notes rather than the README. .github/workflows/claims.yml runs the lot weekly and on every push.",
   "project": "AgentXRay",
   "repository": "https://github.com/alloevil/AgentXRay",
-  "updated": "2026-09-24",
+  "updated": "2026-09-27",
   "claims": [
     {
       "id": "platform-registry",
@@ -106,16 +106,16 @@
     },
     {
       "id": "test-count",
-      "claim": "332 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
-      "value": "332",
-      "metric": "passing node:test cases (# tests 332 / # pass 332 / # fail 0)",
-      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('332 tests on Node's built-in runner (`npm test`, 2026-09-23)') is verified by the run, not read back from the prose.",
+      "claim": "348 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
+      "value": "348",
+      "metric": "passing node:test cases (# tests 348 / # pass 348 / # fail 0)",
+      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('348 tests on Node's built-in runner (`npm test`, 2026-09-27)') is verified by the run, not read back from the prose.",
       "repro": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
       "evidence": "docs/ROADMAP.md",
-      "as_of": "2026-09-13",
+      "as_of": "2026-09-27",
       "check": {
         "cmd": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
-        "expect": { "contains": ["# tests 332", "# pass 332", "# fail 0"] },
+        "expect": { "contains": ["# tests 348", "# pass 348", "# fail 0"] },
         "timeout": 120
       }
     },
@@ -242,7 +242,7 @@
       "check": {
         "cmd": "node scripts/claims-receipts.mjs tests-node-only",
         "expect": {
-          "equals": "22 files in test/ · 16 distinct requires: 11 node builtins, 5 relative, 0 third-party"
+          "equals": "22 files in test/ · 17 distinct requires: 12 node builtins, 5 relative, 0 third-party"
         },
         "timeout": 60
       }
@@ -273,6 +273,19 @@
       "as_of": "2026-09-13",
       "check": {
         "manual": "branch protection lives in GitHub's settings, not in the repository, and reading it needs an authenticated API call (network) which the claims job does not make — deliberately, since every other check here runs offline."
+      }
+    },
+    {
+      "id": "single-session-process-forensics",
+      "claim": "On one previously studied frozen real Codex snapshot, AgentXRay and an independent native-record parser agree on 36 background-process chains and three preselected forensic questions; 28 recorded successes and eight last-recorded running states.",
+      "value": "4,333,237 bytes / 771 records / 36 matching chains / 3 matching answers",
+      "metric": "Structural association agreement on one private snapshot, not population accuracy, live status or human productivity",
+      "method": "Choose the largest frozen-byte-count Codex session from the existing five-session audit set before inspecting results. Compare independent JSON/wrapper/ID/order joins with the actual CLI report; reassemble eight source records and verify exact content. Retain the no-matching-nonzero-terminal answer and all uncertainty limits.",
+      "repro": "Maintainer-local evidence: output/session-forensics/{manifest,results,crosscheck}.json and private frozen input; public method is in docs/session-forensics.md.",
+      "evidence": "docs/session-forensics.md",
+      "as_of": "2026-09-27",
+      "check": {
+        "manual": "The source session and full receipts are private, ignored local artifacts, not available to public CI. Locally verified 36/36 lifecycle associations and 3/3 question answers, with 28 success and 8 last-recorded running states. Readers cannot reproduce this sample from the repository. Do not treat arithmetic consistency or document text matching as independent validation of the real log."
       }
     },
     {

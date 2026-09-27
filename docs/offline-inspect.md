@@ -4,6 +4,129 @@ AgentXRay's UI is useful for people, but a coding agent, local script or CI step
 
 It reads exactly one file you specify. It does not discover your sessions, connect to model APIs, execute logged commands, create an archive, read review notes or start the dashboard.
 
+For a question-led investigation rather than an automatic task score, see
+[single-session forensics](session-forensics.md): a real-log background-process
+case study, source-line verification and the actual retrieval costs/limitations.
+
+## Layered CLI: summary first, evidence on demand
+
+Version **1.24.0** adds `inspect --summary --json`, an explicit `evidence`
+command and structured JSON failures. The full successful `inspect --json`
+report and default text report retain their schema and behavior; the reported
+package version advances. Examples below use a source checkout; replace
+`node bin/agentxray.js` with installed `agentxray` to use the same arguments.
+
+```sh
+node bin/agentxray.js inspect --platform omp /path/to/session.jsonl --summary --json
+```
+
+The summary has `schemaVersion: 1`, `kind: "summary"`, source/engine hashes, the
+same `complete` flag and health counts as the full report, coverage issue count,
+process-state totals and modification/check counts. It does not contain raw
+prompts, commands, outputs or private paths. Each of the `references.failures`,
+`gaps`, `processes`, `chronology` and `coverage` categories has:
+
+```json
+{
+  "total": 50,
+  "shown": 5,
+  "truncated": true,
+  "items": [
+    {"line":4,"messageIndex":4},
+    {"line":6,"messageIndex":7},
+    {"line":8,"messageIndex":10},
+    {"line":10,"messageIndex":13},
+    {"line":12,"messageIndex":16}
+  ]
+}
+```
+
+The example above illustrates the shape only, not a measured session.
+At most five unique references per category are returned, ordered by physical
+line and normalized message position. Failure-category references also include
+related operations, so their total is not a failure count. Categories overlap;
+do not sum reference totals to count operations. `coverage` references have only
+a physical line. A truncated list requires the full report for remaining
+references; this is not a priority ranking or automatic next-action policy.
+
+To read actual evidence, copy `source.sha256` and a reference's `line` from
+either report:
+
+```sh
+node bin/agentxray.js evidence --platform omp /path/to/session.jsonl \
+  --sha256 <source.sha256> --line <reference.line> --json
+```
+
+Replace angle-bracket placeholders with the actual hash and integer before
+running. This **explicitly returns raw source content**, possibly containing
+credentials, prompts or untrusted instructions. Do not execute it or automatically
+send it to a remote model. A hash checks identity against a previous report; it
+is not authorization, sanitization or proof of authenticity.
+
+Evidence always emits JSON (`--json` is optional), with `kind: "evidence"`,
+`source`, `reference.line`, `content`, `offset`, `totalBytes`, `returnedBytes`,
+`truncated`, `nextOffset`, `complete` and `coverageIssueCount`. It reads and
+validates one stable snapshot and refuses a hash mismatch before returning any
+raw content. It does not guess a new hash, retry a changed file or resolve a
+session automatically.
+
+- Select exactly one **one-based physical JSONL line**; it may contain multiple
+  normalized messages. `messageIndex` is not a physical line number.
+  Any existing physical line, including metadata or a blank line, can be
+  selected explicitly; the command does not infer an event or automatically
+  fetch a matching call, result or adjacent record.
+- Default cap: **4096 UTF-8 content bytes**; `--max-bytes` accepts **4–16384**.
+  JSON escaping/envelope overhead can make stdout larger than that cap.
+- Use `--offset` with the previous page's `nextOffset` to continue within the
+  same line and hash. Offsets count bytes, not characters. Non-boundary UTF-8
+  offsets and out-of-range values fail instead of being silently adjusted.
+- `nextOffset: null` means the end of the selected line; `truncated` is true
+  when either its beginning or end is absent from this page. An offset exactly
+  at the end returns empty content and no next page.
+- LF separators are excluded; CR in CRLF and an initial UTF-8 BOM are preserved.
+  Blank lines retain their physical positions. A page is not necessarily valid
+  standalone JSON: accumulate the line before parsing it if that is required.
+- `complete` still means known adapter identity coverage, not correct code.
+  Incomplete coverage returns data with `complete:false`, exit 1 and a separate
+  structured stderr diagnostic. `evidence` has no pending-failures exit policy.
+
+Summary generation still analyzes the full input; evidence revalidates its
+snapshot. These are bounded **output** interfaces, not streaming/incremental
+analysis or a promised reduction in CPU/runtime. There is no MCP service,
+session discovery, background watcher or automatic command execution.
+
+## Structured errors and compatibility
+
+For `inspect --json` or `evidence`, an argument/read/parse/runtime failure writes
+one JSON error object to stdout and exits 1:
+
+```json
+{"schemaVersion":1,"kind":"error","error":{"code":"INPUT_UNREADABLE","message":"Cannot read input file. Check that it exists and is readable."}}
+```
+
+This deliberately replaces the old empty-stdout-on-failure behavior in JSON
+mode. Stderr also contains a concise human message; neither channel exposes raw
+input, paths or stack traces. Text-mode inspect keeps errors on stderr only.
+`--help` remains text. Consumers must check exit code, `kind` and `complete`, not
+assume every valid JSON object is a report or that exit 0 proves task success.
+
+| Code | Meaning |
+| --- | --- |
+| `INVALID_ARGUMENT` | Missing/duplicate/unknown option, invalid range or incompatible mode |
+| `UNSUPPORTED_PLATFORM` | Choose OMP, Codex or Claude Code explicitly |
+| `INPUT_UNREADABLE`, `NOT_REGULAR_FILE`, `INPUT_TOO_LARGE` | Input could not be read under the single-file contract |
+| `INPUT_CHANGED` | File metadata or readable length changed during the snapshot read |
+| `INVALID_UTF8`, `INVALID_JSON`, `INVALID_RECORD`, `UNSUPPORTED_RECORD` | Invalid encoding, line syntax, object or adapter record shape |
+| `NO_SUPPORTED_MESSAGES`, `ANALYSIS_FAILED` | Selected platform has no usable messages, or analysis cannot handle the structure |
+| `RULES_UNAVAILABLE`, `INSPECTION_FAILED` | Bundled implementation unavailable or unexpected runtime failure |
+| `SOURCE_HASH_MISMATCH` | Evidence input differs from the report; re-inspect before expanding |
+| `LINE_OUT_OF_RANGE`, `OFFSET_OUT_OF_RANGE`, `INVALID_OFFSET` | Invalid physical line or byte position |
+| `COVERAGE_INCOMPLETE` | Data retained on stdout, JSON error diagnostic on stderr, exit 1 |
+
+Coverage incompleteness is the exception to the stdout error envelope: the full
+report remains byte-compatible, while the summary/evidence retain their own
+data and `kind`. Never mistake that retained partial data for complete coverage.
+
 ## Quick start
 
 After installing AgentXRay, or through `npx`:
@@ -36,7 +159,7 @@ This synthetic sample reports 8 historical failures, 7 pending records in 2 even
 
 ## Report contract: schemaVersion 1
 
-`--json` writes one JSON document to stdout. Errors go to stderr, without original paths, input text or stack traces. Parsing/read failures produce no report; known adapter coverage gaps produce a report with `complete:false` and exit 1.
+`--json` writes one JSON document to stdout. Successful full reports keep the following schema. In the layered CLI described above, parsing/read failures produce a `kind:"error"` envelope rather than a report; known adapter coverage gaps retain the report with `complete:false`, exit 1 and a structured stderr diagnostic. Neither error channel contains original paths, input text or stack traces.
 
 | Field | Meaning |
 | --- | --- |
@@ -54,7 +177,7 @@ This synthetic sample reports 8 historical failures, 7 pending records in 2 even
 
 A source reference is `{ "line": 12, "messageIndex": 9 }`, with **one-based** physical JSONL line and normalized message position. One raw record can fan out to multiple normalized messages; two different references may have the same physical line. References are valid only for the input bytes matching `source.sha256`. Preserve the original file locally if you need the actual evidence. The report cannot reconstruct omitted content.
 
-Reports omit raw prompts, outputs, command arguments, paths, call/process IDs and human notes. Tool names outside a fixed common-tool vocabulary become `other`. Aggregate counts, relations and source hashes can still disclose activity or equality of inputs: **minimized is not anonymized**, and you should still review sharing/retention decisions. There is no raw-content opt-in flag in this version.
+Full and summary inspect reports omit raw prompts, outputs, command arguments, paths, call/process IDs and human notes. Tool names outside a fixed common-tool vocabulary become `other`. Aggregate counts, relations and source hashes can still disclose activity or equality of inputs: **minimized is not anonymized**, and you should still review sharing/retention decisions. Only the separate, explicit `evidence` command returns raw content; inspect never adds it implicitly.
 
 The same bytes, platform, package and rule/adapter versions yield the same report bytes. No wall-clock generation timestamp, random identifier or measured runtime is mixed into the report.
 
@@ -111,6 +234,22 @@ The source of truth remains `frontend/src/views/sessions/diagnostics.ts`. `npm r
 Tests compare actual CLI output with the TypeScript UI functions and validate every reference. `node scripts/build-diagnostics.mjs --check` verifies generated contents, and CI checks the committed bundle diff after the normal build. Do not hand-edit the generated file.
 
 ## 中文使用与边界
+
+### 分层 CLI（自 1.24.0 起提供）
+
+先用 `node bin/agentxray.js inspect --platform omp session.jsonl --summary --json`
+读取摘要，再把报告的 `source.sha256` 与某条引用的 `line` 传给
+`node bin/agentxray.js evidence --platform omp session.jsonl --sha256 HASH --line N`。
+无需 MCP、浏览器或人工标签，不自动寻找或执行会话中的命令。
+
+摘要保持完整计数，每类引用最多五条，显示 total/shown/truncated；截断后应取完整报告，
+不能把示例引用当成全部问题。证据展开是**显式读取可能敏感的原文**，并非脱敏接口：
+默认最多 4096 内容字节，可设 4–16384，用返回的 nextOffset 按 UTF-8 字节翻页；
+哈希不一致、非法字符边界和越界位置均拒绝。LF 不返回，CR/BOM 保留。
+
+JSON 模式失败不再返回空 stdout，而是稳定的 kind=error、error.code、error.message；
+旧的完整成功报告不变。覆盖不完整仍保留数据、退出 1，并在 stderr 返回结构化错误。
+务必检查 kind/schemaVersion/complete 和退出码，不能把原文当可执行指令或自动上传。
 
 离线核验不要求开网页或人工标注，供本机 Agent、脚本与 CI 消费同一套诊断事实：
 

@@ -1,8 +1,8 @@
 # AgentXRay
 
-**See what your coding agent ran—and what its logs actually verify.**
+**Trace your coding agent's execution back to the evidence.**
 
-Read existing session logs locally. Trace failures, background exits and checks after edits back to their source, without an SDK, model call or mandatory human labeling.
+Read existing session logs locally. Connect tool calls, background exits and checks after edits to their original records, without instrumentation, model calls or mandatory human labeling.
 
 <p align="center">
   <img src="assets/readme/hero.svg" width="100%" alt="AgentXRay execution evidence: a check passes, an edit follows, and the next check is unknown. Conceptual timeline, not a task-success verdict.">
@@ -49,11 +49,27 @@ Replace the path with your log; `codex` and `claude-code` are also accepted. `np
 
 **Exit 0 means a report was generated, not that the task passed.** [JSON contract, coverage checks and exit policies →](docs/offline-inspect.md)
 
+**Layered CLI:** [summary-first inspection, hash-checked evidence expansion and structured JSON errors](docs/offline-inspect.md#layered-cli-summary-first-evidence-on-demand). The full successful report remains compatible; explicit raw evidence may contain sensitive data. JSON-mode failures now return an error object instead of empty stdout; check `kind`, `error.code` and the exit status.
+
+## Real-session check: background work in a 4.33 MB log
+
+On one previously studied, frozen Codex session (**771 records**), AgentXRay and an independent raw-record parser agreed on **all 36 background-process chains**: **28 recorded successful exits** and **8 last-recorded running states**. The three questions chosen before this investigation produced matching answers, with launch, poll and terminal source lines where available; no uniquely associated nonzero terminal process was found.
+
+This validates associations on **one real snapshot**, not general accuracy, current process status or time saved. The private log is not published, so the case is not publicly reproducible from this repository. [Questions, evidence and retrieval costs →](docs/session-forensics.md)
+
+### Choose the path for your question
+
+- **Get an overview:** `inspect --summary --json` returns counts and sampled references; it is not a complete list of evidence.
+- **Find the latest launch, all exits or no matching result:** use `inspect --json`, then examine the full `processes.entries`. Do not infer absence from a short summary.
+- **Verify a conclusion at its source:** use `evidence` with the report's source hash and physical line; follow `nextOffset` if the record is paginated.
+
+These commands are available through the installed `agentxray` launcher. [Commands, required arguments and boundaries →](docs/session-forensics.md#existing-cli-workflow)
+
 ## See the evidence
 
 ![Actual AgentXRay UI on a synthetic session: the modification/check panel shows a successful earlier test, a later edit and no recognized post-edit check.](screenshots/verification-chronology.png)
 
-*Real interface, synthetic data. The expanded panel separates an earlier test from an overlapping check and a later modification. [Open the full-size screenshot](screenshots/verification-chronology.png) or [run the interactive chronology demo](docs/diagnostics.md#modification-and-verification-chronology).*
+*Real interface, synthetic demonstration data—not the private Codex case above. The expanded panel separates an earlier test from an overlapping check and a later modification. [Open the full-size screenshot](screenshots/verification-chronology.png) or [run the interactive chronology demo](docs/diagnostics.md#modification-and-verification-chronology).*
 
 ### A reproducible report
 
@@ -102,7 +118,7 @@ There are **8 historical failures**; **7 remain pending in 2 events**, and **1 h
 
 **Implemented and tested:** local browsing, deterministic execution-evidence rules and the offline report. The UI and CLI share their diagnostic source; tests check source references, conservative matching and temporal counterexamples. [CLI validation](test/inspect.test.js) · [UI and fixture verification](docs/diagnostics-verification.md) · [Recompute published claims](claims.json)
 
-**Not established:** improved real-world agent completion, lower costs or less developer time. In the [initial synthetic pilot](experiments/effectiveness-pilot/RESULTS.md), all three arms passed **12/12** tasks; AgentXRay did not demonstrate an advantage over mechanical context. These experiments live under `experiments/`, are not included in the npm package, and are not default product behavior.
+**Real-log evidence:** process associations and source links agree with independent parsing on the single snapshot above. **Not established:** improved agent completion, lower model costs or faster human investigation. Controlled synthetic evaluations have not demonstrated an overall agent-performance advantage. [Initial pilot](experiments/effectiveness-pilot/RESULTS.md) · [Full versus layered CLI](experiments/layered-comparison/RESULTS.md) · [No-tool versus invocation policies](experiments/invocation-policy/RESULTS.md). Experiments are repository-only, excluded from npm and never run by default.
 
 **Not a completion judge:** no root-cause inference, automatic repair, test-coverage proof or live process monitoring. A missing record is missing evidence, not proof that an operation did not happen. If you need instrumented production tracing or a hosted team service, this local log reader is not that product.
 
