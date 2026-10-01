@@ -31,7 +31,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@types/node": "^22.13.0",
+    "@types/node": "^26.6.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^4.3.4",
