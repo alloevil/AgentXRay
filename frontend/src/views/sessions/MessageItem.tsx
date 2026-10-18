@@ -101,7 +101,7 @@ function Collapse({
   );
 }
 
-const PRE_CLASS = 'overflow-x-auto whitespace-pre-wrap break-words rounded bg-muted/60 p-2 font-mono text-[11px]';
+const PRE_CLASS = 'overflow-x-auto whitespace-pre-wrap wrap-break-word rounded bg-muted/60 p-2 font-mono text-[11px]';
 
 /** Embedded toolCall content part (OpenClaw/omp assistant messages). */
 export function ToolCallPart({ part }: { part: MessageContentPart }) {

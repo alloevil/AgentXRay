@@ -122,7 +122,7 @@ export default function App() {
         <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-1 md:hidden">
           <span className="text-sm font-semibold">AgentXRay</span>
           <button ref={navigationToggle} type="button" aria-expanded={navigationOpen} aria-controls="session-navigation"
-            className="inline-flex min-h-11 items-center gap-2 rounded px-2 text-sm text-primary focus-visible:outline"
+            className="inline-flex min-h-11 items-center gap-2 rounded px-2 text-sm text-primary focus-visible:outline-solid"
             onClick={() => navigationOpen ? returnToContent() : setNavigationOpen(true)}>
             {navigationOpen ? <ArrowLeft className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
             {navigationOpen ? '返回内容' : '会话列表'}

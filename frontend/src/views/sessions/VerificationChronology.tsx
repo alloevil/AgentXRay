@@ -56,7 +56,7 @@ export function VerificationChronology({ chronology, onJump }: {
         {chronology.unclassifiedShellCalls} 次执行调用未识别检查片段。复合命令的片段是否执行或通过保持未知；test/build/lint/typecheck 脚本名不是脚本语义验证。
       </p>
       {!chronology.modifications.length ? <p className="mt-2 text-muted-foreground">未记录到本规则可确认的修改工具成功结果，不代表没有修改。</p> : (
-        <ol className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto" aria-label="修改与检查时序证据">
+        <ol className="mt-3 max-h-128 space-y-3 overflow-y-auto" aria-label="修改与检查时序证据">
           {chronology.modifications.slice(0, visible).map((row) => (
             <li key={row.operation.callIndex + ':' + row.operation.toolCallId} className="min-w-0 rounded border border-border bg-card p-2" data-testid="modification-chronology">
               <p className="font-medium">{row.latestOrderAmbiguous ? '修改之后有多次检查；最近调用位于同一消息，顺序不唯一' : row.latestLater ? `修改之后有检查调用 · 最近${STATES[row.latestLater.operation.state]}`

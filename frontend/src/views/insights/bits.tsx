@@ -111,7 +111,7 @@ export function InsightsScopeSeg({
       className={cn(
         'rounded-md px-3 py-1 text-sm transition-colors',
         active === scope
-          ? 'bg-primary/20 text-foreground shadow-sm'
+          ? 'bg-primary/20 text-foreground shadow-xs'
           : 'text-muted-foreground hover:text-foreground',
         disabled && 'cursor-not-allowed opacity-50 hover:text-muted-foreground'
       )}

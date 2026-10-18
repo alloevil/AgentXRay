@@ -67,7 +67,7 @@ function ClampBlock({ len, children }: { len: number; children: React.ReactNode 
       <div
         className={
         clamped
-          ? 'max-h-[8em] overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent)]'
+          ? 'max-h-[8em] overflow-hidden mask-[linear-gradient(to_bottom,black_70%,transparent)]'
           : undefined
         }
       >
@@ -95,7 +95,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function Pre({ text }: { text: string }) {
   return (
-    <pre className="m-0 whitespace-pre-wrap break-words rounded-md border border-border bg-[hsl(var(--panel-alt))] px-2.5 py-2 font-mono text-xs leading-relaxed">
+    <pre className="m-0 whitespace-pre-wrap wrap-break-word rounded-md border border-border bg-[hsl(var(--panel-alt))] px-2.5 py-2 font-mono text-xs leading-relaxed">
       {text}
     </pre>
   );

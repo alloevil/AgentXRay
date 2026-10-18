@@ -44,7 +44,7 @@ export function RelatedOperations({ operations, onJump }: {
               </p>
               <pre className="mt-2 whitespace-pre-wrap break-all text-[11px] text-muted-foreground">{operation.evidence}</pre>
               {anchor ? (
-                <button type="button" className="mt-2 min-h-9 rounded border border-border px-2 py-1 hover:border-primary focus-visible:outline"
+                <button type="button" className="mt-2 min-h-9 rounded border border-border px-2 py-1 hover:border-primary focus-visible:outline-solid"
                   onClick={() => onJump(`diagnostic-result-${anchor}`)}>查看候选原始结果</button>
               ) : <p className="mt-2 text-muted-foreground">日志缺少定位标识</p>}
             </li>

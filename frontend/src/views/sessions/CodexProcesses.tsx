@@ -61,7 +61,7 @@ export function CodexProcesses({ report, onJump }: { report: ReturnType<typeof a
         {report.linkedPolls} / {report.pollCalls} 次 write_stdin 关联到启动，{report.unlinkedPolls} 次未关联，{report.ambiguousCalls} 次调用标识不唯一。
         与“每条工具调用的最后结果”分开统计，不改写历史失败或自动恢复。同一进程 ID 重用、交叠轮询或冲突结果保持未知。
       </p>
-      <div className="mt-2 max-h-[32rem] overflow-y-auto">
+      <div className="mt-2 max-h-128 overflow-y-auto">
         {report.processes.slice(0, visible).map((process, index) => <ProcessEvidence key={`${process.launchIndex}-${index}`} process={process} onJump={onJump} />)}
       </div>
       {visible < report.processes.length ? <button type="button" className="mt-2 min-h-9 rounded border border-border px-2 py-1" onClick={() => setVisible(visible + 5)}>再显示 {Math.min(5, report.processes.length - visible)} 次启动</button> : null}

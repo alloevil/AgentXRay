@@ -18,7 +18,7 @@ const REASONS = {
 
 const PAGE_SIZE = 5;
 const REVIEW_FILTERS = { unreviewed: '待复核', ...REVIEW_LABELS, all: '全部' };
-const BUTTON_CLASS = 'rounded border border-border px-2 py-1 hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+const BUTTON_CLASS = 'rounded border border-border px-2 py-1 hover:border-primary hover:text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-primary';
 
 function spanLabel(milliseconds: number | null): string {
   if (milliseconds === null) return '时间跨度未知';
@@ -181,7 +181,7 @@ export function SessionDiagnostics({ messages, onScrollToMessage, reviewScope }:
               );
             })}
           </div> : null}
-          <ol className="mt-3 max-h-[32rem] space-y-3 overflow-y-auto" aria-label="待复查失败事件">
+          <ol className="mt-3 max-h-128 space-y-3 overflow-y-auto" aria-label="待复查失败事件">
             {matching.slice(0, visibleCount).map((event) => (
               <EventCard key={event.id} event={event} manual={manual} onJump={onScrollToMessage} review={reviews.entries[event.id]}
                 ready={reviews.loaded && !reviews.error && !!reviews.entries[event.id]}
