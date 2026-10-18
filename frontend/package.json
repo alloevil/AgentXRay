@@ -31,14 +31,15 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.13.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
+    "@vitejs/plugin-react": "^6.1.2",
+    "esbuild": "^0.28.2",
     "postcss": "^8.5.26",
-    "tailwindcss": "^3.4.17",
-    "typescript": "~5.7.3",
-    "vite": "^6.1.0"
+    "tailwindcss": "^4.3.3",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.4"
   }
 }

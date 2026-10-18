@@ -23,7 +23,7 @@ export function TriCheckbox({ checked, onCheckedChange, title, className }: TriC
       onClick={(e) => e.stopPropagation()}
       title={title}
       className={cn(
-        'grid h-4 w-4 shrink-0 place-content-center rounded-sm border border-primary shadow',
+        'grid h-4 w-4 shrink-0 place-content-center rounded-sm border border-primary shadow-sm',
         'data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',
         'data-[state=indeterminate]:bg-primary/40 data-[state=indeterminate]:text-primary-foreground',
         className

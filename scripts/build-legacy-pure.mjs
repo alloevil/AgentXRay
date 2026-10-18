@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-// esbuild is a transitive dependency of vite inside frontend/. Resolve it from
+// esbuild is a direct devDependency of frontend/ (vite 8 no longer ships it). Resolve it from
 // there instead of hardcoding node_modules layout, which breaks when hoisting changes.
 const { buildSync } = createRequire(path.join(root, 'frontend', 'package.json'))('esbuild');
 const entry = path.join(root, 'frontend', 'src', 'lib', 'legacy-pure.ts');

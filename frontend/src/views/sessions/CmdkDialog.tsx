@@ -197,7 +197,7 @@ export function CmdkDialog({
             }
           }}
           placeholder="搜索所有平台的会话内容… 空格分隔多关键词，全部命中才返回"
-          className="w-full border-b border-border bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+          className="w-full border-b border-border bg-transparent px-4 py-3 text-sm outline-hidden placeholder:text-muted-foreground"
         />
         <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-1">
           {searching && <div className="px-3 py-4 text-sm text-muted-foreground">🔍 Searching…</div>}
@@ -245,7 +245,7 @@ export function CmdkDialog({
                     )}
                     {match.timestamp ? <span>{new Date(match.timestamp).toLocaleDateString()}</span> : null}
                   </div>
-                  <div className="mt-0.5 whitespace-pre-wrap break-words text-xs text-foreground/90">
+                  <div className="mt-0.5 whitespace-pre-wrap wrap-break-word text-xs text-foreground/90">
                     <Highlighted text={match.snippet} q={query} />
                   </div>
                 </div>

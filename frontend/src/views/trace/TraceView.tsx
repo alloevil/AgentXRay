@@ -72,7 +72,7 @@ function TurnCard({
               </div>
               <div className="relative h-3.5">
                 <div
-                  className="absolute top-0 h-3.5 cursor-pointer rounded-sm opacity-90 hover:opacity-100 hover:outline hover:outline-1 hover:outline-foreground"
+                  className="absolute top-0 h-3.5 cursor-pointer rounded-sm opacity-90 hover:opacity-100 hover:outline-solid hover:outline-1 hover:outline-foreground"
                   style={{
                     left: `${left.toFixed(2)}%`,
                     width: `${width.toFixed(2)}%`,

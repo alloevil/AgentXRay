@@ -7,7 +7,7 @@ import { renderMarkdownHtml } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
 
 const MARKDOWN_STYLES =
-  'break-words text-sm leading-relaxed ' +
+  'wrap-break-word text-sm leading-relaxed ' +
   '[&_p]:my-1.5 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 ' +
   '[&_h1]:mt-3 [&_h1]:text-base [&_h1]:font-semibold ' +
   '[&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold ' +
