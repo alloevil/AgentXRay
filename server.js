@@ -12,6 +12,7 @@ const mountBackupRoutes = require('./lib/routes/backup');
 const mountWatchRoutes = require('./lib/routes/watch');
 const mountLlmRoutes = require('./lib/routes/llm');
 const { csrfGuard } = require('./lib/csrf');
+const { limiter } = require('./lib/rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3800;
@@ -22,6 +23,9 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DIST_DIR = path.join(__dirname, 'frontend', 'dist');
 // Serve the built React UI when present; the legacy vanilla UI stays at /legacy.
 const HAS_DIST = fs.existsSync(path.join(DIST_DIR, 'index.html'));
+
+// Rate-limit every route before anything touches the filesystem (lib/rate-limit.js).
+app.use(limiter);
 
 // Frontend staleness detection: the SPA polls this and prompts a reload
 // when the serving process (and thus possibly the code) has changed.
