@@ -428,6 +428,8 @@ test('resolveAllowedDir accepts absolute dirs under a root and rejects the rest'
   for (const bad of ['relative/x', `${root}/../etc`, path.join(path.sep, 'etc'), `${root}\0`]) {
     assert.throws(() => safePath.resolveAllowedDir(bad, [root]), { name: 'PathEscapeError' });
   }
+});
+
 const library = require(path.join(__dirname, '..', 'lib', 'library'));
 
 test('serializeLibraryFile ends the body with exactly one newline, in linear time', () => {

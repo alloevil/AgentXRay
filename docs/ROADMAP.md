@@ -8,7 +8,7 @@
 - **Session browser** with tool-call inspection, trace/waterfall view, spawn tracking and message timeline
 - **Prompt tooling** — extraction (noise filtered), template clustering with outcome attribution, Claude-powered rewrites, and a prompt library that installs entries as native slash commands
 - **Global search** across all platforms, insights dashboard, incremental session backup
-- **React + Vite frontend** served by an Express backend; 356 tests on Node's built-in runner (`npm test`, 2026-10-17), CI on Node 22
+- **React + Vite frontend** served by an Express backend; 358 tests on Node's built-in runner (`npm test`, 2026-10-17), CI on Node 22
 - **Evidence-backed failure events and local review** with full-result invalidation, evidence navigation and narrow-screen session layout
 
 ## Current priorities
