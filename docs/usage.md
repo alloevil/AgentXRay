@@ -176,7 +176,7 @@ GEMINI_DIR=/custom/path/gemini/tmp \
 npm start
 ```
 
-**Via API:** Pass `?dir=/absolute/path` query parameter to any API endpoint.
+**Via API:** Pass `?dir=/absolute/path` query parameter to any API endpoint. The override must be an absolute path without `..` whose real path (symlinks resolved) sits inside `$HOME`, one of the configured platform/storage dirs above, or a dir listed in `AGENTXRAY_ALLOWED_DIRS` (`:`-separated); anything else is rejected with `403`.
 
 ---
 
@@ -218,7 +218,7 @@ npm start
 | `POST /api/backup` | Run an incremental backup into `~/.agentxray/archive` |
 | `GET /api/backup/status` | Archive stats: file count, total bytes, last backup time |
 
-All list/detail endpoints accept an optional `?dir=` parameter to override the default directory.
+All list/detail endpoints accept an optional `?dir=` parameter to override the default directory (same allowed-roots rule as above; out-of-bounds, relative, `..` or NUL-containing values get `403`, and agent names / session ids that are only dots get `400`).
 
 ---
 

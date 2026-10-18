@@ -409,6 +409,25 @@ test('buildTurnLedger without usage still yields time rows and reports hasUsage=
   assert.equal(l.hasCost, false);
 });
 
+const safePath = require(path.join(__dirname, '..', 'lib', 'safe-path'));
+
+test('resolveInside keeps joins inside the base and rejects escapes', () => {
+  const base = path.join(path.sep, 'srv', 'data');
+  assert.equal(safePath.resolveInside(base, 'a', 'b.json'), path.join(base, 'a', 'b.json'));
+  assert.equal(safePath.resolveInside(base, 'a/../b'), path.join(base, 'b'));
+  for (const bad of [['..'], ['a', '../../etc'], [path.sep + 'etc'], ['a\0b'], [42]]) {
+    assert.throws(() => safePath.resolveInside(base, ...bad), { code: 'EPATHESCAPE' });
+  }
+  assert.ok(safePath.isInside(base, base));
+  assert.ok(!safePath.isInside(base, `${base}-evil`));
+});
+
+test('resolveAllowedDir accepts absolute dirs under a root and rejects the rest', () => {
+  const root = path.join(path.sep, 'srv', 'data');
+  assert.equal(safePath.resolveAllowedDir(path.join(root, 'x'), [root]), path.join(root, 'x'));
+  for (const bad of ['relative/x', `${root}/../etc`, path.join(path.sep, 'etc'), `${root}\0`]) {
+    assert.throws(() => safePath.resolveAllowedDir(bad, [root]), { name: 'PathEscapeError' });
+  }
 const library = require(path.join(__dirname, '..', 'lib', 'library'));
 
 test('serializeLibraryFile ends the body with exactly one newline, in linear time', () => {
