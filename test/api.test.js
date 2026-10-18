@@ -38,6 +38,18 @@ describe('AgentXRay API', () => {
     assert.ok(body.bootId.length > 0);
   });
 
+  it('every route is rate-limited: 600 requests per minute per IP (lib/rate-limit.js)', async () => {
+    for (const route of ['/api/version', '/', '/no/such/page']) {
+      const res = await fetch(`${srv.base}${route}`);
+      assert.equal(res.status, 200, route);
+      const policy = res.headers.get('ratelimit-policy') || '';
+      assert.match(policy, /q=600/, `${route} policy: ${policy}`);
+      assert.match(policy, /w=60/, `${route} policy: ${policy}`);
+      assert.ok(res.headers.get('ratelimit'), `${route} has a RateLimit header`);
+      await res.arrayBuffer();
+    }
+  });
+
   describe('sessions: codex', () => {
     it('lists sessions newest-first with metadata', async () => {
       const sessions = await getJson(srv.base, '/api/codex/sessions');
