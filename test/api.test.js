@@ -6,6 +6,7 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fsp = require('node:fs/promises');
+const http = require('node:http');
 const path = require('node:path');
 const { startServer, getJson, sendJson } = require('./helpers.js');
 
@@ -501,5 +502,69 @@ describe('csrf guard', () => {
   it('never blocks reads, whatever the origin', async () => {
     const res = await send('GET', { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' }, '/api/version');
     assert.equal(res.status, 200);
+  });
+});
+
+describe('path guards on ?dir= and route params', () => {
+  let srv;
+  before(async () => {
+    srv = await startServer();
+  });
+  after(async () => {
+    await srv.stop();
+  });
+
+  const status = async (pathname) => (await fetch(srv.base + pathname)).status;
+  const q = (value) => encodeURIComponent(value);
+
+  it('rejects ?dir= outside the allowed roots with 403', async () => {
+    assert.equal(await status(`/api/codex/sessions?dir=${q('/etc')}`), 403);
+    assert.equal(await status(`/api/agents?dir=${q(path.dirname(srv.home))}`), 403);
+    const res = await fetch(`${srv.base}/api/codex/sessions?dir=${q('/etc')}`);
+    assert.match((await res.json()).error, /outside the allowed roots/);
+  });
+
+  it('rejects ../ escapes, relative dirs and NUL bytes with 403', async () => {
+    const dotdot = `${path.join(srv.home, '.codex', 'sessions')}/../../..`;
+    assert.equal(await status(`/api/codex/sessions?dir=${q(dotdot)}`), 403);
+    assert.equal(await status(`/api/codex/sessions?dir=${q(`${srv.home}/../${path.basename(srv.home)}`)}`), 403);
+    assert.equal(await status(`/api/codex/sessions?dir=${q('.codex/sessions')}`), 403);
+    assert.equal(await status(`/api/codex/sessions?dir=${q(`${srv.home}\0/x`)}`), 403);
+    assert.equal(await status(`/api/search?q=x&platform=codex&dirCodex=${q('/etc')}`), 403);
+  });
+
+  it('rejects a symlink inside HOME that points outside it', async () => {
+    const link = path.join(srv.home, 'escape-link');
+    await fsp.symlink(path.dirname(srv.home), link);
+    assert.equal(await status(`/api/codex/sessions?dir=${q(link)}`), 403);
+  });
+
+  it('still serves an explicit ?dir= inside HOME, same as the default', async () => {
+    const dflt = await getJson(srv.base, '/api/codex/sessions');
+    const explicit = await getJson(srv.base, `/api/codex/sessions?dir=${q(path.join(srv.home, '.codex', 'sessions'))}`);
+    assert.deepEqual(
+      explicit.map((s) => s.id),
+      dflt.map((s) => s.id)
+    );
+    assert.ok(dflt.length > 0);
+    assert.equal(await status('/api/codex/sessions?dir='), 200);
+  });
+
+  // fetch() would normalise %2E%2E away per the URL spec, so send the raw path.
+  const rawStatus = (rawPath) =>
+    new Promise((resolve, reject) => {
+      const { hostname, port } = new URL(srv.base);
+      http
+        .get({ hostname, port, path: rawPath }, (res) => {
+          res.resume();
+          resolve(res.statusCode);
+        })
+        .on('error', reject);
+    });
+
+  it('rejects dot-only agent names and session ids with 400', async () => {
+    assert.equal(await rawStatus('/api/agents/%2E%2E/sessions'), 400);
+    assert.equal(await rawStatus('/api/agents/main/sessions/%2E%2E'), 400);
+    assert.equal(await rawStatus('/api/agents/main/sessions/%2E%2E%2E'), 400);
   });
 });

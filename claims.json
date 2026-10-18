@@ -106,16 +106,16 @@
     },
     {
       "id": "test-count",
-      "claim": "349 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
-      "value": "349",
-      "metric": "passing node:test cases (# tests 349 / # pass 349 / # fail 0)",
-      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('349 tests on Node's built-in runner (`npm test`, 2026-10-17)') is verified by the run, not read back from the prose.",
+      "claim": "356 tests pass on Node's built-in test runner, the count docs/ROADMAP.md records for `npm test`.",
+      "value": "356",
+      "metric": "passing node:test cases (# tests 356 / # pass 356 / # fail 0)",
+      "method": "npm test → node --test test/*.test.js, run in the claims job after npm ci, and the TAP summary is asserted. The roadmap sentence ('356 tests on Node's built-in runner (`npm test`, 2026-10-17)') is verified by the run, not read back from the prose.",
       "repro": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
       "evidence": "docs/ROADMAP.md",
       "as_of": "2026-10-17",
       "check": {
         "cmd": "npm test 2>&1 | grep -E '^# (tests|pass|fail)'",
-        "expect": { "contains": ["# tests 349", "# pass 349", "# fail 0"] },
+        "expect": { "contains": ["# tests 356", "# pass 356", "# fail 0"] },
         "timeout": 120
       }
     },
