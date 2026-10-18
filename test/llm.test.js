@@ -76,7 +76,12 @@ test('LLM settings API: defaults, save, key redaction and validation', async () 
 test('rewrite goes through a configured OpenAI-compatible endpoint', async () => {
   const reply = JSON.stringify({ rewrite: '改写后的 prompt 内容', rationale: '更明确' });
   const mock = await startMockOpenAi(reply);
-  const { base, stop } = await startServer(NO_CLI);
+  // Close the mock even if the server never starts; an open listener would keep this
+  // test file alive forever (seen with express 5's '*' route crashing server.js).
+  const { base, stop } = await startServer(NO_CLI).catch(async (error) => {
+    await mock.close();
+    throw error;
+  });
   try {
     await sendJson(base, 'PUT', '/api/settings/llm', {
       baseUrl: `${mock.base}/v1`,
@@ -103,7 +108,12 @@ test('rewrite goes through a configured OpenAI-compatible endpoint', async () =>
 
 test('suggest-name uses the endpoint and shapes the reply into a library name', async () => {
   const mock = await startMockOpenAi('Fix Login Bug\n');
-  const { base, stop } = await startServer(NO_CLI);
+  // Close the mock even if the server never starts; an open listener would keep this
+  // test file alive forever (seen with express 5's '*' route crashing server.js).
+  const { base, stop } = await startServer(NO_CLI).catch(async (error) => {
+    await mock.close();
+    throw error;
+  });
   try {
     await sendJson(base, 'PUT', '/api/settings/llm', { baseUrl: mock.base, model: 'mock-model' });
     const result = await sendJson(base, 'POST', '/api/library/suggest-name', { text: 'please fix login' });

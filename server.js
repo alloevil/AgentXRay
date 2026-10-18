@@ -64,7 +64,9 @@ mountWatchRoutes(app);
 mountLlmRoutes(app);
 
 // SPA fallback: unknown paths render the appropriate UI shell
-app.get('*', (req, res) => {
+// Express 5 / path-to-regexp v8: a bare '*' is no longer valid; '/{*splat}' is the
+// named-wildcard form that, like Express 4's '*', also matches '/'.
+app.get('/{*splat}', (req, res) => {
   if (HAS_DIST && req.path.startsWith('/legacy')) {
     return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
   }
