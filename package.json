@@ -52,7 +52,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1"
   },
   "engines": {
     "node": ">=22.13"
