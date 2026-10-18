@@ -20,6 +20,12 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 10
+    # @types/node tracks the Node runtime, not the newest release: CI runs Node 22 and
+    # package.json declares engines >=22.13, so types from a newer major would let code
+    # use APIs that do not exist where it runs. Bump this major together with CI's node-version.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-all:
         patterns: ["*"]
