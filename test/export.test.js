@@ -44,6 +44,16 @@ test('redactSecrets leaves ordinary text alone', () => {
 
 // --- renderers (unit, tiny synthetic payload) ---
 
+test('markdown metadata cells escape backslashes before pipes', () => {
+  const payload = { session: { id: 'synth-esc', cwd: 'C:\\proj|x\\' }, messages: [] };
+  const md = renderSessionMarkdown('codex', payload);
+  const row = md.split('\n').find((line) => line.startsWith('| Working directory |'));
+  assert.equal(row, '| Working directory | C:\\\\proj\\|x\\\\ |');
+  // Every pipe inside the value is preceded by an odd run of backslashes, i.e. escaped.
+  const cell = row.slice('| Working directory | '.length, -2);
+  for (const m of cell.matchAll(/(\\*)\|/g)) assert.equal(m[1].length % 2, 1);
+});
+
 const SYNTH = {
   session: { id: 'synth-1', timestamp: '2026-01-01T00:00:00Z', cwd: '/tmp/proj', model: 'test-model' },
   messages: [

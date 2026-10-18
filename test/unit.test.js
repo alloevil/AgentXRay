@@ -408,3 +408,17 @@ test('buildTurnLedger without usage still yields time rows and reports hasUsage=
   assert.equal(l.hasUsage, false);
   assert.equal(l.hasCost, false);
 });
+
+const library = require(path.join(__dirname, '..', 'lib', 'library'));
+
+test('serializeLibraryFile ends the body with exactly one newline, in linear time', () => {
+  const header = library.serializeLibraryFile({ name: 'x' }, '').slice(0, -1);
+  const body = (content) => library.serializeLibraryFile({ name: 'x' }, content).slice(header.length);
+  assert.equal(body('hello'), 'hello\n');
+  assert.equal(body('hello\n\n\n'), 'hello\n');
+  assert.equal(body('a\n\nb\n'), 'a\n\nb\n');
+  assert.equal(body(''), '\n');
+  const started = process.hrtime.bigint();
+  assert.equal(body(`${'\n'.repeat(200000)}x${'\n'.repeat(200000)}`).length, 200002);
+  assert.ok(Number(process.hrtime.bigint() - started) / 1e6 < 1000);
+});

@@ -2898,7 +2898,7 @@ sessionList.addEventListener('scroll', () => {
 // Ensure the selected card is visible; when virtualized it may not even be in the DOM
 function scrollSessionIntoView(id) {
   if (!id) return;
-  const esc = window.CSS && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"');
+  const esc = window.CSS && CSS.escape ? CSS.escape(id) : id.replace(/["\\]/g, '\\$&');
   const el = sessionList.querySelector(`.session-item[data-session-id="${esc}"]`);
   if (el) {
     el.scrollIntoView({ block: 'nearest' });
